@@ -1,0 +1,425 @@
+/**
+ * Atlasgro — layout y temas (claro / oscuro).
+ * El tema activo se controla con el atributo data-theme en <html> ("claro" | "oscuro").
+ * Persistencia: localStorage "atlasgro-theme" (véase js/theme.js).
+ *
+ * Dónde editar colores por tema:
+ *   - Tema claro:  bloque `html[data-theme="claro"]`
+ *   - Tema oscuro: bloque `html[data-theme="oscuro"]`
+ */
+:root {
+  --sidebar-w: 320px;
+  --header-h: 56px;
+  /* Espacio bajo cabecera en visores/tablas (se ajusta con .app-header--home) */
+  --header-body-gap: 7.5rem;
+  --header-geo-gap: 12.5rem;
+  --header-dashboard-gap: 3rem;
+  --footer-h: 2.1rem;
+
+  --font-sans: "Source Sans 3", "Segoe UI", system-ui, -apple-system, sans-serif;
+  --font-size-root: 15px;
+  --font-weight-title: 700;
+
+  /* Referencias INEGI (no cambian entre temas) */
+  --inegi-primary: #008b8b;
+  --inegi-primary-dark: #006d6d;
+  --inegi-primary-light: #26b5b5;
+  --inegi-navy: #003366;
+  --inegi-navy-mid: #004b87;
+  --inegi-purple: #8e44ad;
+  --inegi-surface-print: #eaeaea;
+
+  --skip-link-bg: var(--inegi-surface-print);
+  --skip-link-fg: #0a121c;
+}
+
+/* ========== Tema CLARO (por defecto) ========== */
+html[data-theme="claro"] {
+  --shell-bg: #40cfc6;
+  --shell-text: #061018;
+  --shell-muted: rgba(6, 16, 24, 0.74);
+  --shell-border: rgba(0, 52, 48, 0.28);
+
+  --bg: var(--shell-bg);
+  --header-bg: var(--shell-bg);
+  --sidebar-bg-top: var(--shell-bg);
+  --sidebar-bg-bottom: var(--shell-bg);
+
+  --text: #061018;
+  --text-rgb: 6, 16, 24;
+  --muted: rgba(6, 16, 24, 0.72);
+
+  /* Acento UI sobre fondo turquesa (marino para contraste) */
+  --accent-rgb: 0, 51, 102;
+  --accent: rgb(var(--accent-rgb));
+  --accent-secondary-rgb: 0, 75, 130;
+  --accent-dim: #004b87;
+  --accent-on-dark: #003366;
+
+  --border: rgba(0, 0, 0, 0.16);
+  --border-accent: rgba(0, 51, 102, 0.35);
+
+  /* Tarjetas / paneles de gráficas y visor: gris #C0C0C0 */
+  --card-background: #c0c0c0;
+  --card-header-background: #b0b0b0;
+
+  --page-glow-teal: rgba(255, 255, 255, 0.22);
+  --page-glow-navy: rgba(0, 45, 42, 0.12);
+  --page-glow-muted: rgba(255, 255, 255, 0.18);
+
+  --chart-separator: var(--inegi-navy);
+
+  /* Paleta de 4 colores (barras y series) */
+  --chart-palette-1: #6342ff;
+  --chart-palette-2: #d08200;
+  --chart-palette-3: #d160c7;
+  --chart-palette-4: #8906b5;
+
+  /* Compatibilidad con nombres “navy/teal” usados en main.css (2010 / 2020) */
+  --chart-series-navy-1: #6342ff;
+  --chart-series-navy-2: #4e36cc;
+  --chart-series-teal-1: #d08200;
+  --chart-series-teal-2: #a86a00;
+
+  --chart-gue-fill-1: #2a9d96;
+  --chart-gue-fill-2: #0d5c57;
+  --chart-gue-glow: rgba(0, 70, 66, 0.35);
+
+  --chart-axis-grid: rgba(0, 0, 0, 0.12);
+  --chart-js-bar-fill: rgba(var(--accent-rgb), 0.42);
+  --chart-js-bar-stroke: rgba(var(--accent-rgb), 0.92);
+
+  --export-snapshot-bg: #c0c0c0;
+  --map-frame-bg: #a8a8a8;
+
+  --select-option-fg: var(--inegi-navy);
+  --select-option-bg: #f0f0f0;
+
+  --table-head-bg: rgba(0, 0, 0, 0.06);
+  --table-row-hover: rgba(var(--accent-rgb), 0.1);
+
+  /* Texto cuerpo “Datos geográficos” (pestañas API / BD) — ~Word 16 pt */
+  --geo-context-body-size: 16pt;
+
+  /* Bootstrap 5: utilidades (.text-muted, body) coherentes con el tema claro */
+  --bs-body-color: #061018;
+  --bs-body-color-rgb: 6, 16, 24;
+  --bs-secondary-color: rgba(6, 16, 24, 0.7);
+  --bs-secondary-rgb: 6, 16, 24;
+  --bs-tertiary-color: rgba(6, 16, 24, 0.55);
+  --bs-emphasis-color: #030810;
+  --bs-heading-color: #041018;
+}
+
+/* ========== Tema OSCURO (azul oscuro original) ========== */
+html[data-theme="oscuro"] {
+  --shell-bg: #0c141f;
+  --shell-text: #ecf1f8;
+  --shell-muted: rgba(236, 241, 248, 0.72);
+  --shell-border: rgba(255, 255, 255, 0.11);
+
+  --bg: #0c141f;
+  --header-bg: rgba(12, 20, 32, 0.9);
+  --sidebar-bg-top: rgba(21, 33, 48, 0.97);
+  --sidebar-bg-bottom: rgba(14, 23, 36, 0.97);
+
+  --text: #ecf1f8;
+  --text-rgb: 236, 241, 248;
+  --muted: rgba(var(--text-rgb), 0.72);
+
+  --accent-rgb: 0, 139, 139;
+  --accent: rgb(var(--accent-rgb));
+  --accent-secondary-rgb: 38, 181, 181;
+  --accent-dim: #6ec9c9;
+  --accent-on-dark: #b8f0f0;
+
+  --border: rgba(255, 255, 255, 0.11);
+  --border-accent: rgba(var(--accent-rgb), 0.28);
+
+  --card-background: rgba(21, 32, 46, 0.92);
+  --card-header-background: rgba(16, 26, 40, 0.82);
+
+  --page-glow-teal: rgba(var(--accent-rgb), 0.12);
+  --page-glow-navy: rgba(0, 51, 102, 0.18);
+  --page-glow-muted: rgba(45, 95, 85, 0.07);
+
+  --chart-separator: var(--inegi-navy);
+
+  --chart-palette-1: #1a4971;
+  --chart-palette-2: #3dbdbd;
+  --chart-palette-3: #8e44ad;
+  --chart-palette-4: #5b2c83;
+
+  --chart-series-navy-1: #1a4971;
+  --chart-series-navy-2: #0f3554;
+  --chart-series-teal-1: #3dbdbd;
+  --chart-series-teal-2: #007070;
+
+  --chart-gue-fill-1: #2db3b3;
+  --chart-gue-fill-2: #0d7a8a;
+  --chart-gue-glow: rgba(var(--accent-secondary-rgb), 0.42);
+
+  --chart-axis-grid: rgba(255, 255, 255, 0.08);
+  --chart-js-bar-fill: rgba(var(--accent-rgb), 0.35);
+  --chart-js-bar-stroke: rgba(var(--accent-rgb), 0.85);
+
+  --export-snapshot-bg: #152232;
+  --map-frame-bg: rgba(0, 0, 0, 0.15);
+
+  --select-option-fg: var(--inegi-navy);
+  --select-option-bg: #f0f4fc;
+
+  --table-head-bg: rgba(255, 255, 255, 0.04);
+  --table-row-hover: rgba(var(--accent-rgb), 0.06);
+
+  --geo-context-body-size: 16pt;
+
+  /* Bootstrap 5: texto legible sobre tarjetas / visor oscuros */
+  --bs-body-color: #ecf1f8;
+  --bs-body-color-rgb: 236, 241, 248;
+  --bs-secondary-color: rgba(255, 255, 255, 0.78);
+  --bs-secondary-rgb: 236, 241, 248;
+  --bs-tertiary-color: rgba(255, 255, 255, 0.58);
+  --bs-emphasis-color: #ffffff;
+  --bs-heading-color: #f5f8ff;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: var(--font-size-root);
+  line-height: 1.45;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background:
+    radial-gradient(1200px 700px at 18% 0%, var(--page-glow-teal), transparent 52%),
+    radial-gradient(880px 520px at 92% 12%, var(--page-glow-navy), transparent 56%),
+    radial-gradient(700px 420px at 55% 96%, var(--page-glow-muted), transparent 50%),
+    var(--bg);
+  color: var(--text);
+}
+
+.app-title {
+  font-weight: var(--font-weight-title);
+  letter-spacing: 0.2px;
+}
+
+/* Cabecera de dos líneas: altura real para cálculos 100vh en todas las secciones */
+.app-header.app-header--home {
+  --header-h: 5.5rem;
+  /* Mismo espacio útil que antes: 56px cabecera + 120px ≈ 88px cabecera + 88px */
+  --header-body-gap: 5.5rem;
+  --header-geo-gap: 14.5rem;
+  --header-dashboard-gap: 5rem;
+  min-height: var(--header-h);
+}
+
+.app-header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  min-height: var(--header-h);
+  color: var(--shell-text);
+  background: var(--header-bg);
+  border-color: var(--shell-border) !important;
+}
+
+html[data-theme="oscuro"] .app-header {
+  backdrop-filter: blur(10px);
+}
+
+html[data-theme="claro"] .app-header {
+  backdrop-filter: none;
+}
+
+html[data-theme="claro"] .app-header .badge.text-bg-light {
+  background: #f5f5f5 !important;
+  color: var(--shell-text) !important;
+  border: 1px solid var(--shell-border) !important;
+}
+
+html[data-theme="oscuro"] .app-header .badge.text-bg-light {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: var(--shell-text) !important;
+  border: 1px solid var(--shell-border) !important;
+}
+
+html[data-theme="claro"] .app-header .text-muted,
+html[data-theme="oscuro"] .app-header .text-muted {
+  color: var(--shell-muted) !important;
+}
+
+html[data-theme="claro"] #btnSidebar {
+  border-color: rgba(0, 40, 38, 0.35);
+  color: var(--shell-text);
+}
+
+html[data-theme="claro"] #btnSidebar img {
+  filter: brightness(0.25);
+}
+
+/* Rejilla principal: ver responsive-layout.css (Bootstrap row) */
+
+.app-sidebar {
+  color: var(--shell-text);
+  background: linear-gradient(180deg, var(--sidebar-bg-top), var(--sidebar-bg-bottom));
+  border-color: var(--shell-border) !important;
+  position: relative;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+html[data-theme="claro"] .app-sidebar .text-muted,
+html[data-theme="oscuro"] .app-sidebar .text-muted {
+  color: var(--shell-muted) !important;
+}
+
+html[data-theme="claro"] .app-sidebar select.municipio-select {
+  background-color: #f5f5f5;
+  border-color: var(--shell-border);
+  color: var(--shell-text);
+}
+
+html[data-theme="claro"] .app-sidebar select.municipio-select:focus {
+  background-color: #ffffff;
+  color: var(--shell-text);
+}
+
+html[data-theme="oscuro"] .app-sidebar select.municipio-select {
+  background-color: rgba(0, 0, 0, 0.22);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+html[data-theme="oscuro"] .app-sidebar select.municipio-select:focus {
+  background-color: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+}
+
+html[data-theme="claro"] .app-sidebar .menu-section {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+html[data-theme="oscuro"] .app-sidebar .menu-section {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="claro"] .app-sidebar .menu-item {
+  background: rgba(255, 255, 255, 0.45);
+}
+
+html[data-theme="oscuro"] .app-sidebar .menu-item {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+/* Selector de tema (pie del sidebar, siempre visible en ventana) */
+.sidebar-theme-picker {
+  margin-top: 0;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--shell-border);
+  flex-shrink: 0;
+  position: sticky;
+  bottom: 0;
+  z-index: 12;
+  min-height: 4.25rem;
+  box-shadow: 0 -6px 16px rgba(0, 0, 0, 0.12);
+  pointer-events: auto;
+  cursor: default;
+}
+
+html[data-theme="oscuro"] .sidebar-theme-picker {
+  background: linear-gradient(180deg, transparent, rgba(14, 23, 36, 0.95));
+}
+
+.app-main {
+  min-width: 0;
+  min-height: 0;
+  background: var(--shell-bg);
+}
+
+.sidebar-inner {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.app-sidebar .menu {
+  max-height: 100%;
+  padding-bottom: 4px;
+}
+
+.sidebar-municipios {
+  grid-row: 1;
+  min-height: 0;
+}
+
+.app-sidebar .menu {
+  grid-row: 2;
+  flex: none;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.app-sidebar .sidebar-theme-picker {
+  grid-row: 3;
+}
+
+.sidebar-heading {
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--shell-border);
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  padding: 12px 14px;
+  border-top: 1px solid var(--shell-border);
+}
+
+.app-sidebar.border-end,
+.app-header.border-bottom {
+  border-color: var(--shell-border) !important;
+}
+
+html[data-theme="claro"] .card .badge.text-bg-light {
+  background: rgba(255, 255, 255, 0.75) !important;
+  color: var(--text) !important;
+  border-color: var(--border) !important;
+}
+
+html[data-theme="claro"] .poblacion-action-btn.btn-outline-light {
+  --bs-btn-color: rgba(6, 16, 24, 0.92);
+  --bs-btn-border-color: rgba(0, 0, 0, 0.22);
+  --bs-btn-hover-bg: rgba(0, 51, 102, 0.12);
+  --bs-btn-hover-color: #020810;
+  --bs-btn-hover-border-color: rgba(0, 51, 102, 0.45);
+  --bs-btn-active-bg: rgba(0, 51, 102, 0.18);
+  --bs-btn-active-border-color: rgba(0, 51, 102, 0.55);
+  --bs-btn-disabled-color: rgba(6, 16, 24, 0.4);
+  --bs-btn-disabled-border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(255, 255, 255, 0.35);
+}
+
+/* Oscuro: refuerzo en panel de capas (visor) y checkboxes — color explícito */
+html[data-theme="oscuro"] .visor-layer-list,
+html[data-theme="oscuro"] .visor-layer-list .form-check-label {
+  color: #f2f6ff;
+}
+
+html[data-theme="oscuro"] .visor-layer-list .text-muted {
+  color: rgba(255, 255, 255, 0.82) !important;
+}
+
+/* Off-canvas sidebar móvil: responsive-layout.css */

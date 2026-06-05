@@ -1,0 +1,632 @@
+/**
+ * Rejilla responsiva Atlasgro — Bootstrap 5 breakpoints.
+ *
+ * Inicio: sidebar (2) + área principal (10) con rejilla interna mapa | panel + KPI 1–5.
+ * Define alturas --home-* y comportamiento col-md / col-lg del shell principal.
+ */
+
+:root {
+
+  --footer-h: 2.1rem;
+
+  --home-layout-offset: calc(var(--header-h) + var(--footer-h) + 1.25rem);
+
+  /* Altura mínima para 5 KPI (gráficas + 5 indicadores en tarjeta 5) */
+
+  --home-cards-band-h: clamp(11.5rem, 21vh, 15rem);
+
+}
+
+
+
+html,
+
+body {
+
+  min-height: 100%;
+
+}
+
+
+
+body {
+
+  display: flex;
+
+  flex-direction: column;
+
+}
+
+
+
+.app-shell {
+
+  display: flex;
+
+  flex-direction: column;
+
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  overflow: hidden;
+
+}
+
+
+
+.app-shell__fluid {
+
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  height: 100%;
+
+}
+
+
+
+.app-shell__row {
+
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  height: 100%;
+
+}
+
+
+
+.app-shell__row > [class*="col"] {
+
+  min-height: 0;
+
+}
+
+
+
+.app-main {
+
+  display: flex;
+
+  flex-direction: column;
+
+  min-width: 0;
+
+  overflow: hidden;
+
+}
+
+
+
+.app-main .dashboard-root {
+
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  overflow: hidden;
+
+}
+
+
+
+#main:not(.home-mode) .dashboard-root {
+  padding: 1rem;
+}
+
+/* Sin scroll de página en escritorio: viewport-fit.css */
+
+
+
+/* Rejilla Inicio: mapa + panel arriba; tarjetas KPI abajo (ancho completo) */
+
+.home-layout-grid {
+
+  display: grid;
+
+  gap: 0.5rem;
+
+  height: 100%;
+
+  min-height: 0;
+
+  overflow: hidden;
+
+  grid-template-columns: 1fr;
+
+  grid-template-rows: auto auto auto;
+
+  grid-template-areas:
+
+    "map"
+
+    "aside"
+
+    "cards";
+
+}
+
+
+
+.home-map-frame-wrap {
+
+  flex: 1 1 auto;
+
+  min-height: 0;
+
+  height: 100%;
+
+  width: 100%;
+
+}
+
+
+
+.home-map-zone {
+
+  grid-area: map;
+
+  min-height: 0;
+
+  min-width: 0;
+
+  display: flex;
+
+  flex-direction: column;
+
+  border-radius: 10px;
+
+  overflow: hidden;
+
+  border: 1px solid var(--home-card-border);
+
+  background: var(--home-map-bg);
+
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+
+}
+
+
+
+.home-aside-zone {
+
+  grid-area: aside;
+
+  min-height: 0;
+
+  min-width: 0;
+
+  display: block;
+
+  align-self: start;
+
+  height: auto;
+
+}
+
+
+
+.home-aside-zone .home-panel--mun {
+
+  flex: none;
+
+  height: auto;
+
+  max-height: none;
+
+  overflow: visible;
+
+}
+
+
+
+.home-cards-band {
+
+  grid-area: cards;
+
+  min-height: 0;
+
+  display: flex;
+
+  flex-direction: column;
+
+}
+
+
+
+.home-cards-scroll {
+
+  flex: 0 0 auto;
+
+  min-height: 0;
+
+  overflow: visible;
+
+}
+
+
+
+.home-cards-row {
+
+  display: grid;
+
+  gap: 0.5rem;
+
+  grid-template-columns: 1fr;
+
+  align-items: stretch;
+
+}
+
+
+
+.home-cards-row .home-card {
+
+  min-height: 0;
+
+  height: 100%;
+
+}
+
+
+
+/* Altura del mapa (#mapa-wrapper) por breakpoint */
+
+#mapa-wrapper,
+
+.home-map-zone #mapa-wrapper {
+
+  width: 100%;
+
+  min-height: 0;
+
+  flex: 1 1 auto;
+
+  height: 350px;
+
+}
+
+
+
+#mapa-wrapper .map-frame,
+
+#mapa-wrapper .map-frame .leaflet-container,
+#mapa-wrapper .map-frame .maplibregl-map,
+
+#mapMountHome {
+
+  height: 100% !important;
+
+  min-height: 0 !important;
+
+  width: 100%;
+
+}
+
+
+
+@media (min-width: 768px) {
+
+  #mapa-wrapper,
+
+  .home-map-zone #mapa-wrapper {
+
+    height: 450px;
+
+  }
+
+
+
+  .home-cards-row {
+
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+
+  }
+
+}
+
+
+
+@media (min-width: 992px) {
+
+  .home-layout-grid {
+
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 22%);
+
+    /* Mapa ocupa el espacio libre; KPIs altura fija al pie (sin hueco inferior) */
+
+    grid-template-rows: minmax(0, 1fr) var(--home-cards-band-h);
+
+    grid-template-areas:
+
+      "map aside"
+
+      "cards cards";
+
+    align-items: start;
+
+    gap: 0.35rem;
+
+    /* Último empujón: altura exacta del viewport menos cabecera, pie y márgenes */
+
+    height: calc(var(--app-main-h, 100vh - var(--header-h) - var(--footer-h)) - 0.45rem);
+
+    max-height: 100%;
+
+  }
+
+
+
+  .home-aside-zone {
+
+    align-self: stretch;
+
+    height: 100%;
+
+    min-height: 0;
+
+    display: flex;
+
+    flex-direction: column;
+
+  }
+
+
+
+  .home-aside-zone .home-panel--mun {
+
+    flex: 1 1 auto;
+
+    min-height: 16.5rem;
+
+    max-height: 100%;
+
+    width: 100%;
+
+  }
+
+
+
+  .home-map-zone {
+
+    align-self: stretch;
+
+    height: 100%;
+
+    min-height: 0;
+
+    max-height: none;
+
+  }
+
+
+
+  #mapa-wrapper,
+
+  .home-map-zone #mapa-wrapper {
+
+    height: 100%;
+
+    max-height: 100%;
+
+  }
+
+
+
+  .home-cards-band {
+
+    align-self: stretch;
+
+    flex-shrink: 0;
+
+    height: var(--home-cards-band-h);
+
+    min-height: var(--home-cards-band-h);
+
+    overflow: visible;
+
+  }
+
+
+
+  .home-cards-band .home-cards-row,
+
+  .home-cards-band .home-card {
+
+    height: 100%;
+
+    min-height: 0;
+
+  }
+
+}
+
+
+
+@media (min-width: 1200px) {
+
+  :root {
+
+    --home-cards-band-h: clamp(12.25rem, 21.5vh, 15.25rem);
+
+  }
+
+
+
+  html:has(#main.home-mode) .app-shell__row--home {
+
+    overflow: hidden;
+
+  }
+
+
+
+  .home-layout-grid {
+
+    grid-template-columns: minmax(0, 1fr) minmax(260px, 20rem);
+
+  }
+
+
+
+  .home-cards-row {
+
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+
+  }
+
+}
+
+
+
+
+
+
+/* Modo app: main ocupa columnas del sidebar */
+
+.app-shell__row:not(.app-shell__row--home) .app-main {
+
+  flex: 1 1 auto;
+
+}
+
+
+
+/* Tablet */
+
+@media (min-width: 768px) and (max-width: 991.98px) {
+
+  .app-sidebar {
+
+    position: relative;
+
+    transform: none;
+
+    height: auto;
+
+    max-height: none;
+
+  }
+
+
+
+  .app-shell__row--home .app-main {
+
+    max-height: none;
+
+  }
+
+}
+
+
+
+/* Móvil: una columna; menú lateral off-canvas */
+
+@media (max-width: 767.98px) {
+
+  .app-shell__row {
+
+    flex-wrap: wrap;
+
+  }
+
+
+
+  .app-sidebar {
+
+    position: fixed;
+
+    left: 0;
+
+    top: var(--header-h);
+
+    height: calc(100vh - var(--header-h));
+
+    width: min(92vw, var(--sidebar-w));
+
+    max-width: 320px;
+
+    transform: translateX(-105%);
+
+    transition: transform 0.18s ease;
+
+    z-index: 60;
+
+    flex: 0 0 auto;
+
+  }
+
+
+
+  .app-sidebar.is-open {
+
+    transform: translateX(0);
+
+  }
+
+
+
+  .app-main {
+
+    flex: 0 0 100%;
+
+    max-width: 100%;
+
+  }
+
+
+
+  html:has(#main.home-mode) {
+
+    overflow: auto;
+
+    height: auto;
+
+  }
+
+
+
+  html:has(#main.home-mode) body {
+
+    overflow: auto;
+
+    height: auto;
+
+  }
+
+
+
+  html:has(#main.home-mode) .app-shell {
+
+    overflow: visible;
+
+    max-height: none;
+
+  }
+
+
+
+  #main.home-mode {
+
+    overflow: visible;
+
+    height: auto;
+
+  }
+
+
+
+  .home-layout-grid {
+
+    overflow: visible;
+
+    height: auto;
+
+  }
+
+}
+
+

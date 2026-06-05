@@ -1,0 +1,574 @@
+/**
+ * Tablas Martin (PostGIS atlas.*) y simbología MapLibre (MxSIG_vector.map).
+ * source-layer en MVT = id del catálogo Martin (p. ej. "c_mun", no "atlas.c_mun").
+ */
+
+/** Suavizado sutil del trazo central (overlays / detalle). */
+export const LINE_BLUR_SOFT = 0.2;
+
+/** Municipios: visibles pero por debajo del contorno estatal. */
+export const HOME_MUN_LINE_STACK_OPACITY = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  0.72,
+  8,
+  0.82,
+  10,
+  0.92,
+  12,
+  1,
+  14,
+  1,
+];
+
+/** @deprecated alias de HOME_MUN_LINE_STACK_OPACITY */
+export const HOME_LINE_STACK_OPACITY = HOME_MUN_LINE_STACK_OPACITY;
+
+/** Contorno estatal: visible desde zoom bajo (no se apaga como municipios). */
+export const HOME_ENT_LINE_STACK_OPACITY = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  0.92,
+  7,
+  0.97,
+  9,
+  1,
+  11,
+  1,
+];
+
+/** line-blur mayor en zoom bajo suaviza el trazo vectorial (MapLibre paint line-blur). */
+export const HOME_LINE_BLUR = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  0.55,
+  8,
+  0.35,
+  11,
+  0.18,
+  14,
+  0.08,
+];
+
+/** Joins/caps redondeados — mejora esquinas y terminaciones. */
+export const LINE_LAYOUT_SMOOTH = {
+  "line-join": "round",
+  "line-cap": "round",
+};
+
+function homeLineOpacity(zoomStops) {
+  return ["*", HOME_MUN_LINE_STACK_OPACITY, ["interpolate", ["linear"], ["zoom"], ...zoomStops]];
+}
+
+function homeMunLineOpacity(zoomStops) {
+  return homeLineOpacity(zoomStops);
+}
+
+function homeEntLineOpacity(zoomStops) {
+  return ["*", HOME_ENT_LINE_STACK_OPACITY, ["interpolate", ["linear"], ["zoom"], ...zoomStops]];
+}
+
+/** Ancho de línea escalado por zoom: lineWidthZoom(8, 1, 12, 2, 15, 4) */
+export function lineWidthZoom(...stops) {
+  return ["interpolate", ["linear"], ["zoom"], ...stops];
+}
+
+/**
+ * Municipios — gruesos en vista estatal (Explorador ~z6–8); al acercar (z9+) grosor fino.
+ * fill-outline-color siempre ~1px; en Explorador se apaga (HOME_MUN_DISP_FILL_PAINT).
+ */
+const MUN_LINE_HALO_WIDTH = lineWidthZoom(5, 14, 7, 13, 8, 12, 9, 5.4, 12, 6, 15, 6.8);
+const MUN_LINE_WIDTH = lineWidthZoom(5, 5.5, 7, 5, 8, 4.5, 9, 2.25, 12, 2.85, 15, 3.4);
+
+/** Sin line-blur en zoom bajo: el blur hacía ver delgadas las líneas en vista estatal. */
+export const HOME_MUN_LINE_BLUR = [
+  "interpolate",
+  ["linear"],
+  ["zoom"],
+  5,
+  0,
+  9,
+  0,
+  11,
+  0.18,
+  14,
+  0.08,
+];
+
+/**
+ * Contorno estatal — doble línea (halo + núcleo), ~2× grosor municipal en vista estatal.
+ * La capa casing queda disponible pero apagada (evita banda excesiva).
+ */
+const ENT_LINE_CASING_WIDTH = lineWidthZoom(5, 10, 7, 11, 9, 12, 12, 13, 15, 14);
+const ENT_LINE_HALO_WIDTH = lineWidthZoom(5, 6, 7, 6.5, 9, 7, 12, 8, 15, 9);
+const ENT_LINE_WIDTH = lineWidthZoom(5, 2.2, 7, 2.4, 9, 2.6, 12, 2.9, 15, 3.2);
+
+/** Overlays administrativos (colonias, AGEB, localidades). */
+const DETAIL_LINE_HALO = lineWidthZoom(10, 1.6, 13, 2.6, 16, 3.8, 18, 5.5);
+const DETAIL_LINE_CORE = lineWidthZoom(10, 0.75, 13, 1.35, 16, 2.2, 18, 3.5);
+
+/** Vialidades / RNC. */
+const ROAD_LINE_HALO = lineWidthZoom(10, 2.2, 13, 3.4, 16, 5, 18, 7);
+const ROAD_LINE_CORE = lineWidthZoom(10, 1.1, 13, 2, 16, 3.2, 18, 4.8);
+
+/** Hidrografía (corrientes). */
+const HYDRO_LINE_HALO = lineWidthZoom(8, 1.8, 11, 3, 14, 4.5, 16, 6);
+const HYDRO_LINE_CORE = lineWidthZoom(8, 0.9, 11, 1.6, 14, 2.8, 16, 4);
+
+/** Curvas de nivel (curnivel / c_curvasn en MxSIG_vector.map). */
+const CUR_LINE_HALO = lineWidthZoom(10, 1.6, 13, 2, 16, 2.4);
+const CUR_LINE_CORE = lineWidthZoom(10, 1, 13, 1.2, 16, 1.5);
+const CUR_MA_HALO = lineWidthZoom(10, 3.4, 13, 3.8, 16, 4.2);
+const CUR_MA_CORE = lineWidthZoom(10, 2.2, 13, 2.6, 16, 3);
+
+/** Vialidades — MapServer OUTLINECOLOR 140 95 55 (sin relleno oscuro). */
+const VIAL_COLOR = "rgb(140, 95, 55)";
+
+/** RNC — colores por tipo_vial (OUTLINECOLOR en MxSIG_vector.map). */
+export const RNC_LINE_COLOR = [
+  "match",
+  ["coalesce", ["get", "tipo_vial"], ["get", "TIPO_VIAL"], ""],
+  "Carretera",
+  "rgb(200, 0, 0)",
+  "Periférico",
+  "rgb(235, 145, 60)",
+  "Vereda",
+  "rgb(0, 0, 0)",
+  "Camino",
+  "rgb(140, 95, 55)",
+  "rgb(140, 95, 55)",
+];
+export const MARTIN_TABLES = {
+  entidad: "c_ent",
+  entidadDisp: "v_c_ent_disp",
+  municipios: "c_mun",
+  municipiosDisp: "v_c_mun_disp",
+  locsAtlas: "c_l",
+  locsPunto: "c_loc_punto",
+  colonias: "c_col_ase",
+  agebUrbanas: "c_a",
+  agebRurales: "c_ar",
+  manzanas: "c_m",
+  vialidades: "c_e",
+  rnc: "c_rnc",
+  saneamientoAgua: "c_agua_sanea",
+  clima: "clima",
+  hcorrientes: "hcorrientes",
+  hcuerpos: "hcuerpos",
+  curnivel: "curnivel",
+};
+
+/** Curvas maestras (elev múltiplo de 1000) — MxSIG c_curvasn. */
+export function curnivelMaestroFilter() {
+  return [
+    "==",
+    ["%", ["round", ["to-number", ["coalesce", ["get", "elev"], ["get", "ELEV"], 0]]], 1000],
+    0,
+  ];
+}
+
+/** Uso de suelo (Martin: atlas.usosuelo). */
+export const MARTIN_USO_SUELO = {
+  sourceId: "src_usosuelo",
+  layerId: "lyr_usosuelo",
+  martinPath: "usosuelo",
+  sourceLayer: "usosuelo",
+};
+
+/** Capa vectorial dentro del tile (.pbf) */
+export function martinSourceLayer(table) {
+  return table;
+}
+
+export const LAYER_PAINT = {
+  /**
+   * Municipios — estilo MapServer (TYPE POLYGON + OUTLINECOLOR).
+   * fill-outline-color usa antialiasing GPU → contorno suave en zoom bajo.
+   */
+  munAllFill: {
+    "fill-antialias": true,
+    "fill-color": "#dce8ef",
+    "fill-opacity": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      5,
+      0.22,
+      8,
+      0.2,
+      11,
+      0.22,
+      14,
+      0.28,
+    ],
+    "fill-outline-color": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      5,
+      "#7a96a8",
+      9,
+      "#6b8494",
+      12,
+      "#556b78",
+      14,
+      "#4a6572",
+    ],
+  },
+  munAllLineHalo: {
+    "line-color": "#eef2f6",
+    "line-width": MUN_LINE_HALO_WIDTH,
+    "line-opacity": homeMunLineOpacity([5, 0.88, 9, 0.8, 14, 0.65]),
+    "line-blur": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      5,
+      0,
+      9,
+      0.12,
+      14,
+      0,
+    ],
+  },
+  munAllLine: {
+    "line-color": "#4a6572",
+    "line-width": MUN_LINE_WIDTH,
+    "line-opacity": homeMunLineOpacity([5, 0.85, 9, 0.9, 14, 0.96]),
+    "line-blur": HOME_MUN_LINE_BLUR,
+  },
+  munHighlightFill: {
+    "fill-antialias": true,
+    "fill-color": "#008b8b",
+    "fill-opacity": 0.42,
+  },
+  munHighlightLineHalo: {
+    "line-color": "#ffffff",
+    "line-width": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      6,
+      3.5,
+      9,
+      4,
+      12,
+      4.5,
+      15,
+      5,
+    ],
+    "line-opacity": 0.65,
+  },
+  munHighlightLine: {
+    "line-color": "#004858",
+    "line-width": lineWidthZoom(6, 1.75, 9, 2.25, 12, 2.75, 15, 3.25),
+    "line-opacity": 0.95,
+    "line-blur": LINE_BLUR_SOFT,
+  },
+  marcoMunLine: {
+    "line-color": "#2c5282",
+    "line-width": lineWidthZoom(8, 1.85, 12, 2.6, 15, 3.4),
+    "line-opacity": 0.92,
+  },
+  /** Contorno estatal: triple banda oscura (legible sobre mapa base claro). */
+  entFill: {
+    "fill-antialias": true,
+    "fill-color": "#c5d4e3",
+    "fill-opacity": [
+      "interpolate",
+      ["linear"],
+      ["zoom"],
+      5,
+      0.04,
+      10,
+      0.02,
+      14,
+      0,
+    ],
+    "fill-outline-color": "rgba(6, 24, 41, 0)",
+  },
+  /** Banda exterior (reserva; apagada en Explorador — ver applyHomeMapModeLayers). */
+  marcoEntLineCasing: {
+    "line-color": "#64748b",
+    "line-width": ENT_LINE_CASING_WIDTH,
+    "line-opacity": 0.75,
+  },
+  marcoEntLineHalo: {
+    "line-color": "#64748b",
+    "line-width": ENT_LINE_HALO_WIDTH,
+    "line-opacity": 0.88,
+  },
+  marcoEntLine: {
+    "line-color": "#0f172a",
+    "line-width": ENT_LINE_WIDTH,
+    "line-opacity": 1,
+  },
+  locsAtlasHalo: {
+    "line-color": "#3399ff",
+    "line-width": DETAIL_LINE_HALO,
+    "line-opacity": 0.95,
+  },
+  locsAtlas: {
+    "line-color": "#3399ff",
+    "line-width": DETAIL_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.95,
+  },
+  /** Relleno casi invisible solo para hover dentro del polígono (c_l). */
+  locsAtlasFillHit: {
+    "fill-color": "#3399ff",
+    "fill-opacity": 0.01,
+    "fill-antialias": true,
+  },
+  coloniasHalo: {
+    "line-color": "#990000",
+    "line-width": DETAIL_LINE_HALO,
+    "line-opacity": 0.95,
+  },
+  colonias: {
+    "line-color": "#990000",
+    "line-width": DETAIL_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.95,
+  },
+  coloniasFillHit: {
+    "fill-color": "#990000",
+    "fill-opacity": 0.01,
+    "fill-antialias": true,
+  },
+  agebUHalo: {
+    "line-color": "#990000",
+    "line-width": DETAIL_LINE_HALO,
+    "line-opacity": 0.95,
+  },
+  agebU: {
+    "line-color": "#990000",
+    "line-width": DETAIL_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.95,
+  },
+  agebUFillHit: {
+    "fill-color": "#990000",
+    "fill-opacity": 0.01,
+    "fill-antialias": true,
+  },
+  agebRHalo: {
+    "line-color": "#666600",
+    "line-width": DETAIL_LINE_HALO,
+    "line-opacity": 0.95,
+  },
+  agebR: {
+    "line-color": "#666600",
+    "line-width": DETAIL_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.95,
+  },
+  agebRFillHit: {
+    "fill-color": "#666600",
+    "fill-opacity": 0.01,
+    "fill-antialias": true,
+  },
+  manzanasFill: {
+    "fill-color": "rgb(245, 225, 145)",
+    "fill-outline-color": "rgb(150, 150, 150)",
+    "fill-opacity": 0.6,
+  },
+  manzanasLineHalo: {
+    "line-color": "rgb(150, 150, 150)",
+    "line-width": lineWidthZoom(14, 1.4, 16, 2, 18, 2.8),
+    "line-opacity": 0.9,
+  },
+  manzanasLine: {
+    "line-color": "rgb(150, 150, 150)",
+    "line-width": lineWidthZoom(14, 0.65, 16, 1, 18, 1.5),
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.9,
+  },
+  vialidadesHalo: {
+    "line-color": VIAL_COLOR,
+    "line-width": ROAD_LINE_HALO,
+    "line-opacity": 0.95,
+  },
+  vialidades: {
+    "line-color": VIAL_COLOR,
+    "line-width": ROAD_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.95,
+  },
+  rncHalo: {
+    "line-color": RNC_LINE_COLOR,
+    "line-width": ROAD_LINE_HALO,
+    "line-opacity": 0.95,
+  },
+  rnc: {
+    "line-color": RNC_LINE_COLOR,
+    "line-width": ROAD_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.95,
+  },
+  saneamiento: { "circle-color": "#0066cc", "circle-radius": 5 },
+  locsPunto: {
+    "circle-color": "#0066cc",
+    "circle-radius": 6,
+    "circle-stroke-width": 1,
+    "circle-stroke-color": "#fff",
+  },
+  usoSuelo: {
+    "fill-color": [
+      "case",
+      [
+        ">=",
+        ["index-of", "CUERPO DE AGUA", ["upcase", ["coalesce", ["to-string", ["get", "descripcio"]], ""]]],
+        0,
+      ],
+      "rgb(0, 197, 255)",
+      [
+        ">=",
+        ["index-of", "ASENTAMIENTOS", ["upcase", ["coalesce", ["to-string", ["get", "descripcio"]], ""]]],
+        0,
+      ],
+      "rgb(255, 0, 0)",
+      [
+        ">=",
+        ["index-of", "AGRICULTURA", ["upcase", ["coalesce", ["to-string", ["get", "descripcio"]], ""]]],
+        0,
+      ],
+      "rgb(255, 255, 190)",
+      [">=", ["index-of", "BOSQUE", ["upcase", ["coalesce", ["to-string", ["get", "descripcio"]], ""]]], 0],
+      "rgb(38, 115, 0)",
+      [">=", ["index-of", "SELVA", ["upcase", ["coalesce", ["to-string", ["get", "descripcio"]], ""]]], 0],
+      "rgb(112, 168, 0)",
+      "rgb(204, 204, 204)",
+    ],
+    "fill-opacity": 0.85,
+  },
+  hcorrientesHalo: {
+    "line-color": [
+      "match",
+      ["upcase", ["coalesce", ["to-string", ["get", "condicion"]], ""]],
+      "INTERMITENTE",
+      "rgb(100, 180, 255)",
+      "rgb(0, 120, 230)",
+    ],
+    "line-width": HYDRO_LINE_HALO,
+    "line-opacity": 0.92,
+  },
+  hcorrientes: {
+    "line-color": [
+      "match",
+      ["upcase", ["coalesce", ["to-string", ["get", "condicion"]], ""]],
+      "INTERMITENTE",
+      "rgb(100, 180, 255)",
+      "rgb(0, 120, 230)",
+    ],
+    "line-width": HYDRO_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.92,
+    "line-dasharray": [
+      "case",
+      ["==", ["upcase", ["coalesce", ["to-string", ["get", "condicion"]], ""]], "INTERMITENTE"],
+      ["literal", [2, 2]],
+      ["literal", [1, 0]],
+    ],
+  },
+  hcuerposFill: {
+    "fill-antialias": true,
+    "fill-color": [
+      "match",
+      ["upcase", ["coalesce", ["to-string", ["get", "condicion"]], ""]],
+      "INTERMITENTE",
+      "rgb(170, 230, 255)",
+      "rgb(0, 160, 255)",
+    ],
+    "fill-opacity": 0.88,
+    "fill-outline-color": [
+      "match",
+      ["upcase", ["coalesce", ["to-string", ["get", "condicion"]], ""]],
+      "INTERMITENTE",
+      "rgb(120, 190, 230)",
+      "rgb(0, 120, 230)",
+    ],
+  },
+  /** Curvas de nivel — doble trazo blanco + marrón (OPACITY 35/88 en mapfile). */
+  curnivelHalo: {
+    "line-color": "#ffffff",
+    "line-width": CUR_LINE_HALO,
+    "line-opacity": 0.35,
+  },
+  curnivel: {
+    "line-color": "#463a30",
+    "line-width": CUR_LINE_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 0.88,
+  },
+  curnivelMaestroHalo: {
+    "line-color": "#ffffff",
+    "line-width": CUR_MA_HALO,
+    "line-opacity": 0.55,
+  },
+  curnivelMaestro: {
+    "line-color": "#231c16",
+    "line-width": CUR_MA_CORE,
+    "line-blur": LINE_BLUR_SOFT,
+    "line-opacity": 1,
+  },
+  clima: {
+    "fill-color": [
+      "match",
+      ["get", "desc_mapa"],
+      "Grupo A - Cálido Subhúmedo",
+      "rgb(230, 0, 126)",
+      "Grupo C - Semicálido Subhúmedo",
+      "rgb(34, 161, 18)",
+      "Grupo C - Templado Subhúmedo",
+      "rgb(153, 204, 102)",
+      "Grupo B - Semiseco",
+      "rgb(188, 143, 143)",
+      "Grupo B - Muy Seco",
+      "rgb(255, 255, 0)",
+      "rgb(200, 200, 200)",
+    ],
+    "fill-opacity": 0.88,
+  },
+};
+
+/** Explorador municipal: relleno municipal (contorno fino de respaldo + capas line encima). */
+export const HOME_MUN_DISP_FILL_PAINT = {
+  "fill-antialias": true,
+  "fill-color": "#dce8ef",
+  "fill-opacity": [
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    5,
+    0.22,
+    8,
+    0.2,
+    11,
+    0.22,
+    14,
+    0.28,
+  ],
+  "fill-outline-color": "rgba(0, 0, 0, 0)",
+};
+
+/** Explorador: grosor fijo (zoom bloqueado ~z7); geometría c_mun (no v_c_mun_disp). */
+export const HOME_MUN_DISP_LINE_HALO_PAINT = {
+  "line-color": "#f1f5f9",
+  "line-width": 4.2,
+  "line-opacity": 0.95,
+  "line-blur": 0,
+};
+
+export const HOME_MUN_DISP_LINE_PAINT = {
+  "line-color": "#475569",
+  "line-width": 1.25,
+  "line-opacity": 1,
+  "line-blur": 0,
+};

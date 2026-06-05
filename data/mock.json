@@ -1,0 +1,112 @@
+{
+  "meta": {
+    "name": "Mock Atlas Guerrero",
+    "updatedAt": "2026-04-16",
+    "notes": "Valores de ejemplo por municipio. Sustituir por datos reales después."
+  },
+  "municipios": [
+    "Acapulco de Juárez",
+    "Chilpancingo de los Bravo",
+    "Iguala de la Independencia",
+    "Taxco de Alarcón",
+    "Zihuatanejo de Azueta",
+    "Tlapa de Comonfort",
+    "Coyuca de Benítez",
+    "Ometepec",
+    "Tecpan de Galeana",
+    "Petatlán"
+  ],
+  "indicators": {
+    "geo_altitud": {
+      "unit": "m",
+      "values": {
+        "Acapulco de Juárez": 30,
+        "Chilpancingo de los Bravo": 1250,
+        "Iguala de la Independencia": 740,
+        "Taxco de Alarcón": 1750,
+        "Zihuatanejo de Azueta": 10,
+        "Tlapa de Comonfort": 1250,
+        "Coyuca de Benítez": 40,
+        "Ometepec": 180,
+        "Tecpan de Galeana": 80,
+        "Petatlán": 20
+      }
+    },
+    "socio_poblacion": {
+      "unit": "personas",
+      "values": {
+        "Acapulco de Juárez": 779566,
+        "Chilpancingo de los Bravo": 283354,
+        "Iguala de la Independencia": 157817,
+        "Taxco de Alarcón": 104053,
+        "Zihuatanejo de Azueta": 126152,
+        "Tlapa de Comonfort": 92724,
+        "Coyuca de Benítez": 83292,
+        "Ometepec": 69803,
+        "Tecpan de Galeana": 91010,
+        "Petatlán": 51266
+      }
+    },
+    "socio_densidad": {
+      "unit": "hab/km²",
+      "values": {
+        "Acapulco de Juárez": 414,
+        "Chilpancingo de los Bravo": 112,
+        "Iguala de la Independencia": 278,
+        "Taxco de Alarcón": 65,
+        "Zihuatanejo de Azueta": 86,
+        "Tlapa de Comonfort": 127,
+        "Coyuca de Benítez": 48,
+        "Ometepec": 72,
+        "Tecpan de Galeana": 37,
+        "Petatlán": 25
+      }
+    },
+    "viv_hacinamiento": {
+      "unit": "%",
+      "values": {
+        "Acapulco de Juárez": 9.1,
+        "Chilpancingo de los Bravo": 10.4,
+        "Iguala de la Independencia": 8.7,
+        "Taxco de Alarcón": 12.6,
+        "Zihuatanejo de Azueta": 7.9,
+        "Tlapa de Comonfort": 16.8,
+        "Coyuca de Benítez": 14.2,
+        "Ometepec": 15.3,
+        "Tecpan de Galeana": 13.1,
+        "Petatlán": 11.9
+      }
+    },
+    "eco_empleo": {
+      "unit": "%",
+      "values": {
+        "Acapulco de Juárez": 93.2,
+        "Chilpancingo de los Bravo": 92.1,
+        "Iguala de la Independencia": 94.0,
+        "Taxco de Alarcón": 91.3,
+        "Zihuatanejo de Azueta": 94.7,
+        "Tlapa de Comonfort": 89.6,
+        "Coyuca de Benítez": 90.8,
+        "Ometepec": 88.9,
+        "Tecpan de Galeana": 90.1,
+        "Petatlán": 91.0
+      }
+    },
+    "contacto_directorio": {
+      "unit": "",
+      "values": {
+        "Acapulco de Juárez": 1,
+        "Chilpancingo de los Bravo": 1,
+        "Iguala de la Independencia": 1,
+        "Taxco de Alarcón": 1,
+        "Zihuatanejo de Azueta": 1,
+        "Tlapa de Comonfort": 1,
+        "Coyuca de Benítez": 1,
+        "Ometepec": 1,
+        "Tecpan de Galeana": 1,
+        "Petatlán": 1
+      }
+    }
+  }
+}
+

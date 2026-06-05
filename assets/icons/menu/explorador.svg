@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+  <!-- Mapa municipal (pliegue) -->
+  <path d="M4 7.5 9 5.5l3 1.2 3-1.2 5 2v11l-5-2-3 1.2-3-1.2-5 2V7.5z"/>
+  <path d="M9 5.5v11M15 6.7v11"/>
+  <!-- Lupa: explorar territorio -->
+  <circle cx="16.5" cy="16.5" r="3.25"/>
+  <path d="M18.9 18.9 21 21"/>
+</svg>
