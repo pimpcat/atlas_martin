@@ -11,21 +11,24 @@ import {
   isInvPolygonLayer,
 } from "./invVivCatalog.js";
 import { invLayerIconSvg } from "./invVivIcons.js";
-import { INV_ENTORNO_CODES, getEntornoColor, getEntornoLabel } from "./invVivEntorno.js";
+import { INV_ENTORNO_CODES, getEntornoLabel } from "./invVivEntorno.js";
 
 // --- Constantes de zoom y panes Leaflet ---
 
 const API_INV_BBOX = apiUrl("/api/inv/bbox");
 const INV_SOURCE_ID = "invviv-geojson";
-const INV_LAYER_POINT = "invviv-points";
+const INV_LAYER_POINT_BG = "invviv-points-bg";
+const INV_LAYER_POINT_LABEL = "invviv-points-label";
 const INV_LAYER_POLY = "invviv-polygons";
+const INV_LAYER_POLY_OUTLINE = "invviv-poly-outline";
+const INV_LAYER_POLY_LABEL = "invviv-poly-labels";
 /** Manzanas INV (etiquetas y polígonos): solo zoom de detalle calle/manzana. */
 const MIN_ZOOM_POINT = 14;
 const MIN_ZOOM_POLYGON = 14;
-const INV_MARKER_PANE = "invvivLabels";
-const INV_POLY_PANE = "invvivPolygons";
-/** Pane propio: debe quedar por encima de invvivLabels (Leaflet tooltipPane ≈ 650). */
-const INV_TOOLTIP_PANE = "invvivTooltips";
+
+/** @type {Array<{ layerId: string, handlers: [string, Function][] }>} */
+let _invTipBindings = [];
+let _invTipEl = null;
 
 /** @type {string | null} */
 let _activeField = null;
@@ -43,6 +46,14 @@ let _syncZoomUiHandler = null;
 let _mapZoomGuardHandler = null;
 let _fetchGen = 0;
 let _statusEl = null;
+let _refreshTimer = null;
+/** @type {"point"|"polygon"|null} */
+let _lastRenderMode = null;
+/** @type {string|null} */
+let _lastRenderField = null;
+/** @type {string|null} */
+let _lastFetchKey = null;
+let _fetchInFlight = false;
 
 function mapZoomLevel(map) {
   if (!map) return 0;
@@ -99,14 +110,111 @@ function syncInvVivHint(map) {
   hintEl.style.display = z >= minZ ? "none" : "";
 }
 
-function ensureInvVivPanes(_map) {
-  /* MapLibre no usa panes Leaflet; capas INV van por orden de addLayer. */
+function invLayerIdsToRemove() {
+  return [
+    INV_LAYER_POINT_BG,
+    INV_LAYER_POINT_LABEL,
+    INV_LAYER_POLY,
+    INV_LAYER_POLY_OUTLINE,
+    INV_LAYER_POLY_LABEL,
+    INV_SOURCE_ID,
+  ];
 }
 
-function bringInvTooltipToFront(layer) {
-  const tip = layer && layer.getTooltip ? layer.getTooltip() : null;
-  if (tip && typeof tip.bringToFront === "function") {
-    tip.bringToFront();
+function formatInvValue(props, layerDef) {
+  if (!layerDef) return "—";
+  if (layerDef.kind === "entorno") return getEntornoLabel(props ? props.value : null);
+  return fmtVal(props ? props.value : null);
+}
+
+function enrichInvFeatureCollection(fc, layerDef) {
+  const badge = layerBadgeStyle(layerDef?.color || "#66bb6a");
+  const features = (fc?.features || []).map((feature) => {
+    const props = feature?.properties || {};
+    return {
+      ...feature,
+      properties: {
+        ...props,
+        value_label: formatInvValue(props, layerDef),
+        label_fg: badge.fg,
+      },
+    };
+  });
+  return { type: "FeatureCollection", features };
+}
+
+function ensureInvTipEl(map) {
+  const container = map.getContainer();
+  if (_invTipEl && _invTipEl.parentNode !== container) {
+    _invTipEl.remove();
+    _invTipEl = null;
+  }
+  if (_invTipEl) return _invTipEl;
+  _invTipEl = document.createElement("div");
+  _invTipEl.className = "invviv-map-tip";
+  _invTipEl.setAttribute("role", "tooltip");
+  _invTipEl.style.display = "none";
+  container.appendChild(_invTipEl);
+  return _invTipEl;
+}
+
+function showInvTip(map, point, html) {
+  const el = ensureInvTipEl(map);
+  el.innerHTML = html;
+  el.style.display = "block";
+  el.style.left = `${Math.round(point.x + 14)}px`;
+  el.style.top = `${Math.round(point.y + 14)}px`;
+  map.getCanvas().style.cursor = "pointer";
+}
+
+function hideInvTip(map) {
+  if (_invTipEl) _invTipEl.style.display = "none";
+  if (map) map.getCanvas().style.cursor = "";
+}
+
+function unbindInvMapTooltips(map) {
+  if (!map) return;
+  for (const binding of _invTipBindings) {
+    for (const [ev, fn] of binding.handlers) {
+      try {
+        map.off(ev, binding.layerId, fn);
+      } catch {
+        /* noop */
+      }
+    }
+  }
+  _invTipBindings = [];
+  hideInvTip(map);
+}
+
+function bindInvMapTooltips(map, layerIds) {
+  unbindInvMapTooltips(map);
+  for (const layerId of layerIds) {
+    if (!map.getLayer(layerId)) continue;
+    const onEnter = (e) => {
+      const f = e.features?.[0];
+      if (!f) return;
+      showInvTip(map, e.point, buildTooltipHtml(f.properties || {}));
+    };
+    const onMove = (e) => {
+      if (!_invTipEl || _invTipEl.style.display === "none") return;
+      _invTipEl.style.left = `${Math.round(e.point.x + 14)}px`;
+      _invTipEl.style.top = `${Math.round(e.point.y + 14)}px`;
+      const f = e.features?.[0];
+      if (f) _invTipEl.innerHTML = buildTooltipHtml(f.properties || {});
+    };
+    const onLeave = () => hideInvTip(map);
+    map.on("mouseenter", layerId, onEnter);
+    map.on("mousemove", layerId, onMove);
+    map.on("mouseleave", layerId, onLeave);
+    _invTipBindings.push({
+      layerId,
+      handlers: [
+        ["mouseenter", onEnter],
+        ["mousemove", onMove],
+        ["mouseleave", onLeave],
+      ],
+    });
   }
 }
 
@@ -245,18 +353,139 @@ function removeInvVivMapControls(map) {
   }
 }
 
+function padMercBbox(sw, ne, ratio = 0.12) {
+  const dx = Math.max((ne.x - sw.x) * ratio, 8);
+  const dy = Math.max((ne.y - sw.y) * ratio, 8);
+  return {
+    sw: { x: sw.x - dx, y: sw.y - dy },
+    ne: { x: ne.x + dx, y: ne.y + dy },
+  };
+}
+
+function buildFetchKey(cve, field, isPolygon, sw, ne) {
+  const round = (n) => Math.round(n / 4);
+  return [
+    cve,
+    field,
+    isPolygon ? "poly" : "pt",
+    round(sw.x),
+    round(sw.y),
+    round(ne.x),
+    round(ne.y),
+  ].join("|");
+}
+
+function applyPointLayerPaint(map, layerDef) {
+  const color = layerDef?.color || "#66bb6a";
+  const badge = layerBadgeStyle(color);
+  const textColor = badgeTextColor(color);
+  const textHalo = textColor === "#ffffff" ? "rgba(0, 0, 0, 0.5)" : "rgba(255, 255, 255, 0.75)";
+  if (!map.getLayer(INV_LAYER_POINT_BG)) return;
+  map.setPaintProperty(INV_LAYER_POINT_BG, "circle-color", color);
+  map.setPaintProperty(INV_LAYER_POINT_BG, "circle-stroke-color", badge.border);
+  if (map.getLayer(INV_LAYER_POINT_LABEL)) {
+    map.setPaintProperty(INV_LAYER_POINT_LABEL, "text-color", textColor);
+    map.setPaintProperty(INV_LAYER_POINT_LABEL, "text-halo-color", textHalo);
+  }
+}
+
+function addPointLayers(map, layerDef) {
+  const color = layerDef?.color || "#66bb6a";
+  const badge = layerBadgeStyle(color);
+  const textColor = badgeTextColor(color);
+  const textHalo = textColor === "#ffffff" ? "rgba(0, 0, 0, 0.5)" : "rgba(255, 255, 255, 0.75)";
+  map.addLayer({
+    id: INV_LAYER_POINT_BG,
+    type: "circle",
+    source: INV_SOURCE_ID,
+    paint: {
+      "circle-radius": [
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        14,
+        16,
+        16,
+        18,
+        18,
+        20,
+      ],
+      "circle-color": color,
+      "circle-opacity": 0.92,
+      "circle-stroke-width": 1.5,
+      "circle-stroke-color": badge.border,
+    },
+  });
+  map.addLayer({
+    id: INV_LAYER_POINT_LABEL,
+    type: "symbol",
+    source: INV_SOURCE_ID,
+    layout: {
+      "text-field": ["coalesce", ["get", "value_label"], "—"],
+      "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+      "text-size": ["interpolate", ["linear"], ["zoom"], 14, 11, 17, 13, 19, 14],
+      "text-anchor": "center",
+      "text-allow-overlap": true,
+      "text-ignore-placement": true,
+      "symbol-placement": "point",
+    },
+    paint: {
+      "text-color": textColor,
+      "text-halo-color": textHalo,
+      "text-halo-width": 1,
+    },
+  });
+  bindInvMapTooltips(map, [INV_LAYER_POINT_BG, INV_LAYER_POINT_LABEL]);
+  try {
+    map.moveLayer(INV_LAYER_POINT_LABEL);
+  } catch {
+    /* noop */
+  }
+}
+
+function addPolygonLayers(map) {
+  const matchExpr = ["match", ["to-number", ["get", "value"]]];
+  INV_ENTORNO_CODES.forEach((c) => {
+    matchExpr.push(c.code, c.color);
+  });
+  matchExpr.push("#cccccc");
+  map.addLayer({
+    id: INV_LAYER_POLY,
+    type: "fill",
+    source: INV_SOURCE_ID,
+    paint: { "fill-color": matchExpr, "fill-opacity": 0.78 },
+  });
+  map.addLayer({
+    id: INV_LAYER_POLY_OUTLINE,
+    type: "line",
+    source: INV_SOURCE_ID,
+    paint: { "line-color": "#333333", "line-width": 1 },
+  });
+  bindInvMapTooltips(map, [INV_LAYER_POLY]);
+  try {
+    map.moveLayer(INV_LAYER_POLY_OUTLINE);
+    map.moveLayer(INV_LAYER_POLY);
+  } catch {
+    /* noop */
+  }
+}
+
 function clearLayerInternal() {
   const map = getLeafletMap();
   if (!map) return;
-  [INV_LAYER_POINT, INV_LAYER_POLY, "invviv-poly-outline", INV_SOURCE_ID].forEach((id) => {
+  unbindInvMapTooltips(map);
+  for (const id of invLayerIdsToRemove()) {
     try {
       if (map.getLayer(id)) map.removeLayer(id);
       if (map.getSource(id)) map.removeSource(id);
-    } catch (_) {
+    } catch {
       /* noop */
     }
-  });
+  }
   _layer = null;
+  _lastRenderMode = null;
+  _lastRenderField = null;
+  _lastFetchKey = null;
 }
 
 function renderInvGeoJsonOnMap(map, fc, isPolygon, layerDef) {
@@ -264,48 +493,41 @@ function renderInvGeoJsonOnMap(map, fc, isPolygon, layerDef) {
     whenAtlasMapReady(() => renderInvGeoJsonOnMap(map, fc, isPolygon, layerDef));
     return;
   }
+  const data = enrichInvFeatureCollection(fc, layerDef);
+  const mode = isPolygon ? "polygon" : "point";
+  const canUpdate =
+    _layer &&
+    map.getSource(INV_SOURCE_ID) &&
+    _lastRenderMode === mode &&
+    map.getLayer(isPolygon ? INV_LAYER_POLY : INV_LAYER_POINT_BG);
+
+  if (canUpdate) {
+    map.getSource(INV_SOURCE_ID).setData(data);
+    if (isPolygon) {
+      bindInvMapTooltips(map, [INV_LAYER_POLY]);
+    } else {
+      applyPointLayerPaint(map, layerDef);
+      bindInvMapTooltips(map, [INV_LAYER_POINT_BG, INV_LAYER_POINT_LABEL]);
+      try {
+        map.moveLayer(INV_LAYER_POINT_LABEL);
+      } catch {
+        /* noop */
+      }
+    }
+    _lastRenderField = _activeField;
+    return;
+  }
+
   clearLayerInternal();
-  if (!map.getSource(INV_SOURCE_ID)) {
-    map.addSource(INV_SOURCE_ID, { type: "geojson", data: fc });
-  } else {
-    map.getSource(INV_SOURCE_ID).setData(fc);
-  }
+  map.addSource(INV_SOURCE_ID, { type: "geojson", data });
   if (isPolygon) {
-    const matchExpr = ["match", ["to-number", ["get", "value"]]];
-    INV_ENTORNO_CODES.forEach((c) => {
-      matchExpr.push(c.code, c.color);
-    });
-    matchExpr.push("#cccccc");
-    if (!map.getLayer(INV_LAYER_POLY)) {
-      map.addLayer({
-        id: INV_LAYER_POLY,
-        type: "fill",
-        source: INV_SOURCE_ID,
-        paint: { "fill-color": matchExpr, "fill-opacity": 0.55 },
-      });
-      map.addLayer({
-        id: "invviv-poly-outline",
-        type: "line",
-        source: INV_SOURCE_ID,
-        paint: { "line-color": "#333", "line-width": 1 },
-      });
-    }
+    addPolygonLayers(map);
   } else {
-    const color = layerDef?.color || "#66bb6a";
-    if (!map.getLayer(INV_LAYER_POINT)) {
-      map.addLayer({
-        id: INV_LAYER_POINT,
-        type: "circle",
-        source: INV_SOURCE_ID,
-        paint: {
-          "circle-radius": 8,
-          "circle-color": color,
-          "circle-stroke-width": 1,
-          "circle-stroke-color": "#fff",
-        },
-      });
-    }
+    addPointLayers(map, layerDef);
   }
+  _layer = true;
+  _lastRenderMode = mode;
+  _lastRenderField = _activeField;
 }
 
 /** Quita la capa del mapa si el zoom actual está por debajo del mínimo del indicador activo. */
@@ -347,6 +569,11 @@ export function clearInvVivLayer() {
 }
 
 export function teardownInvVivMode() {
+  if (_refreshTimer) {
+    clearTimeout(_refreshTimer);
+    _refreshTimer = null;
+  }
+  _fetchInFlight = false;
   clearInvVivLayer();
   _activeField = null;
   const map = getLeafletMap();
@@ -360,6 +587,15 @@ export function teardownInvVivMode() {
   }
   _mapZoomGuardHandler = null;
   _fetchGen += 1;
+  unbindInvMapTooltips(map);
+  if (_invTipEl) {
+    try {
+      _invTipEl.remove();
+    } catch {
+      /* noop */
+    }
+    _invTipEl = null;
+  }
   removeInvVivMapControls(map);
 }
 
@@ -385,6 +621,13 @@ function layerBadgeStyle(layerColor) {
   };
 }
 
+/** Texto del badge en hex (MapLibre no pinta bien rgba en text-color). */
+function badgeTextColor(layerColor) {
+  const { r, g, b } = parseHexColor(layerColor);
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  return lum > 165 ? "#001e28" : "#ffffff";
+}
+
 function buildTooltipHtml(props) {
   const cvegeo = props && props.cvegeo != null ? String(props.cvegeo) : "—";
   const amb = props && props.ambito != null ? String(props.ambito) : "—";
@@ -408,62 +651,6 @@ function buildTooltipHtml(props) {
       <div class="invviv-tip__row"><span>Pob. masc.</span><strong>${pobm}</strong></div>
     </div>
   `.trim();
-}
-
-function entornoPolygonStyle(feature) {
-  const code = feature && feature.properties ? feature.properties.value : null;
-  const fill = getEntornoColor(code);
-  const light = code === 2 || code === 7 || code === 8;
-  return {
-    fillColor: fill,
-    fillOpacity: 0.78,
-    color: light ? "rgba(0, 0, 0, 0.42)" : "rgba(255, 255, 255, 0.32)",
-    weight: 1,
-  };
-}
-
-function bindInvFeatureTooltip(layer, props) {
-  layer.bindTooltip(buildTooltipHtml(props || {}), {
-    direction: "top",
-    opacity: 1,
-    sticky: true,
-    className: "invviv-tooltip",
-    pane: INV_TOOLTIP_PANE,
-  });
-  layer.on("mouseover", () => {
-    layer.openTooltip();
-    bringInvTooltipToFront(layer);
-  });
-  layer.on("mouseout", () => layer.closeTooltip());
-}
-
-function renderPointLayer(map, fc, layerDef) {
-  const badge = layerBadgeStyle(layerDef ? layerDef.color : "#66bb6a");
-  return L.geoJSON(fc, {
-    pointToLayer: (feature, latlng) => {
-      const v = feature && feature.properties ? feature.properties.value : null;
-      const txt = fmtVal(v);
-      const html = `<span class="invviv-badge" style="--invviv-bg:${badge.bg};--invviv-fg:${badge.fg};--invviv-border:${badge.border}">${txt}</span>`;
-      const icon = L.divIcon({
-        className: "invviv-label",
-        html,
-        iconSize: null,
-      });
-      const m = L.marker(latlng, { icon, interactive: true, pane: INV_MARKER_PANE });
-      bindInvFeatureTooltip(m, feature.properties || {});
-      return m;
-    },
-  });
-}
-
-function renderPolygonLayer(map, fc) {
-  return L.geoJSON(fc, {
-    pane: INV_POLY_PANE,
-    style: entornoPolygonStyle,
-    onEachFeature: (feature, layer) => {
-      bindInvFeatureTooltip(layer, feature.properties || {});
-    },
-  });
 }
 
 async function fetchAndRender(map, cve_mun) {
@@ -496,43 +683,50 @@ async function fetchAndRender(map, cve_mun) {
       Math.PI;
     return { x, y };
   };
-  const sw = toMerc(swLL.lng, swLL.lat);
-  const ne = toMerc(neLL.lng, neLL.lat);
+  const rawSw = toMerc(swLL.lng, swLL.lat);
+  const rawNe = toMerc(neLL.lng, neLL.lat);
+  const padded = padMercBbox(rawSw, rawNe);
+  const fetchKey = buildFetchKey(cve, _activeField, isPolygon, padded.sw, padded.ne);
+  if (_fetchInFlight && fetchKey === _lastFetchKey) return;
 
   if (_abort) {
     try {
       _abort.abort();
-    } catch (_) {}
+    } catch {
+      /* noop */
+    }
   }
   _abort = new AbortController();
+  _fetchInFlight = true;
+  _lastFetchKey = fetchKey;
 
   setStatus("Cargando manzanas…");
 
-  const u = new URL(API_INV_BBOX);
+  const u = new URL(API_INV_BBOX, window.location.href);
   u.searchParams.set("cve_mun", cve);
   u.searchParams.set("field", _activeField);
   if (isPolygon) u.searchParams.set("mode", "polygon");
-  u.searchParams.set("xmin", String(sw.x));
-  u.searchParams.set("ymin", String(sw.y));
-  u.searchParams.set("xmax", String(ne.x));
-  u.searchParams.set("ymax", String(ne.y));
+  u.searchParams.set("xmin", String(padded.sw.x));
+  u.searchParams.set("ymin", String(padded.sw.y));
+  u.searchParams.set("xmax", String(padded.ne.x));
+  u.searchParams.set("ymax", String(padded.ne.y));
 
   let json;
   try {
     const res = await fetch(u.toString(), { signal: _abort.signal, cache: "no-store" });
     json = await res.json();
   } catch (err) {
+    _fetchInFlight = false;
     if (err && err.name === "AbortError") return;
     if (fetchGen !== _fetchGen) return;
-    clearLayerInternal();
     setStatus("No se pudo consultar atlas.c_inv.", true);
     return;
   }
 
+  _fetchInFlight = false;
   if (fetchGen !== _fetchGen) return;
 
   if (!json || json.ok !== true) {
-    clearLayerInternal();
     const msg = json && json.message ? String(json.message) : "Error en la consulta INV.";
     setStatus(msg, true);
     return;
@@ -546,10 +740,11 @@ async function fetchAndRender(map, cve_mun) {
     if (v != null && !Number.isNaN(v)) shown += 1;
   }
 
-  clearLayerInternal();
-  ensureInvVivPanes(map);
-
   if (!feats.length) {
+    if (_layer) {
+      setStatus(`Sin manzanas en esta vista; se mantienen los datos previos (zoom ${z}).`, true);
+      return;
+    }
     setStatus(`Sin manzanas en esta vista (cve ${cve}). Prueba otro zoom o municipio.`, true);
     return;
   }
@@ -557,11 +752,18 @@ async function fetchAndRender(map, cve_mun) {
   if (enforceInvZoomVisibility(map)) return;
 
   renderInvGeoJsonOnMap(map, fc, isPolygon, layerDef);
-  _layer = true;
   syncInvVivHint(map);
   const total = json.count != null ? json.count : feats.length;
   const tipo = isPolygon ? "polígono(s)" : "manzana(s)";
   setStatus(`${total} ${tipo} · ${shown} con valor · zoom ${z}`);
+}
+
+function scheduleFetchAndRender(map, cve_mun) {
+  if (_refreshTimer) clearTimeout(_refreshTimer);
+  _refreshTimer = setTimeout(() => {
+    _refreshTimer = null;
+    void fetchAndRender(map, cve_mun);
+  }, 150);
 }
 
 /**
@@ -581,7 +783,6 @@ export function attachInvVivMap(options = {}) {
     }
 
     ensureControls(map);
-    ensureInvVivPanes(map);
     syncEntornoMapLegend(map);
 
     if (_mapRefreshHandler) {
@@ -595,7 +796,7 @@ export function attachInvVivMap(options = {}) {
     _mapRefreshHandler = () => {
       if (enforceInvZoomVisibility(map)) return;
       const cve = _getCveMun ? _getCveMun() : null;
-      void fetchAndRender(map, cve);
+      scheduleFetchAndRender(map, cve);
     };
 
     _mapZoomGuardHandler = () => {
@@ -633,6 +834,11 @@ export function setInvVivActive(fieldId) {
   const id = fieldId && String(fieldId).trim() ? String(fieldId).trim() : "";
   if (!id) return;
   _activeField = id;
+  _lastFetchKey = null;
+  if (_refreshTimer) {
+    clearTimeout(_refreshTimer);
+    _refreshTimer = null;
+  }
   const titleEl = document.getElementById("invVivActiveLabel");
   if (titleEl) titleEl.textContent = getIndicatorLabel(_activeField);
 

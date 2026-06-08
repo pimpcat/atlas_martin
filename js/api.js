@@ -13,6 +13,8 @@ const DATA_URL = "./data/mock.json";
 const API_INDICATOR_URL = apiUrl("/api/indicators");
 const API_MUNICIPIOS_URL = apiUrl("/api/municipios");
 const API_MUNICIPIO_EXTENT_URL = apiUrl("/api/municipio/extent");
+const API_COLONIAS_LABELS_URL = apiUrl("/api/visor/colonias-labels");
+const API_LOCS_ATLAS_LABELS_URL = apiUrl("/api/visor/locs-atlas-labels");
 const API_GEO_CONTEXTO_URL = apiUrl("/api/geo/contexto");
 const API_SUPERFICIE_COMPARATIVA_URL = apiUrl("/api/comparativas/superficie");
 const API_POBLACION_URL = apiUrl("/api/comparativas/poblacion");
@@ -304,6 +306,36 @@ export async function fetchMunicipios() {
     throw new Error(json && json.message ? String(json.message) : "Respuesta inválida");
   }
   return json.rows;
+}
+
+/** Puntos de etiqueta de colonias (una por polígono, ST_PointOnSurface en PostGIS). */
+export async function fetchColoniasLabels(cve_mun) {
+  const cve = String(cve_mun ?? "").trim();
+  if (!cve) throw new Error("cve_mun requerido");
+  const url = new URL(API_COLONIAS_LABELS_URL, window.location.href);
+  url.searchParams.set("cve_mun", cve);
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json?.ok || !json.featureCollection) {
+    throw new Error(json?.message || json?.detail || "Sin etiquetas de colonias");
+  }
+  return json.featureCollection;
+}
+
+/** Puntos de etiqueta de localidades con amanzanamiento (c_l, ST_PointOnSurface en PostGIS). */
+export async function fetchLocsAtlasLabels(cve_mun) {
+  const cve = String(cve_mun ?? "").trim();
+  if (!cve) throw new Error("cve_mun requerido");
+  const url = new URL(API_LOCS_ATLAS_LABELS_URL, window.location.href);
+  url.searchParams.set("cve_mun", cve);
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json?.ok || !json.featureCollection) {
+    throw new Error(json?.message || json?.detail || "Sin etiquetas de localidades");
+  }
+  return json.featureCollection;
 }
 
 /** Bbox WGS84 del municipio (atlas.c_mun) para encuadre sin depender de teselas MVT. */

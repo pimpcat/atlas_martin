@@ -168,8 +168,10 @@
     min-height: clamp(260px, 38vh, 480px);
   }
 
-  .analf-left-mixed-grid.analf-mini-chart--entidad > .analf-mini-track {
-    min-height: clamp(150px, 22vh, 260px);
+  .analf-left-mixed-grid.analf-mini-chart--entidad .analf-mini-col-stack .analf-mini-track {
+    min-height: 0;
+    height: auto;
+    max-height: none;
   }
 
 }

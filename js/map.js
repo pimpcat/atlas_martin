@@ -8,6 +8,19 @@ import {
   HOME_MUN_DISP_FILL_PAINT,
   HOME_MUN_DISP_LINE_HALO_PAINT,
   HOME_MUN_DISP_LINE_PAINT,
+  COLONIAS_LABEL_LAYOUT,
+  COLONIAS_LABEL_MIN_ZOOM,
+  COLONIAS_LABEL_PAINT,
+  COLONIAS_LABEL_PAINT_CLARO,
+  LOCS_ATLAS_LABEL_LAYOUT,
+  LOCS_ATLAS_LABEL_MIN_ZOOM,
+  LOCS_ATLAS_LABEL_PAINT,
+  LOCS_ATLAS_LABEL_PAINT_CLARO,
+  LOCS_PUNTO_LABEL_LAYOUT,
+  LOCS_PUNTO_LABEL_MIN_ZOOM,
+  LOCS_PUNTO_LABEL_PAINT,
+  LOCS_PUNTO_LABEL_PAINT_CLARO,
+  MAPLIBRE_GLYPHS_URL,
   LAYER_PAINT,
   LINE_LAYOUT_SMOOTH,
   MARTIN_TABLES,
@@ -29,6 +42,20 @@ import {
   findMunicipioFeature,
   getTurf,
 } from "./mapGeo.js";
+import {
+  bindColoniasLabelsSync,
+  clearColoniasLabels,
+  coloniasLabelLayerIdForOverlay,
+  ensureColoniasLabelLayer,
+  scheduleColoniasLabelsSync,
+} from "./mapColoniasLabels.js";
+import {
+  bindLocsAtlasLabelsSync,
+  clearLocsAtlasLabels,
+  ensureLocsAtlasLabelLayer,
+  locsAtlasLabelLayerIdForOverlay,
+  scheduleLocsAtlasLabelsSync,
+} from "./mapLocsAtlasLabels.js";
 
 const SRC_ENT = "src-c_ent";
 const SRC_ENT_DISP = "src-c_ent-disp";
@@ -66,12 +93,212 @@ function atlasMapContextAttributes() {
 function buildAtlasMapOptions(containerEl, extra = {}) {
   return {
     container: containerEl,
-    style: { version: 8, sources: {}, layers: [] },
+    style: {
+      version: 8,
+      sources: {},
+      layers: [],
+      glyphs: MAPLIBRE_GLYPHS_URL,
+    },
     pixelRatio: getMapPixelRatio(),
     antialias: true,
     canvasContextAttributes: atlasMapContextAttributes(),
     ...extra,
   };
+}
+
+/** Etiquetas fijas en capas del visor (localidades). */
+const OVERLAY_LABEL_BY_KEY = {
+  locsPunto: {
+    minzoom: LOCS_PUNTO_LABEL_MIN_ZOOM,
+    layout: LOCS_PUNTO_LABEL_LAYOUT,
+    paint: LOCS_PUNTO_LABEL_PAINT,
+    paintClaro: LOCS_PUNTO_LABEL_PAINT_CLARO,
+  },
+  locsAtlas: {
+    minzoom: LOCS_ATLAS_LABEL_MIN_ZOOM,
+    layout: LOCS_ATLAS_LABEL_LAYOUT,
+    paint: LOCS_ATLAS_LABEL_PAINT,
+    paintClaro: LOCS_ATLAS_LABEL_PAINT_CLARO,
+  },
+  colonias: {
+    minzoom: COLONIAS_LABEL_MIN_ZOOM,
+    layout: COLONIAS_LABEL_LAYOUT,
+    paint: COLONIAS_LABEL_PAINT,
+    paintClaro: COLONIAS_LABEL_PAINT_CLARO,
+  },
+};
+
+function coloniasLabelsCtx() {
+  return {
+    homeMode: _homeMode,
+    coloniasActive: !!_overlayActive.colonias,
+    focusCve: _focusCve || "001",
+  };
+}
+
+function ensureColoniasLabelsLayer(map) {
+  const labelDef = OVERLAY_LABEL_BY_KEY.colonias;
+  if (!labelDef || !map) return;
+  ensureColoniasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
+  applyOverlayLabelSpec(map, "colonias");
+}
+
+function locsAtlasLabelsCtx() {
+  return {
+    homeMode: _homeMode,
+    locsAtlasActive: !!_overlayActive.locsAtlas,
+    focusCve: _focusCve || "001",
+  };
+}
+
+function ensureLocsAtlasLabelsLayer(map) {
+  const labelDef = OVERLAY_LABEL_BY_KEY.locsAtlas;
+  if (!labelDef || !map) return;
+  ensureLocsAtlasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
+  applyOverlayLabelSpec(map, "locsAtlas");
+}
+
+function overlayGeoLabelLayerIds() {
+  return [coloniasLabelLayerIdForOverlay(), locsAtlasLabelLayerIdForOverlay()];
+}
+
+function isOverlayGeoLabelLayer(id) {
+  return overlayGeoLabelLayerIds().includes(id);
+}
+
+function activateOverlayGeoLabels(map, overlayKey, cve) {
+  const cveFocus = cve || _focusCve || "001";
+  if (overlayKey === "colonias") {
+    ensureColoniasLabelsLayer(map);
+    try {
+      if (map.getLayer(coloniasLabelLayerIdForOverlay())) {
+        map.setFilter(coloniasLabelLayerIdForOverlay(), null);
+      }
+    } catch {
+      /* noop */
+    }
+    scheduleColoniasLabelsSync(
+      map,
+      { ...coloniasLabelsCtx(), focusCve: cveFocus },
+      munFilter,
+      ensureColoniasLabelsLayer,
+    );
+    return;
+  }
+  if (overlayKey === "locsAtlas") {
+    ensureLocsAtlasLabelsLayer(map);
+    try {
+      if (map.getLayer(locsAtlasLabelLayerIdForOverlay())) {
+        map.setFilter(locsAtlasLabelLayerIdForOverlay(), null);
+      }
+    } catch {
+      /* noop */
+    }
+    scheduleLocsAtlasLabelsSync(
+      map,
+      { ...locsAtlasLabelsCtx(), focusCve: cveFocus },
+      munFilter,
+      ensureLocsAtlasLabelsLayer,
+    );
+  }
+}
+
+function deactivateOverlayGeoLabels(map, overlayKey) {
+  if (overlayKey === "colonias") clearColoniasLabels(map);
+  if (overlayKey === "locsAtlas") clearLocsAtlasLabels(map);
+}
+
+function overlayLabelLayerId(layerId) {
+  return `${layerId}-labels`;
+}
+
+function readDocumentTheme() {
+  return document.documentElement.getAttribute("data-theme") === "claro" ? "claro" : "oscuro";
+}
+
+function overlayLabelPaintForTheme(labelDef) {
+  return readDocumentTheme() === "claro" ? labelDef.paintClaro || labelDef.paint : labelDef.paint;
+}
+
+function applyOverlayLabelSpec(map, overlayKey) {
+  const labelDef = OVERLAY_LABEL_BY_KEY[overlayKey];
+  if (!labelDef || !map) return;
+  const labelId = overlayLabelLayerId(`ly-${overlayKey}`);
+  if (!map.getLayer(labelId)) return;
+  for (const [prop, val] of Object.entries(labelDef.layout)) {
+    if (prop === "visibility") continue;
+    try {
+      map.setLayoutProperty(labelId, prop, val);
+    } catch {
+      /* noop */
+    }
+  }
+  const paint = overlayLabelPaintForTheme(labelDef);
+  for (const [prop, val] of Object.entries(paint)) {
+    try {
+      map.setPaintProperty(labelId, prop, val);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function applyOverlayLabelTheme(map) {
+  if (!map) return;
+  for (const key of Object.keys(OVERLAY_LABEL_BY_KEY)) {
+    applyOverlayLabelSpec(map, key);
+  }
+}
+
+function ensureMapGlyphs(map) {
+  if (!map?.getStyle) return;
+  const style = map.getStyle();
+  if (style?.glyphs) return;
+  try {
+    map.setStyle({ ...style, glyphs: MAPLIBRE_GLYPHS_URL });
+  } catch (e) {
+    console.warn("[map] glyphs no disponibles; etiquetas symbol pueden fallar.", e);
+  }
+}
+
+function overlayKeyFromLayerId(layerId) {
+  if (!layerId.startsWith("ly-")) return null;
+  const key = layerId.slice(3);
+  return OVERLAY_LABEL_BY_KEY[key] ? key : null;
+}
+
+function ensureOverlayLabelLayer(map, def) {
+  const labelDef = OVERLAY_LABEL_BY_KEY[def.key];
+  if (!labelDef) return;
+  ensureMapGlyphs(map);
+  const layerId = `ly-${def.key}`;
+  const labelId = overlayLabelLayerId(layerId);
+  if (def.key === "colonias") {
+    ensureColoniasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
+    applyOverlayLabelSpec(map, "colonias");
+    return;
+  }
+  if (def.key === "locsAtlas") {
+    ensureLocsAtlasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
+    applyOverlayLabelSpec(map, "locsAtlas");
+    return;
+  }
+  const src = `src-${def.table}`;
+  addMartinSource(map, src, def.table);
+  if (map.getLayer(labelId)) {
+    applyOverlayLabelSpec(map, def.key);
+    return;
+  }
+  map.addLayer({
+    id: labelId,
+    type: "symbol",
+    source: src,
+    "source-layer": martinSourceLayer(def.table),
+    minzoom: labelDef.minzoom,
+    filter: munFilter("001"),
+    layout: { ...labelDef.layout, visibility: "none" },
+    paint: overlayLabelPaintForTheme(labelDef),
+  });
 }
 
 /** Reaplica simbología vectorial estatal (tras hot reload o capas ya creadas). */
@@ -385,6 +612,26 @@ function munDispBaseLineHalo(layerIds) {
   return LAYER_PAINT.munAllLineHalo;
 }
 
+/** MapLibre no permite ["zoom"] dentro de un branch de "case"; reescribe step/interpolate. */
+function paintExprWithMunHighlight(match, highlightValue, baseExpr) {
+  if (!Array.isArray(baseExpr)) {
+    return ["case", match, highlightValue, baseExpr];
+  }
+  const head = baseExpr[0];
+  if (head === "interpolate" || head === "step") {
+    const input = baseExpr[1];
+    const zoomInput = baseExpr[2];
+    if (Array.isArray(zoomInput) && zoomInput[0] === "zoom") {
+      const out = [head, input, zoomInput];
+      for (let i = 3; i < baseExpr.length; i += 2) {
+        out.push(baseExpr[i], ["case", match, highlightValue, baseExpr[i + 1]]);
+      }
+      return out;
+    }
+  }
+  return ["case", match, highlightValue, baseExpr];
+}
+
 /** Resaltado instantáneo sobre v_c_mun_disp (explorador municipal y mini-mapa geo). */
 function applyMunDispHighlightPaint(map, cve_mun, layerIds = MUN_DISP_PAINT_IDS) {
   const fillId = layerIds.fill;
@@ -416,12 +663,7 @@ function applyMunDispHighlightPaint(map, cve_mun, layerIds = MUN_DISP_PAINT_IDS)
     MUN_HIGHLIGHT_FILL,
     baseFill["fill-color"],
   ]);
-  map.setPaintProperty(fillId, "fill-opacity", [
-    "case",
-    match,
-    0.42,
-    baseFill["fill-opacity"],
-  ]);
+  map.setPaintProperty(fillId, "fill-opacity", paintExprWithMunHighlight(match, 0.42, baseFill["fill-opacity"]));
   if (map.getLayer(lineId)) {
     map.setPaintProperty(lineId, "line-color", [
       "case",
@@ -429,12 +671,7 @@ function applyMunDispHighlightPaint(map, cve_mun, layerIds = MUN_DISP_PAINT_IDS)
       MUN_HIGHLIGHT_LINE,
       baseLine["line-color"],
     ]);
-    map.setPaintProperty(lineId, "line-opacity", [
-      "case",
-      match,
-      0.95,
-      baseLine["line-opacity"],
-    ]);
+    map.setPaintProperty(lineId, "line-opacity", paintExprWithMunHighlight(match, 0.95, baseLine["line-opacity"]));
   }
   if (map.getLayer(haloId)) {
     map.setPaintProperty(haloId, "line-color", [
@@ -443,12 +680,7 @@ function applyMunDispHighlightPaint(map, cve_mun, layerIds = MUN_DISP_PAINT_IDS)
       MUN_HIGHLIGHT_HALO,
       baseHalo["line-color"],
     ]);
-    map.setPaintProperty(haloId, "line-opacity", [
-      "case",
-      match,
-      0.65,
-      baseHalo["line-opacity"],
-    ]);
+    map.setPaintProperty(haloId, "line-opacity", paintExprWithMunHighlight(match, 0.65, baseHalo["line-opacity"]));
   }
   if (layerIds === MUN_DISP_PAINT_IDS) hideLegacyMunHiLayers(map);
   if (layerIds === MUN_DISP_PAINT_IDS && _homeMode) applyHomeMunLinePaint(map);
@@ -485,6 +717,9 @@ function addMartinSource(map, id, table) {
   map.addSource(id, {
     type: "vector",
     tiles: [tileUrl],
+    ...(table === MARTIN_TABLES.colonias || table === MARTIN_TABLES.locsAtlas
+      ? { promoteId: { [martinSourceLayer(table)]: "gid" } }
+      : {}),
   });
 }
 
@@ -1023,6 +1258,8 @@ function overlayLayerIds(map, layerId) {
   if (map.getLayer(`${layerId}-fill`)) ids.push(`${layerId}-fill`);
   if (map.getLayer(`${layerId}-halo`)) ids.push(...lineLayerIds(layerId));
   else if (map.getLayer(layerId)) ids.push(layerId);
+  const labelsId = overlayLabelLayerId(layerId);
+  if (map.getLayer(labelsId)) ids.push(labelsId);
   return ids;
 }
 
@@ -1067,8 +1304,12 @@ function ensureOverlayLayer(map, def) {
   ensureOverlayFillHitLayer(map, def, layerId, spec);
 
   if (def.lineStack && def.paintHalo) {
-    if (map.getLayer(`${layerId}-halo`) && map.getLayer(layerId)) return layerId;
+    if (map.getLayer(`${layerId}-halo`) && map.getLayer(layerId)) {
+      ensureOverlayLabelLayer(map, def);
+      return layerId;
+    }
   } else if (map.getLayer(layerId)) {
+    ensureOverlayLabelLayer(map, def);
     return layerId;
   }
 
@@ -1107,6 +1348,7 @@ function ensureOverlayLayer(map, def) {
   } else {
     map.addLayer({ ...spec, id: layerId, type: "line", paint: def.paint, layout: lineLayout });
   }
+  ensureOverlayLabelLayer(map, def);
   return layerId;
 }
 
@@ -1136,10 +1378,12 @@ function syncOverlayLayersFromState(map, cve, options = {}) {
   }
 
   if (forceAllOff) {
+    const geoLabelIds = new Set(overlayGeoLabelLayerIds());
     for (const d of OVERLAY_DEFS) {
       const lid = `ly-${d.key}`;
       for (const id of collectOverlayLayerIds(map, lid)) {
         if (!map.getLayer(id)) continue;
+        if (geoLabelIds.has(id)) continue;
         try {
           map.setFilter(id, emptyFilter);
         } catch {
@@ -1183,9 +1427,9 @@ function setLayerVisible(map, layerId, visible, cve) {
   ids.forEach((id) => {
     if (!map.getLayer(id)) return;
     map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
-    if (visible && cve) {
+    if (visible && cve && !isOverlayGeoLabelLayer(id)) {
       map.setFilter(id, munFilter(cve));
-    } else if (!visible) {
+    } else if (!visible && !isOverlayGeoLabelLayer(id)) {
       try {
         map.setFilter(id, emptyFilter);
       } catch {
@@ -1200,6 +1444,18 @@ function setLayerVisible(map, layerId, visible, cve) {
       } catch {
         /* capa aún no lista */
       }
+    }
+    const overlayKey = overlayKeyFromLayerId(layerId);
+    if (overlayKey) {
+      applyOverlayLabelSpec(map, overlayKey);
+      if (overlayKey === "colonias" || overlayKey === "locsAtlas") {
+        activateOverlayGeoLabels(map, overlayKey, cve);
+      }
+    }
+  } else {
+    const overlayKey = overlayKeyFromLayerId(layerId);
+    if (overlayKey === "colonias" || overlayKey === "locsAtlas") {
+      deactivateOverlayGeoLabels(map, overlayKey);
     }
   }
 }
@@ -1218,11 +1474,16 @@ function ensureMap(containerEl) {
   );
 
   _map.on("load", () => {
+    ensureMapGlyphs(_map);
     prefetchLocalBasemapCatalog();
     ensureBaseLayers(_map);
     ensureMarcoLayers(_map);
     applyHomeVectorRenderQuality(_map);
     ensureThematicMartinLayers(_map);
+    OVERLAY_DEFS.forEach((d) => ensureOverlayLabelLayer(_map, d));
+    bindColoniasLabelsSync(_map, coloniasLabelsCtx, munFilter, ensureColoniasLabelsLayer);
+    bindLocsAtlasLabelsSync(_map, locsAtlasLabelsCtx, munFilter, ensureLocsAtlasLabelsLayer);
+    applyOverlayLabelTheme(_map);
     bringMarcoEntToFront(_map);
     OVERLAY_DEFS.forEach((d) => ensureOverlayLayer(_map, d));
     _atlasLayersReady = true;
@@ -1242,6 +1503,12 @@ function ensureMap(containerEl) {
     ensureBaseLayerControl(_map);
     bindMapClick();
     bindAllOverlayTipHovers(_map, overlayLayerIds);
+    if (!_map.__overlayLabelThemeBound) {
+      window.addEventListener("atlasgro-themechange", () => {
+        if (_map) applyOverlayLabelTheme(_map);
+      });
+      _map.__overlayLabelThemeBound = true;
+    }
   });
 
   return _map;

@@ -6,6 +6,131 @@
 /** Suavizado sutil del trazo central (overlays / detalle). */
 export const LINE_BLUR_SOFT = 0.2;
 
+/** Glyphs MapLibre (requerido para capas symbol / etiquetas). */
+export const MAPLIBRE_GLYPHS_URL = "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
+
+/** Visor geográfico — etiquetas de localidades (puntos) desde este zoom. */
+export const LOCS_PUNTO_LABEL_MIN_ZOOM = 13;
+
+/** Clave geográfica + nombre (sin prefijo; el hover sigue mostrando "Localidad:"). */
+export const LOCS_PUNTO_LABEL_TEXT = [
+  "case",
+  [
+    "all",
+    [">", ["length", ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ""]], 0],
+  ],
+  [
+    "concat",
+    ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""],
+    " ",
+    ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ""],
+  ],
+  [">", ["length", ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""]], 0],
+  ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], "—"],
+  [">", ["length", ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ""]], 0],
+  ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], "—"],
+  "—",
+];
+
+export const LOCS_PUNTO_LABEL_LAYOUT = {
+  "text-field": LOCS_PUNTO_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 13, 13, 15, 14, 17, 15],
+  "text-anchor": "bottom",
+  "text-offset": [0, -1.45],
+  "text-justify": "center",
+  "text-max-width": 20,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "text-letter-spacing": 0.01,
+  "symbol-placement": "point",
+  "visibility": "none",
+};
+
+export const LOCS_PUNTO_LABEL_PAINT = {
+  "text-color": "#2c3e50",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": ["step", ["zoom"], 0, LOCS_PUNTO_LABEL_MIN_ZOOM, 1],
+};
+
+export const LOCS_PUNTO_LABEL_PAINT_CLARO = {
+  "text-color": "#2c3e50",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": LOCS_PUNTO_LABEL_PAINT["text-opacity"],
+};
+
+/** Localidades con amanzanamiento (c_l) — misma etiqueta desde zoom 13. */
+export const LOCS_ATLAS_LABEL_MIN_ZOOM = LOCS_PUNTO_LABEL_MIN_ZOOM;
+
+export const LOCS_ATLAS_LABEL_TEXT = [
+  "case",
+  [
+    "all",
+    [">", ["length", ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nomgeo"], ["get", "NOMGEO"], ""]], 0],
+  ],
+  [
+    "concat",
+    ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""],
+    " ",
+    ["coalesce", ["get", "nomgeo"], ["get", "NOMGEO"], ""],
+  ],
+  [">", ["length", ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""]], 0],
+  ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], "—"],
+  [">", ["length", ["coalesce", ["get", "nomgeo"], ["get", "NOMGEO"], ""]], 0],
+  ["coalesce", ["get", "nomgeo"], ["get", "NOMGEO"], "—"],
+  "—",
+];
+
+export const LOCS_ATLAS_LABEL_LAYOUT = {
+  ...LOCS_PUNTO_LABEL_LAYOUT,
+  "text-field": LOCS_ATLAS_LABEL_TEXT,
+};
+
+export const LOCS_ATLAS_LABEL_PAINT = { ...LOCS_PUNTO_LABEL_PAINT };
+export const LOCS_ATLAS_LABEL_PAINT_CLARO = { ...LOCS_PUNTO_LABEL_PAINT_CLARO };
+
+/** Colonias (c_col_ase) — etiquetas desde zoom 14. */
+export const COLONIAS_LABEL_MIN_ZOOM = 14;
+
+export const COLONIAS_LABEL_TEXT = [
+  "coalesce",
+  ["get", "nom_asen"],
+  ["get", "NOM_ASEN"],
+  "—",
+];
+
+export const COLONIAS_LABEL_LAYOUT = {
+  "text-field": COLONIAS_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 14, 13, 16, 14, 18, 15],
+  "text-anchor": "center",
+  "text-offset": [0, 0],
+  "text-justify": "center",
+  "text-max-width": 20,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "text-letter-spacing": 0.01,
+  "symbol-placement": "point",
+  "symbol-avoid-edges": true,
+  "visibility": "none",
+};
+
+export const COLONIAS_LABEL_PAINT = {
+  "text-color": "#2c3e50",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": ["step", ["zoom"], 0, COLONIAS_LABEL_MIN_ZOOM, 1],
+};
+
+export const COLONIAS_LABEL_PAINT_CLARO = { ...COLONIAS_LABEL_PAINT };
+
 /** Municipios: visibles pero por debajo del contorno estatal. */
 export const HOME_MUN_LINE_STACK_OPACITY = [
   "interpolate",

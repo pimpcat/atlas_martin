@@ -153,14 +153,17 @@ function buildLeftMiniBlock(payload) {
   const entLbl = el("div", "analf-ent-lbl-side");
   entLbl.appendChild(document.createTextNode(nomUp));
 
-  grid.append(entLbl, buildTrack(a, "analf-mini-bar--2010"), buildTrack(b, "analf-mini-bar--2020"));
-
-  const spFoot = el("div", "analf-mix-spacer");
   const x2010 = el("div", "analf-mini-x");
   x2010.appendChild(document.createTextNode("2010"));
   const x2020 = el("div", "analf-mini-x");
   x2020.appendChild(document.createTextNode("2020"));
-  grid.append(spFoot, x2010, x2020);
+
+  const col2010 = el("div", "analf-mini-col-stack");
+  col2010.append(buildTrack(a, "analf-mini-bar--2010"), x2010);
+  const col2020 = el("div", "analf-mini-col-stack");
+  col2020.append(buildTrack(b, "analf-mini-bar--2020"), x2020);
+
+  grid.append(entLbl, col2010, col2020);
 
   return grid;
 }
