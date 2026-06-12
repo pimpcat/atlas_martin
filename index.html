@@ -10,6 +10,7 @@
 
   Entrada JS: js/app.js (type=module). API REST: FastAPI vía Nginx (/api/…)
   Mapa: MapLibre GL + Martin (teselas vectoriales) vía js/map.js · API FastAPI
+  Geocoder visor: assets/maplibre-gl-geocoder.js + GET /api/buscar (PostGIS local)
 -->
 <html lang="es">
 <head>
@@ -46,6 +47,10 @@
 
   <!-- MapLibre GL (local) -->
   <link rel="stylesheet" href="./css/maplibre-gl.css" />
+  <link rel="stylesheet" href="./css/mapbox-gl-draw.css" />
+  <link rel="stylesheet" href="./css/maplibre-gl-compare.css" />
+  <link rel="stylesheet" href="./css/maplibre-gl-geocoder.css" />
+  <link rel="stylesheet" href="./css/maplibre-gl-export.css" />
 
   <link rel="stylesheet" href="./css/layout.css" />
   <link rel="stylesheet" href="./css/main.css" />
@@ -1035,7 +1040,7 @@
                 <div class="card-header d-flex align-items-center gap-2 py-2">
                   <img src="./assets/icons/marker.svg" alt="" width="18" height="18" />
                   <div class="fw-semibold">Visor geográfico</div>
-                  <div class="ms-auto small text-muted">Leaflet · WMS MapServer</div>
+                  <div class="ms-auto small fw-bold" id="visorMunicipioLabel">—</div>
                 </div>
                 <div class="card-body p-0">
                   <div id="mapMountVisor" class="visor-map-frame-wrap">
@@ -1103,7 +1108,14 @@
   <!-- Bases API/Martin: auto-detectadas en js/atlasConfig.js (Nginx → rutas relativas) -->
 
   <script src="./assets/maplibre-gl.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6/turf.min.js"></script>
+  <script src="./assets/maplibre-gl-geocoder.js"></script>
+  <script src="./assets/maplibre-gl-compare.js"></script>
+  <script src="./assets/maplibre-gl-export.umd.min.js"></script>
+  <script src="./assets/mapbox-gl-draw.js"></script>
+  <script src="./assets/mapbox-gl-draw-geodesic.js"></script>
+  <script src="./assets/turf.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- App (ES Modules) -->
   <script>

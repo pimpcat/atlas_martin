@@ -3,6 +3,8 @@
  * Mismo patrón visual que invViv.js (indicador de zoom + hint por capa activa).
  */
 import { getLeafletMap, whenAtlasMapReady, syncVisorOverlayLayersFromState } from "./map.js";
+import { scheduleVisorCompareSync } from "./visorMapCompare.js";
+import { syncVisorMapLegend } from "./visorMapLegend.js";
 
 let _zoomEl = null;
 let _hintEl = null;
@@ -127,13 +129,16 @@ export function teardownVisorMapUi() {
 /** Llamar al activar/desactivar capas del panel lateral. */
 export function notifyVisorLayerToggled() {
   syncVisorOverlayLayersFromState();
+  scheduleVisorCompareSync();
   const map = getLeafletMap();
   if (!map) return;
   if (!controlsConnected()) {
     ensureControls(map);
+    syncVisorMapLegend();
     return;
   }
   syncVisorMapUi();
+  syncVisorMapLegend();
 }
 
 /** Re-sincroniza controles tras cambio de municipio o resize del mapa. */
@@ -141,4 +146,5 @@ export function refreshVisorMapUi() {
   const map = getLeafletMap();
   if (!map) return;
   ensureControls(map);
+  syncVisorMapLegend();
 }

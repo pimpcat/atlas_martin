@@ -12,6 +12,22 @@ import {
   COLONIAS_LABEL_MIN_ZOOM,
   COLONIAS_LABEL_PAINT,
   COLONIAS_LABEL_PAINT_CLARO,
+  RESIDUO_SOLIDO_LABEL_LAYOUT,
+  RESIDUO_SOLIDO_LABEL_MIN_ZOOM,
+  RESIDUO_SOLIDO_LABEL_PAINT,
+  RESIDUO_SOLIDO_LABEL_PAINT_CLARO,
+  SANEAMIENTO_AGUA_LABEL_LAYOUT,
+  SANEAMIENTO_AGUA_LABEL_MIN_ZOOM,
+  SANEAMIENTO_AGUA_LABEL_PAINT,
+  SANEAMIENTO_AGUA_LABEL_PAINT_CLARO,
+  HCORRIENTES_LABEL_LAYOUT,
+  HCORRIENTES_LABEL_MIN_ZOOM,
+  HCORRIENTES_LABEL_PAINT,
+  HCORRIENTES_LABEL_PAINT_CLARO,
+  HCUERPOS_LABEL_LAYOUT,
+  HCUERPOS_LABEL_MIN_ZOOM,
+  HCUERPOS_LABEL_PAINT,
+  HCUERPOS_LABEL_PAINT_CLARO,
   LOCS_ATLAS_LABEL_LAYOUT,
   LOCS_ATLAS_LABEL_MIN_ZOOM,
   LOCS_ATLAS_LABEL_PAINT,
@@ -56,6 +72,18 @@ import {
   locsAtlasLabelLayerIdForOverlay,
   scheduleLocsAtlasLabelsSync,
 } from "./mapLocsAtlasLabels.js";
+import {
+  ensureResiduoSolidoMapIcons,
+  RESIDUO_SOLIDO_SYMBOL_LAYOUT,
+  RESIDUO_SOLIDO_SYMBOL_PAINT,
+  residuoSolidoLayerUsesLegacyCircle,
+} from "./mapResiduoSolidoIcons.js";
+import {
+  ensureLocsPuntoMapIcons,
+  LOCS_PUNTO_SYMBOL_LAYOUT,
+  LOCS_PUNTO_SYMBOL_PAINT,
+  locsPuntoLayerUsesLegacyCircle,
+} from "./mapLocsPuntoIcons.js";
 
 const SRC_ENT = "src-c_ent";
 const SRC_ENT_DISP = "src-c_ent-disp";
@@ -125,6 +153,18 @@ const OVERLAY_LABEL_BY_KEY = {
     layout: COLONIAS_LABEL_LAYOUT,
     paint: COLONIAS_LABEL_PAINT,
     paintClaro: COLONIAS_LABEL_PAINT_CLARO,
+  },
+  residuoSolido: {
+    minzoom: RESIDUO_SOLIDO_LABEL_MIN_ZOOM,
+    layout: RESIDUO_SOLIDO_LABEL_LAYOUT,
+    paint: RESIDUO_SOLIDO_LABEL_PAINT,
+    paintClaro: RESIDUO_SOLIDO_LABEL_PAINT_CLARO,
+  },
+  saneamientoAgua: {
+    minzoom: SANEAMIENTO_AGUA_LABEL_MIN_ZOOM,
+    layout: SANEAMIENTO_AGUA_LABEL_LAYOUT,
+    paint: SANEAMIENTO_AGUA_LABEL_PAINT,
+    paintClaro: SANEAMIENTO_AGUA_LABEL_PAINT_CLARO,
   },
 };
 
@@ -220,6 +260,93 @@ function overlayLabelPaintForTheme(labelDef) {
   return readDocumentTheme() === "claro" ? labelDef.paintClaro || labelDef.paint : labelDef.paint;
 }
 
+function visorOnlyLabelPaintForTheme(spec) {
+  return readDocumentTheme() === "claro" ? spec.paintClaro || spec.paint : spec.paint;
+}
+
+function applyVisorOnlyLabelSpec(map, layerKey) {
+  const spec = VISOR_ONLY_LABEL_SPECS[layerKey];
+  if (!spec || !map?.getLayer(spec.labelId)) return;
+  for (const [prop, val] of Object.entries(spec.layout)) {
+    if (prop === "visibility") continue;
+    try {
+      map.setLayoutProperty(spec.labelId, prop, val);
+    } catch {
+      /* noop */
+    }
+  }
+  const paint = visorOnlyLabelPaintForTheme(spec);
+  for (const [prop, val] of Object.entries(paint)) {
+    try {
+      map.setPaintProperty(spec.labelId, prop, val);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function ensureVisorOnlyLabelLayer(map, layerKey) {
+  const spec = VISOR_ONLY_LABEL_SPECS[layerKey];
+  if (!spec || !map) return;
+  ensureMapGlyphs(map);
+  addMartinSource(map, spec.sourceId, spec.table);
+  if (map.getLayer(spec.labelId)) {
+    applyVisorOnlyLabelSpec(map, layerKey);
+    return;
+  }
+  map.addLayer({
+    id: spec.labelId,
+    type: "symbol",
+    source: spec.sourceId,
+    "source-layer": martinSourceLayer(spec.table),
+    minzoom: spec.minzoom,
+    filter: munFilter("001"),
+    layout: { ...spec.layout, visibility: "none" },
+    paint: visorOnlyLabelPaintForTheme(spec),
+  });
+}
+
+function setVisorOnlyLabelVisible(map, layerKey, visible, cve) {
+  const spec = VISOR_ONLY_LABEL_SPECS[layerKey];
+  if (!spec || !map?.getLayer(spec.labelId)) return;
+  const emptyFilter = ["literal", false];
+  map.setLayoutProperty(spec.labelId, "visibility", visible ? "visible" : "none");
+  if (visible && cve) {
+    map.setFilter(spec.labelId, munFilter(cve));
+    applyVisorOnlyLabelSpec(map, layerKey);
+  } else {
+    try {
+      map.setFilter(spec.labelId, emptyFilter);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function hideVisorOnlyLabels(map) {
+  if (!map) return;
+  for (const key of Object.keys(VISOR_ONLY_LABEL_SPECS)) {
+    setVisorOnlyLabelVisible(map, key, false, null);
+  }
+}
+
+function syncVisorSharedThematicLayers(map, cve, forceAllOff = false) {
+  if (!map) return;
+  ensureThematicMartinLayers(map);
+  const mun = cve || _focusCve || "001";
+  const on = (key) => !forceAllOff && !!_visorSharedActive[key];
+
+  setHidroCorrientesVisible(map, on("hidro_corrientes"), mun);
+  setHidroCuerposVisible(map, on("hidro_cuerpos"), mun);
+  setCurnivelLayersVisible(map, on("curvas_nivel"), mun);
+
+  for (const key of Object.keys(VISOR_ONLY_LABEL_SPECS)) {
+    ensureVisorOnlyLabelLayer(map, key);
+    setVisorOnlyLabelVisible(map, key, on(key), mun);
+  }
+  if (forceAllOff) hideVisorOnlyLabels(map);
+}
+
 function applyOverlayLabelSpec(map, overlayKey) {
   const labelDef = OVERLAY_LABEL_BY_KEY[overlayKey];
   if (!labelDef || !map) return;
@@ -248,6 +375,9 @@ function applyOverlayLabelTheme(map) {
   for (const key of Object.keys(OVERLAY_LABEL_BY_KEY)) {
     applyOverlayLabelSpec(map, key);
   }
+  for (const key of Object.keys(VISOR_ONLY_LABEL_SPECS)) {
+    applyVisorOnlyLabelSpec(map, key);
+  }
 }
 
 function ensureMapGlyphs(map) {
@@ -273,20 +403,25 @@ function ensureOverlayLabelLayer(map, def) {
   ensureMapGlyphs(map);
   const layerId = `ly-${def.key}`;
   const labelId = overlayLabelLayerId(layerId);
+  const active = !!_overlayActive[def.key];
   if (def.key === "colonias") {
-    ensureColoniasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
-    applyOverlayLabelSpec(map, "colonias");
+    if (active) {
+      ensureColoniasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
+      applyOverlayLabelSpec(map, "colonias");
+    }
     return;
   }
   if (def.key === "locsAtlas") {
-    ensureLocsAtlasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
-    applyOverlayLabelSpec(map, "locsAtlas");
+    if (active) {
+      ensureLocsAtlasLabelLayer(map, labelDef, overlayLabelPaintForTheme);
+      applyOverlayLabelSpec(map, "locsAtlas");
+    }
     return;
   }
   const src = `src-${def.table}`;
   addMartinSource(map, src, def.table);
   if (map.getLayer(labelId)) {
-    applyOverlayLabelSpec(map, def.key);
+    if (active) applyOverlayLabelSpec(map, def.key);
     return;
   }
   map.addLayer({
@@ -472,7 +607,7 @@ const OVERLAY_DEFS = [
     paintHalo: LAYER_PAINT.locsAtlasHalo,
     paint: LAYER_PAINT.locsAtlas,
   },
-  { key: "locsPunto", table: MARTIN_TABLES.locsPunto, type: "circle", paint: LAYER_PAINT.locsPunto },
+  { key: "locsPunto", table: MARTIN_TABLES.locsPunto, type: "symbol", layout: LOCS_PUNTO_SYMBOL_LAYOUT, paint: LOCS_PUNTO_SYMBOL_PAINT },
   {
     key: "colonias",
     table: MARTIN_TABLES.colonias,
@@ -526,7 +661,21 @@ const OVERLAY_DEFS = [
     paintHalo: LAYER_PAINT.rncHalo,
     paint: LAYER_PAINT.rnc,
   },
-  { key: "saneamientoAgua", table: MARTIN_TABLES.saneamientoAgua, type: "circle", paint: LAYER_PAINT.saneamiento },
+  {
+    key: "saneamientoAgua",
+    table: MARTIN_TABLES.saneamientoAgua,
+    type: "circle",
+    paint: LAYER_PAINT.saneamiento,
+    labelMinZoom: SANEAMIENTO_AGUA_LABEL_MIN_ZOOM,
+  },
+  {
+    key: "residuoSolido",
+    table: MARTIN_TABLES.residuoSolido,
+    type: "symbol",
+    layout: RESIDUO_SOLIDO_SYMBOL_LAYOUT,
+    paint: RESIDUO_SOLIDO_SYMBOL_PAINT,
+    labelMinZoom: RESIDUO_SOLIDO_LABEL_MIN_ZOOM,
+  },
 ];
 
 const _overlayActive = {};
@@ -544,6 +693,40 @@ const CURNIVEL_LAYERS = {
 
 const HIDRO_CORRIENTES_ID = "ly-hidro";
 const HIDRO_CUERPOS_ID = "ly-hcuerpos";
+
+/** Capas temáticas compartidas con Datos geográficos; activación independiente en el visor. */
+const VISOR_SHARED_LAYER_MIN_ZOOM = {
+  hidro_corrientes: HCORRIENTES_LABEL_MIN_ZOOM,
+  hidro_cuerpos: HCUERPOS_LABEL_MIN_ZOOM,
+};
+
+const VISOR_ONLY_LABEL_SPECS = {
+  hidro_corrientes: {
+    labelId: "ly-hidro-visor-labels",
+    sourceId: "src-hcorrientes",
+    table: MARTIN_TABLES.hcorrientes,
+    minzoom: HCORRIENTES_LABEL_MIN_ZOOM,
+    layout: HCORRIENTES_LABEL_LAYOUT,
+    paint: HCORRIENTES_LABEL_PAINT,
+    paintClaro: HCORRIENTES_LABEL_PAINT_CLARO,
+  },
+  hidro_cuerpos: {
+    labelId: "ly-hcuerpos-visor-labels",
+    sourceId: "src-hcuerpos",
+    table: MARTIN_TABLES.hcuerpos,
+    minzoom: HCUERPOS_LABEL_MIN_ZOOM,
+    layout: HCUERPOS_LABEL_LAYOUT,
+    paint: HCUERPOS_LABEL_PAINT,
+    paintClaro: HCUERPOS_LABEL_PAINT_CLARO,
+  },
+};
+
+const _visorSharedActive = {
+  hidro_corrientes: false,
+  hidro_cuerpos: false,
+  curvas_nivel: false,
+};
+const _visorSharedKeyGen = Object.create(null);
 
 function pad3(cve) {
   const n = String(cve ?? "").replace(/\D/g, "");
@@ -698,6 +881,32 @@ function getMaplibregl() {
 
 export function getLeafletMap() {
   return _map;
+}
+
+/**
+ * Segundo mapa MapLibre para maplibre-gl-compare (misma vista, estilo clonado).
+ */
+export function createCompareMapInstance(containerEl, styleSnapshot, viewState) {
+  const ml = getMaplibregl();
+  if (!ml) throw new Error("maplibre-gl no está cargado.");
+  return new ml.Map(
+    buildAtlasMapOptions(containerEl, {
+      style: styleSnapshot,
+      center: viewState.center,
+      zoom: viewState.zoom,
+      bearing: viewState.bearing,
+      pitch: viewState.pitch,
+      maxZoom: 22,
+      interactive: true,
+      attributionControl: false,
+    }),
+  );
+}
+
+/** Tooltips hover en cualquier instancia MapLibre (p. ej. mapa del comparador). */
+export function bindAtlasOverlayTips(map) {
+  if (!map) return;
+  refreshOverlayTipBindings(map, overlayLayerIds);
 }
 
 function addMartinSource(map, id, table) {
@@ -1282,9 +1491,28 @@ function ensureOverlayFillHitLayer(map, def, layerId, spec) {
   else map.addLayer(fillSpec);
 }
 
+function overlayUsesLegacyCircle(def, map) {
+  if (def.key === "residuoSolido") return residuoSolidoLayerUsesLegacyCircle(map);
+  if (def.key === "locsPunto") return locsPuntoLayerUsesLegacyCircle(map);
+  return false;
+}
+
+function overlaySymbolIconLoader(def) {
+  if (def.key === "residuoSolido") return ensureResiduoSolidoMapIcons;
+  if (def.key === "locsPunto") return ensureLocsPuntoMapIcons;
+  return async () => {};
+}
+
 function ensureOverlayLayer(map, def) {
   const src = `src-${def.table}`;
   const layerId = `ly-${def.key}`;
+  if (overlayUsesLegacyCircle(def, map)) {
+    try {
+      map.removeLayer(layerId);
+    } catch {
+      /* capa aún no lista */
+    }
+  }
   addMartinSource(map, src, def.table);
   if (def.lineStack && map.getLayer(layerId) && !map.getLayer(`${layerId}-halo`)) {
     try {
@@ -1305,11 +1533,11 @@ function ensureOverlayLayer(map, def) {
 
   if (def.lineStack && def.paintHalo) {
     if (map.getLayer(`${layerId}-halo`) && map.getLayer(layerId)) {
-      ensureOverlayLabelLayer(map, def);
+      if (_overlayActive[def.key]) ensureOverlayLabelLayer(map, def);
       return layerId;
     }
   } else if (map.getLayer(layerId)) {
-    ensureOverlayLabelLayer(map, def);
+    if (_overlayActive[def.key]) ensureOverlayLabelLayer(map, def);
     return layerId;
   }
 
@@ -1320,6 +1548,18 @@ function ensureOverlayLayer(map, def) {
       layout: { visibility: "none" },
       type: "circle",
       paint: def.paint,
+    });
+  } else if (def.type === "symbol") {
+    void overlaySymbolIconLoader(def)(map).then(() => {
+      if (map.getLayer(layerId)) return;
+      map.addLayer({
+        ...spec,
+        id: layerId,
+        layout: { visibility: "none", ...(def.layout || {}) },
+        type: "symbol",
+        paint: def.paint || {},
+      });
+      if (_overlayActive[def.key]) ensureOverlayLabelLayer(map, def);
     });
   } else if (def.type === "fill") {
     map.addLayer({
@@ -1358,6 +1598,127 @@ function hideVisorThematicLayersOnMap(map) {
   syncOverlayLayersFromState(map, null, { forceAllOff: true });
 }
 
+/** Apaga todas las sub-capas de un overlay temático. */
+function forceOverlayGroupOff(map, overlayKey) {
+  if (!map) return;
+  const lid = `ly-${overlayKey}`;
+  const emptyFilter = ["literal", false];
+  for (const id of collectOverlayLayerIds(map, lid)) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.setLayoutProperty(id, "visibility", "none");
+      map.setFilter(id, emptyFilter);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function forceLayerGroupOff(map, layerId) {
+  if (!map) return;
+  const emptyFilter = ["literal", false];
+  for (const id of collectOverlayLayerIds(map, layerId)) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.setLayoutProperty(id, "visibility", "none");
+      map.setFilter(id, emptyFilter);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+function copyLayerGroupRuntime(fromMap, toMap, layerId, mun, emptyFilter) {
+  for (const id of collectOverlayLayerIds(fromMap, layerId)) {
+    if (!toMap.getLayer(id)) continue;
+    try {
+      const vis = fromMap.getLayoutProperty(id, "visibility") ?? "none";
+      toMap.setLayoutProperty(id, "visibility", vis);
+      if (vis === "visible") {
+        const filter = fromMap.getFilter(id);
+        toMap.setFilter(id, filter != null ? filter : munFilter(mun));
+      } else {
+        toMap.setFilter(id, emptyFilter);
+      }
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+/** Copia visibilidad/filtros runtime del mapa principal al clon del comparador. */
+export function copyVisorOverlayRuntime(fromMap, toMap) {
+  if (!fromMap || !toMap || fromMap === toMap) return;
+  const emptyFilter = ["literal", false];
+  const mun = _focusCve || "001";
+
+  for (const d of OVERLAY_DEFS) {
+    if (!_overlayActive[d.key]) {
+      forceOverlayGroupOff(toMap, d.key);
+      continue;
+    }
+    const lid = `ly-${d.key}`;
+    for (const id of collectOverlayLayerIds(fromMap, lid)) {
+      if (!toMap.getLayer(id)) continue;
+      try {
+        const vis = fromMap.getLayoutProperty(id, "visibility") ?? "none";
+        toMap.setLayoutProperty(id, "visibility", vis);
+        if (vis === "visible") {
+          const filter = fromMap.getFilter(id);
+          toMap.setFilter(id, filter != null ? filter : munFilter(mun));
+        } else {
+          toMap.setFilter(id, emptyFilter);
+        }
+      } catch {
+        /* noop */
+      }
+    }
+  }
+
+  for (const key of Object.keys(_visorSharedActive)) {
+    if (!_visorSharedActive[key]) {
+      if (key === "hidro_corrientes") forceLayerGroupOff(toMap, HIDRO_CORRIENTES_ID);
+      else if (key === "hidro_cuerpos") forceLayerGroupOff(toMap, HIDRO_CUERPOS_ID);
+      else if (key === "curvas_nivel") setCurnivelLayersVisible(toMap, false, mun);
+      setVisorOnlyLabelVisible(toMap, key, false, null);
+      continue;
+    }
+    if (key === "hidro_corrientes") {
+      copyLayerGroupRuntime(fromMap, toMap, HIDRO_CORRIENTES_ID, mun, emptyFilter);
+      setVisorOnlyLabelVisible(toMap, key, true, mun);
+    } else if (key === "hidro_cuerpos") {
+      copyLayerGroupRuntime(fromMap, toMap, HIDRO_CUERPOS_ID, mun, emptyFilter);
+      setVisorOnlyLabelVisible(toMap, key, true, mun);
+    } else if (key === "curvas_nivel") {
+      const vis =
+        fromMap.getLayer(CURNIVEL_LAYERS.base) &&
+        fromMap.getLayoutProperty(CURNIVEL_LAYERS.base, "visibility") === "visible";
+      setCurnivelLayersVisible(toMap, vis, mun);
+    }
+  }
+
+  const usoId = MARTIN_USO_SUELO.layerId;
+  if (toMap.getLayer(usoId)) {
+    try {
+      if (!_usoSueloActive) {
+        toMap.setLayoutProperty(usoId, "visibility", "none");
+        toMap.setFilter(usoId, emptyFilter);
+      } else if (fromMap.getLayer(usoId)) {
+        const vis = fromMap.getLayoutProperty(usoId, "visibility") ?? "none";
+        toMap.setLayoutProperty(usoId, "visibility", vis);
+        if (vis === "visible") {
+          const filter = fromMap.getFilter(usoId);
+          if (filter != null) toMap.setFilter(usoId, filter);
+        } else {
+          toMap.setFilter(usoId, emptyFilter);
+        }
+      }
+    } catch {
+      /* noop */
+    }
+  }
+}
+
 /** Alinea capas temáticas del visor con `_overlayActive` / `_usoSueloActive`. */
 function syncOverlayLayersFromState(map, cve, options = {}) {
   if (!map) return;
@@ -1370,12 +1731,15 @@ function syncOverlayLayersFromState(map, cve, options = {}) {
     if (!collectOverlayLayerIds(map, lid).length) continue;
     const on = !forceAllOff && !!_overlayActive[d.key];
     setLayerVisible(map, lid, on, on ? mun : null);
+    if (!on) forceOverlayGroupOff(map, d.key);
   }
 
   if (map.getLayer(MARTIN_USO_SUELO.layerId)) {
     const onUso = !forceAllOff && _usoSueloActive;
     setLayerVisible(map, MARTIN_USO_SUELO.layerId, onUso, onUso ? mun : null);
   }
+
+  syncVisorSharedThematicLayers(map, mun, forceAllOff);
 
   if (forceAllOff) {
     const geoLabelIds = new Set(overlayGeoLabelLayerIds());
@@ -1397,12 +1761,73 @@ function syncOverlayLayersFromState(map, cve, options = {}) {
 /** Re-sincroniza overlays del visor (p. ej. tras toggle en el panel). */
 export function syncVisorOverlayLayersFromState() {
   if (!_map) return;
-  const apply = (map) => syncOverlayLayersFromState(map, _focusCve);
+  const apply = (map) => {
+    syncOverlayLayersFromState(map, _focusCve);
+    notifyVisorOverlaysChanged();
+  };
   if (_atlasLayersReady && _map.isStyleLoaded()) {
     apply(_map);
     return;
   }
   whenAtlasMapReady(apply);
+}
+
+/**
+ * Replica en otra instancia MapLibre (p. ej. mapa INEGI del comparador) el estado
+ * de capas temáticas del visor: crea capas faltantes y aplica visibilidad/filtros.
+ * @param {import("maplibre-gl").Map} map
+ */
+export function syncVisorOverlayLayersOnMap(map) {
+  if (!map) return;
+  const run = () => {
+    ensureThematicMartinLayers(map);
+    OVERLAY_DEFS.forEach((d) => ensureOverlayLayer(map, d));
+    for (const key of Object.keys(VISOR_ONLY_LABEL_SPECS)) {
+      ensureVisorOnlyLabelLayer(map, key);
+    }
+    syncOverlayLayersFromState(map, _focusCve);
+    OVERLAY_DEFS.forEach((d) => ensureOverlayLabelLayer(map, d));
+    if (map !== _map && _map?.isStyleLoaded?.()) {
+      copyVisorOverlayRuntime(_map, map);
+    }
+    if (map !== _map) {
+      if (!map.__atlasColoniasLabelsBound) {
+        bindColoniasLabelsSync(map, coloniasLabelsCtx, munFilter, ensureColoniasLabelsLayer);
+        map.__atlasColoniasLabelsBound = true;
+      }
+      if (!map.__atlasLocsAtlasLabelsBound) {
+        bindLocsAtlasLabelsSync(map, locsAtlasLabelsCtx, munFilter, ensureLocsAtlasLabelsLayer);
+        map.__atlasLocsAtlasLabelsBound = true;
+      }
+    }
+    refreshOverlayTipBindings(map, overlayLayerIds);
+  };
+  if (map.isStyleLoaded()) {
+    run();
+    return;
+  }
+  map.once("load", run);
+}
+
+/** @type {(() => void) | null} */
+let _compareOverlaySyncHook = null;
+
+/** Registra callback síncrono para replicar capas en el mapa INEGI del comparador. */
+export function registerCompareOverlaySyncHook(fn) {
+  _compareOverlaySyncHook = typeof fn === "function" ? fn : null;
+}
+
+function notifyVisorOverlaysChanged() {
+  window.dispatchEvent(new CustomEvent("atlas:map-overlays-changed"));
+  if (_compareOverlaySyncHook) {
+    requestAnimationFrame(() => {
+      try {
+        _compareOverlaySyncHook?.();
+      } catch (err) {
+        console.warn("[visor compare] overlay sync:", err);
+      }
+    });
+  }
 }
 
 /** Apaga capas temáticas del visor (estado + mapa). Ignora callbacks async obsoletos. */
@@ -1414,6 +1839,10 @@ export function clearVisorThematicLayersOnMap() {
     _overlayActive[d.key] = false;
     _overlayKeyGen[d.key] = (_overlayKeyGen[d.key] || 0) + 1;
   });
+  for (const key of Object.keys(_visorSharedActive)) {
+    _visorSharedActive[key] = false;
+    _visorSharedKeyGen[key] = (_visorSharedKeyGen[key] || 0) + 1;
+  }
   if (_map && _atlasLayersReady && _map.isStyleLoaded()) {
     hideVisorThematicLayersOnMap(_map);
     return;
@@ -1457,6 +1886,17 @@ function setLayerVisible(map, layerId, visible, cve) {
     if (overlayKey === "colonias" || overlayKey === "locsAtlas") {
       deactivateOverlayGeoLabels(map, overlayKey);
     }
+    if (overlayKey && OVERLAY_LABEL_BY_KEY[overlayKey]) {
+      const labelId = overlayLabelLayerId(layerId);
+      if (map.getLayer(labelId)) {
+        try {
+          map.setLayoutProperty(labelId, "visibility", "none");
+          map.setFilter(labelId, emptyFilter);
+        } catch {
+          /* noop */
+        }
+      }
+    }
   }
 }
 
@@ -1485,7 +1925,9 @@ function ensureMap(containerEl) {
     bindLocsAtlasLabelsSync(_map, locsAtlasLabelsCtx, munFilter, ensureLocsAtlasLabelsLayer);
     applyOverlayLabelTheme(_map);
     bringMarcoEntToFront(_map);
-    OVERLAY_DEFS.forEach((d) => ensureOverlayLayer(_map, d));
+    void Promise.all([ensureResiduoSolidoMapIcons(_map), ensureLocsPuntoMapIcons(_map)]).finally(() => {
+      OVERLAY_DEFS.forEach((d) => ensureOverlayLayer(_map, d));
+    });
     _atlasLayersReady = true;
     flushStyleReadyQueue();
     if (_pendingHomeMode !== null) {
@@ -2132,6 +2574,7 @@ export function invalidateMapSize() {
       setTimeout(() => _map.resize(), 120);
     });
   }
+  window.dispatchEvent(new CustomEvent("atlas:map-resize"));
 }
 
 let _resizeTimer = null;
@@ -2167,6 +2610,7 @@ function setOverlayActive(key, active, cve_mun) {
     ensureOverlayLayer(map, def);
     syncOverlayLayersFromState(map, cve);
     refreshOverlayTipBindings(map, overlayLayerIds);
+    notifyVisorOverlaysChanged();
   };
 
   if (_map && _atlasLayersReady && _map.isStyleLoaded()) {
@@ -2179,7 +2623,30 @@ function setOverlayActive(key, active, cve_mun) {
 /** Zoom mínimo de una capa Martin del visor (p. ej. manzanas → 14). */
 export function getOverlayMinZoom(key) {
   const def = OVERLAY_DEFS.find((d) => d.key === key);
-  return def?.minzoom ?? null;
+  if (def) return def?.labelMinZoom ?? def?.minzoom ?? null;
+  if (VISOR_SHARED_LAYER_MIN_ZOOM[key] != null) return VISOR_SHARED_LAYER_MIN_ZOOM[key];
+  return null;
+}
+
+function setVisorSharedLayerActive(key, active, cve_mun) {
+  if (!Object.prototype.hasOwnProperty.call(_visorSharedActive, key)) return;
+  _visorSharedKeyGen[key] = (_visorSharedKeyGen[key] || 0) + 1;
+  const keyGen = _visorSharedKeyGen[key];
+  _visorSharedActive[key] = Boolean(active);
+  const cve = cve_mun || _focusCve || "001";
+
+  const apply = (map) => {
+    if (keyGen !== _visorSharedKeyGen[key]) return;
+    syncOverlayLayersFromState(map, cve);
+    refreshOverlayTipBindings(map, overlayLayerIds);
+    notifyVisorOverlaysChanged();
+  };
+
+  if (_map && _atlasLayersReady && _map.isStyleLoaded()) {
+    apply(_map);
+    return;
+  }
+  whenAtlasMapReady(apply);
 }
 
 export function setLocsAtlasLayerActive(a, c) { setOverlayActive("locsAtlas", a, c); }
@@ -2200,6 +2667,26 @@ export function setRncLayerActive(a, c) { setOverlayActive("rnc", a, c); }
 export function getRncLayerActive() { return !!_overlayActive.rnc; }
 export function setSaneamientoAguaLayerActive(a, c) { setOverlayActive("saneamientoAgua", a, c); }
 export function getSaneamientoAguaLayerActive() { return !!_overlayActive.saneamientoAgua; }
+export function setResiduoSolidoLayerActive(a, c) { setOverlayActive("residuoSolido", a, c); }
+export function getResiduoSolidoLayerActive() { return !!_overlayActive.residuoSolido; }
+export function setHidroCorrientesVisorLayerActive(a, c) {
+  setVisorSharedLayerActive("hidro_corrientes", a, c);
+}
+export function getHidroCorrientesVisorLayerActive() {
+  return !!_visorSharedActive.hidro_corrientes;
+}
+export function setHidroCuerposVisorLayerActive(a, c) {
+  setVisorSharedLayerActive("hidro_cuerpos", a, c);
+}
+export function getHidroCuerposVisorLayerActive() {
+  return !!_visorSharedActive.hidro_cuerpos;
+}
+export function setCurvasNivelVisorLayerActive(a, c) {
+  setVisorSharedLayerActive("curvas_nivel", a, c);
+}
+export function getCurvasNivelVisorLayerActive() {
+  return !!_visorSharedActive.curvas_nivel;
+}
 
 export function setRelieveLayerActive(active, cve_mun) {
   _relieveActive = Boolean(active);
@@ -2226,6 +2713,7 @@ export function setUsoSueloLayerActive(a, c) {
     if (opGen !== _usoSueloOpGen) return;
     ensureThematicMartinLayers(map);
     syncOverlayLayersFromState(map, cve);
+    notifyVisorOverlaysChanged();
   };
   if (_map && _atlasLayersReady && _map.isStyleLoaded()) {
     apply(_map);

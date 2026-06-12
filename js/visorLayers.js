@@ -33,8 +33,16 @@ import {
   getRncLayerActive,
   setSaneamientoAguaLayerActive,
   getSaneamientoAguaLayerActive,
+  setResiduoSolidoLayerActive,
+  getResiduoSolidoLayerActive,
   setUsoSueloLayerActive,
   getUsoSueloLayerActive,
+  setHidroCorrientesVisorLayerActive,
+  getHidroCorrientesVisorLayerActive,
+  setHidroCuerposVisorLayerActive,
+  getHidroCuerposVisorLayerActive,
+  setCurvasNivelVisorLayerActive,
+  getCurvasNivelVisorLayerActive,
   getOverlayMinZoom,
   clearVisorThematicLayersOnMap,
 } from "./map.js";
@@ -122,11 +130,40 @@ const VISOR_LAYER_DEFS = [
     setActive: setSaneamientoAguaLayerActive,
   },
   {
+    id: "residuo_solido",
+    overlayKey: "residuoSolido",
+    checkboxId: "visorResiduoSolido",
+    label: "Residuos solidos urbanos",
+    getActive: getResiduoSolidoLayerActive,
+    setActive: setResiduoSolidoLayerActive,
+  },
+  {
     id: "uso_suelo",
     checkboxId: "visorUsoSuelo",
     label: "Uso de suelo",
     getActive: getUsoSueloLayerActive,
     setActive: setUsoSueloLayerActive,
+  },
+  {
+    id: "hidro_corrientes",
+    checkboxId: "visorHidroCorrientes",
+    label: "Hidrografía (corrientes de agua)",
+    getActive: getHidroCorrientesVisorLayerActive,
+    setActive: setHidroCorrientesVisorLayerActive,
+  },
+  {
+    id: "hidro_cuerpos",
+    checkboxId: "visorHidroCuerpos",
+    label: "Hidrografía (cuerpos de agua)",
+    getActive: getHidroCuerposVisorLayerActive,
+    setActive: setHidroCuerposVisorLayerActive,
+  },
+  {
+    id: "curvas_nivel",
+    checkboxId: "visorCurvasNivel",
+    label: "Curvas de nivel",
+    getActive: getCurvasNivelVisorLayerActive,
+    setActive: setCurvasNivelVisorLayerActive,
   },
 ];
 
@@ -221,32 +258,14 @@ export function renderVisorLayerPanel(container, options = {}) {
 
   container.innerHTML = "";
 
-  const intro = document.createElement("p");
-  intro.className = "small text-muted mb-2 px-1";
-  intro.textContent =
-    "El mapa base (OSM / INEGI / Satélite) y el recentrado al municipio se controlan en la esquina inferior izquierda del mapa.";
-  container.append(intro);
-
-  const capTitle = document.createElement("div");
-  capTitle.className = "small text-uppercase text-muted px-1 mb-1";
-  capTitle.textContent = "Capas";
-  container.append(capTitle);
-
-  const exportHint = document.createElement("p");
-  exportHint.className = "small text-muted mb-2 px-1";
-  exportHint.textContent =
-    "KML y SHP exportan solo el municipio seleccionado (atributos de la tabla + geometría WGS84).";
-  container.append(exportHint);
-
   for (const def of VISOR_LAYER_DEFS) {
     appendVisorLayerRow(container, def, getCveMun, getMunicipio);
   }
+}
 
-  const hint = document.createElement("p");
-  hint.className = "small text-muted mt-3 mb-0 px-1";
-  hint.textContent =
-    "Las capas temáticas usan CVE_MUN de 3 dígitos. El Shapefile se entrega en ZIP (.shp, .shx, .dbf, .prj).";
-  container.append(hint);
+/** Capas temáticas activas en el panel lateral del visor. */
+export function getActiveVisorLayers() {
+  return VISOR_LAYER_DEFS.filter((def) => def.getActive());
 }
 
 /** Capas activas del panel que exigen un zoom mínimo (para hint en el mapa). */

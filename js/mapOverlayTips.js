@@ -14,13 +14,34 @@ const TIP_DEFS = [
   { primary: "ly-vialidades", tipHtml: vialidadesTipHtml },
   { primary: "ly-rnc", tipHtml: rncTipHtml },
   { primary: "ly-saneamientoAgua", tipHtml: saneamientoTipHtml },
+  { primary: "ly-residuoSolido", tipHtml: residuoSolidoTipHtml },
   { primary: MARTIN_USO_SUELO.layerId, tipHtml: usoSueloTipHtml },
+  { primary: "ly-hidro", tipHtml: hidroCorrienteTipHtml, visorOnly: true },
+  { primary: "ly-hcuerpos", tipHtml: hidroCuerpoTipHtml, visorOnly: true },
 ];
 
-/** @type {Set<string>} */
-const _boundLayerIds = new Set();
-/** @type {Map<string, { depth: number, primary: string, tipHtml: (p: object) => string }>} */
-const _layerHandlers = new Map();
+/** @type {WeakMap<import("maplibre-gl").Map, Set<string>>} */
+const _boundLayersByMap = new WeakMap();
+/** @type {WeakMap<import("maplibre-gl").Map, Map<string, { depth: number, primary: string, tipHtml: (p: object) => string }>>} */
+const _handlersByMap = new WeakMap();
+
+function boundLayerSet(map) {
+  let set = _boundLayersByMap.get(map);
+  if (!set) {
+    set = new Set();
+    _boundLayersByMap.set(map, set);
+  }
+  return set;
+}
+
+function handlerMap(map) {
+  let m = _handlersByMap.get(map);
+  if (!m) {
+    m = new Map();
+    _handlersByMap.set(map, m);
+  }
+  return m;
+}
 
 let _tipEl = null;
 let _tipHoverFeatKey = null;
@@ -120,8 +141,30 @@ export function saneamientoTipHtml(props) {
   return overlayTipShell("Agua/saneamiento", tipColonJoin(props, ["tipo"], ["nom_tipo"]));
 }
 
+export function residuoSolidoTipHtml(props) {
+  return overlayTipShell(
+    "Residuos solidos urbanos",
+    tipColonJoin(props, ["tipo"], ["nom_tipo"]),
+  );
+}
+
 export function usoSueloTipHtml(props) {
   return overlayTipShell("Uso de Suelo", tipValue(props, "descripcio"));
+}
+
+export function hidroCorrienteTipHtml(props) {
+  return overlayTipShell("Corriente de agua", `NOMBRE: ${tipValue(props, "nombre")}`);
+}
+
+export function hidroCuerpoTipHtml(props) {
+  return overlayTipShell("Cuerpo de agua", `NOMBRE: ${tipValue(props, "nombre")}`);
+}
+
+let _visorGeograficoActiveFn = () => false;
+
+/** Solo hover/etiquetas de hidrografía en el visor geográfico (no en Datos geográficos). */
+export function setOverlayTipsVisorModeActive(fn) {
+  _visorGeograficoActiveFn = typeof fn === "function" ? fn : () => false;
 }
 
 function overlayFeatureKey(feature) {
@@ -181,7 +224,7 @@ function scheduleHideIfIdle(map) {
   if (_tipLeaveTimer) clearTimeout(_tipLeaveTimer);
   _tipLeaveTimer = setTimeout(() => {
     let anyDepth = false;
-    for (const st of _layerHandlers.values()) {
+    for (const st of handlerMap(map).values()) {
       if (st.depth > 0) {
         anyDepth = true;
         break;
@@ -192,13 +235,15 @@ function scheduleHideIfIdle(map) {
   }, 50);
 }
 
-function bindLayerTipHandlers(map, layerId, primary, tipHtml) {
-  if (!map.getLayer(layerId) || _boundLayerIds.has(layerId)) return;
+function bindLayerTipHandlers(map, layerId, primary, tipHtml, visorOnly = false) {
+  const bound = boundLayerSet(map);
+  if (!map.getLayer(layerId) || bound.has(layerId)) return;
 
-  const state = { depth: 0, primary, tipHtml };
-  _layerHandlers.set(layerId, state);
+  const state = { depth: 0, primary, tipHtml, visorOnly };
+  handlerMap(map).set(layerId, state);
 
   const onEnter = (e) => {
+    if (visorOnly && !_visorGeograficoActiveFn()) return;
     if (!_overlayLayerIdsFn || !isGroupVisible(map, _overlayLayerIdsFn, primary)) return;
     const f = e.features?.[0];
     if (!f) return;
@@ -236,7 +281,7 @@ function bindLayerTipHandlers(map, layerId, primary, tipHtml) {
   map.on("mouseenter", layerId, onEnter);
   map.on("mousemove", layerId, onMove);
   map.on("mouseleave", layerId, onLeave);
-  _boundLayerIds.add(layerId);
+  bound.add(layerId);
 }
 
 let _overlayLayerIdsFn = null;
@@ -252,7 +297,7 @@ export function refreshOverlayTipBindings(map, overlayLayerIds) {
 
   for (const def of TIP_DEFS) {
     for (const layerId of overlayLayerIds(map, def.primary)) {
-      bindLayerTipHandlers(map, layerId, def.primary, def.tipHtml);
+      bindLayerTipHandlers(map, layerId, def.primary, def.tipHtml, Boolean(def.visorOnly));
     }
   }
 

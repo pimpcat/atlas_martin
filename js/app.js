@@ -174,6 +174,45 @@ import {
 } from "./visorLayers.js";
 import { attachVisorMapUi, teardownVisorMapUi, refreshVisorMapUi } from "./visorMapUi.js";
 import {
+  attachVisorMapLegend,
+  teardownVisorMapLegend,
+  refreshVisorMapLegend,
+} from "./visorMapLegend.js";
+import { setOverlayTipsVisorModeActive } from "./mapOverlayTips.js";
+import {
+  attachVisorMapExport,
+  teardownVisorMapExport,
+  refreshVisorMapExport,
+} from "./visorMapExport.js";
+import { attachVisorDraw, teardownVisorDraw, refreshVisorDraw } from "./visorDraw.js";
+import { attachVisorBuffer, teardownVisorBuffer, refreshVisorBuffer } from "./visorBuffer.js";
+import {
+  attachVisorFeaturePickBuffer,
+  teardownVisorFeaturePickBuffer,
+  refreshVisorFeaturePickBuffer,
+} from "./visorFeaturePickBuffer.js";
+import {
+  attachVisorSpatialAnalysis,
+  teardownVisorSpatialAnalysis,
+  refreshVisorSpatialAnalysis,
+} from "./visorSpatialAnalysis.js";
+import {
+  attachVisorTabular,
+  teardownVisorTabular,
+  refreshVisorTabular,
+} from "./visorTabular.js";
+import {
+  attachVisorMapCompare,
+  teardownVisorMapCompare,
+  refreshVisorMapCompare,
+} from "./visorMapCompare.js";
+import {
+  attachVisorGeocoder,
+  teardownVisorGeocoder,
+  refreshVisorGeocoder,
+  clearVisorGeocoderSearch,
+} from "./visorGeocoder.js";
+import {
   renderInvVivPanel,
   attachInvVivMap,
   refreshInvVivNow,
@@ -237,6 +276,13 @@ function setTableMeta(text) {
 
 function isVisorIndicator(indicator) {
   return indicator && indicator.visor === true;
+}
+
+function updateVisorMunicipioLabel() {
+  const el = document.getElementById("visorMunicipioLabel");
+  if (!el) return;
+  const nom = state.selectedMunicipio?.nomgeo?.trim();
+  el.textContent = nom || "—";
 }
 
 function isInvVivIndicator(indicator) {
@@ -415,6 +461,61 @@ function visorLayerPanelOptions() {
   };
 }
 
+function spatialAnalysisOptions() {
+  return {
+    getCveMun: () =>
+      state.selectedMunicipio?.cve_mun != null
+        ? String(state.selectedMunicipio.cve_mun)
+        : null,
+  };
+}
+
+/** Plugins de mapa compartidos entre visor geográfico e inventario de viviendas. */
+function attachMapViewerPlugins({ includeMapUi = false } = {}) {
+  if (includeMapUi) {
+    attachVisorMapUi({ getActiveLayersWithMinZoom: getActiveVisorLayersWithMinZoom });
+    attachVisorMapLegend();
+    setOverlayTipsVisorModeActive(() => isVisorIndicator(state.activeIndicator));
+    attachVisorFeaturePickBuffer();
+  }
+  attachVisorGeocoder(visorLayerPanelOptions());
+  attachVisorMapExport();
+  attachVisorDraw();
+  attachVisorBuffer();
+  attachVisorSpatialAnalysis(spatialAnalysisOptions());
+  attachVisorTabular(visorLayerPanelOptions());
+  attachVisorMapCompare();
+}
+
+function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
+  if (includeMapUi) {
+    refreshVisorMapUi();
+    refreshVisorMapLegend();
+    refreshVisorFeaturePickBuffer();
+  }
+  refreshVisorMapExport();
+  refreshVisorDraw();
+  refreshVisorBuffer();
+  refreshVisorSpatialAnalysis();
+  refreshVisorTabular(visorLayerPanelOptions());
+  refreshVisorMapCompare();
+  refreshVisorGeocoder();
+}
+
+function teardownMapViewerPlugins() {
+  setOverlayTipsVisorModeActive(() => false);
+  teardownVisorMapUi();
+  teardownVisorMapLegend();
+  teardownVisorFeaturePickBuffer();
+  teardownVisorMapExport();
+  teardownVisorDraw();
+  teardownVisorBuffer();
+  teardownVisorSpatialAnalysis();
+  teardownVisorTabular();
+  teardownVisorMapCompare();
+  teardownVisorGeocoder();
+}
+
 function refreshVisorLayerPanel() {
   const layerHost = document.getElementById("visorLayerList");
   if (layerHost && isVisorIndicator(state.activeIndicator)) {
@@ -470,6 +571,7 @@ function resetVisorMapForMunicipioChange() {
     requestAnimationFrame(() => {
       invalidateMapSize();
       refreshVisorMapUi();
+      refreshVisorGeocoder();
     });
   }
 }
@@ -479,6 +581,10 @@ function resetInvVivForMunicipioChange() {
   const mapEl = document.getElementById("mapFrame");
   if (state.selectedMunicipio && state.selectedMunicipio.cve_mun && mapEl) {
     scheduleMunicipioMapFocus(mapEl, state.selectedMunicipio.cve_mun, "inv");
+    requestAnimationFrame(() => {
+      invalidateMapSize();
+      refreshMapViewerPlugins({ includeMapUi: false });
+    });
   }
   refreshInvVivNow();
 }
@@ -514,7 +620,7 @@ async function goToHomeView() {
     setVisorLayout(false);
     setInvVivLayout(false);
     teardownInvVivMode();
-    teardownVisorMapUi();
+    teardownMapViewerPlugins();
     invalidateMunicipioMapFocus();
     clearVisorThematicLayers();
     clearGeoThematicLayers();
@@ -608,6 +714,12 @@ async function applyMunicipioSelection(m) {
     }
   }
 
+  if (onVisor) {
+    updateVisorMunicipioLabel();
+    clearVisorGeocoderSearch();
+    refreshVisorGeocoder();
+  }
+
   if (
     isPoblacionIndicator(state.activeIndicator) ||
     isCrecimientoIndicator(state.activeIndicator) ||
@@ -648,8 +760,8 @@ async function onIndicatorSelected(indicator) {
     teardownInvVivMode();
   }
 
-  if (!isVisorIndicator(indicator)) {
-    teardownVisorMapUi();
+  if (!isVisorIndicator(indicator) && !isInvVivIndicator(indicator)) {
+    teardownMapViewerPlugins();
   }
 
   if (!isVisorIndicator(indicator) && !isInvVivIndicator(indicator)) {
@@ -740,12 +852,13 @@ async function onIndicatorSelected(indicator) {
     setInvVivLayout(false);
     setVisorLayout(true);
     setMarcoWmsVisible(true);
+    updateVisorMunicipioLabel();
     const layerHost = document.getElementById("visorLayerList");
     if (layerHost) {
       renderVisorLayerPanel(layerHost, visorLayerPanelOptions());
     }
     requestAnimationFrame(() => {
-      attachVisorMapUi({ getActiveLayersWithMinZoom: getActiveVisorLayersWithMinZoom });
+      attachMapViewerPlugins({ includeMapUi: true });
       invalidateMapSize();
       if (state.selectedMunicipio?.cve_mun) {
         scheduleAppMunicipioFocus("visor");
@@ -753,7 +866,11 @@ async function onIndicatorSelected(indicator) {
         const mapElVisor = document.getElementById("mapFrame");
         if (mapElVisor) setMapView(mapElVisor, indicator.viewParam);
       }
-      requestAnimationFrame(() => refreshVisorMapUi());
+      requestAnimationFrame(() => refreshMapViewerPlugins({ includeMapUi: true }));
+      setTimeout(() => {
+        invalidateMapSize();
+        refreshMapViewerPlugins({ includeMapUi: true });
+      }, 400);
     });
     setActivePill(indicator.title);
     setTableMeta("—");
@@ -795,12 +912,19 @@ async function onIndicatorSelected(indicator) {
 
     const mapElInv = document.getElementById("mapFrame");
     requestAnimationFrame(() => {
+      teardownVisorMapUi();
+      attachMapViewerPlugins({ includeMapUi: false });
       invalidateMapSize();
       if (state.selectedMunicipio?.cve_mun && mapElInv) {
         scheduleMunicipioMapFocus(mapElInv, state.selectedMunicipio.cve_mun, "inv");
       } else if (mapElInv) {
         setMapView(mapElInv, indicator.viewParam);
       }
+      requestAnimationFrame(() => refreshMapViewerPlugins({ includeMapUi: false }));
+      setTimeout(() => {
+        invalidateMapSize();
+        refreshMapViewerPlugins({ includeMapUi: false });
+      }, 400);
     });
     setActivePill(indicator.title);
     setTableMeta("—");

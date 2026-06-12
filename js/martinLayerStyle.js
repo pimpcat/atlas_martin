@@ -131,6 +131,176 @@ export const COLONIAS_LABEL_PAINT = {
 
 export const COLONIAS_LABEL_PAINT_CLARO = { ...COLONIAS_LABEL_PAINT };
 
+/** Residuos sólidos urbanos (c_residuo_solido) — etiquetas desde zoom 14. */
+export const RESIDUO_SOLIDO_LABEL_MIN_ZOOM = 14;
+
+export const RESIDUO_SOLIDO_LABEL_TEXT = [
+  "case",
+  [
+    "all",
+    [">", ["length", ["coalesce", ["get", "tipo"], ["get", "TIPO"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], ""]], 0],
+  ],
+  [
+    "concat",
+    ["coalesce", ["get", "tipo"], ["get", "TIPO"], ""],
+    "\n",
+    ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], ""],
+  ],
+  [">", ["length", ["coalesce", ["get", "tipo"], ["get", "TIPO"], ""]], 0],
+  ["coalesce", ["get", "tipo"], ["get", "TIPO"], "—"],
+  [">", ["length", ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], ""]], 0],
+  ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], "—"],
+  "—",
+];
+
+export const RESIDUO_SOLIDO_LABEL_LAYOUT = {
+  "text-field": RESIDUO_SOLIDO_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 14, 12, 16, 13, 18, 14],
+  "text-anchor": "bottom",
+  "text-offset": [0, -1.6],
+  "text-justify": "center",
+  "text-max-width": 18,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "text-line-height": 1.15,
+  "symbol-placement": "point",
+  "visibility": "none",
+};
+
+export const RESIDUO_SOLIDO_LABEL_PAINT = {
+  "text-color": "#3e2723",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": ["step", ["zoom"], 0, RESIDUO_SOLIDO_LABEL_MIN_ZOOM, 1],
+};
+
+export const RESIDUO_SOLIDO_LABEL_PAINT_CLARO = { ...RESIDUO_SOLIDO_LABEL_PAINT };
+
+/** Agua y saneamiento (c_agua_sanea) — etiquetas desde zoom 14 (mismo texto que el hover). */
+export const SANEAMIENTO_AGUA_LABEL_MIN_ZOOM = 14;
+
+export const SANEAMIENTO_AGUA_LABEL_TEXT = [
+  "case",
+  [
+    "all",
+    [">", ["length", ["coalesce", ["get", "tipo"], ["get", "TIPO"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], ""]], 0],
+  ],
+  [
+    "concat",
+    ["coalesce", ["get", "tipo"], ["get", "TIPO"], ""],
+    ": ",
+    ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], ""],
+  ],
+  [">", ["length", ["coalesce", ["get", "tipo"], ["get", "TIPO"], ""]], 0],
+  ["concat", ["coalesce", ["get", "tipo"], ["get", "TIPO"], ""], ":"],
+  [">", ["length", ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], ""]], 0],
+  ["coalesce", ["get", "nom_tipo"], ["get", "NOM_TIPO"], "—"],
+  "—",
+];
+
+export const SANEAMIENTO_AGUA_LABEL_LAYOUT = {
+  "text-field": SANEAMIENTO_AGUA_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 14, 12, 16, 13, 18, 14],
+  "text-anchor": "bottom",
+  "text-offset": [0, -1.2],
+  "text-justify": "center",
+  "text-max-width": 18,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "symbol-placement": "point",
+  "visibility": "none",
+};
+
+export const SANEAMIENTO_AGUA_LABEL_PAINT = {
+  "text-color": "#004080",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": ["step", ["zoom"], 0, SANEAMIENTO_AGUA_LABEL_MIN_ZOOM, 1],
+};
+
+export const SANEAMIENTO_AGUA_LABEL_PAINT_CLARO = { ...SANEAMIENTO_AGUA_LABEL_PAINT };
+
+/** Hidrografía — texto «NOMBRE: …» (hover y etiquetas del visor geográfico). */
+export const HIDRO_NOMBRE_LABEL_TEXT = [
+  "case",
+  [">", ["length", ["coalesce", ["get", "nombre"], ["get", "NOMBRE"], ""]], 0],
+  ["concat", "NOMBRE: ", ["coalesce", ["get", "nombre"], ["get", "NOMBRE"], ""]],
+  "NOMBRE: —",
+];
+
+/** Corrientes de agua (hcorrientes) — etiquetas desde zoom 16. */
+export const HCORRIENTES_LABEL_MIN_ZOOM = 16;
+
+export const HCORRIENTES_LABEL_TEXT = [
+  "concat",
+  "Corriente de agua\n",
+  HIDRO_NOMBRE_LABEL_TEXT,
+];
+
+export const HCORRIENTES_LABEL_LAYOUT = {
+  "text-field": HCORRIENTES_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 16, 11, 18, 12, 20, 13],
+  "text-anchor": "center",
+  "text-justify": "center",
+  "text-max-width": 16,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "text-line-height": 1.15,
+  "symbol-placement": "line",
+  "text-rotation-alignment": "map",
+  "visibility": "none",
+};
+
+export const HCORRIENTES_LABEL_PAINT = {
+  "text-color": "#004080",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": ["step", ["zoom"], 0, HCORRIENTES_LABEL_MIN_ZOOM, 1],
+};
+
+export const HCORRIENTES_LABEL_PAINT_CLARO = { ...HCORRIENTES_LABEL_PAINT };
+
+/** Cuerpos de agua (hcuerpos) — etiquetas desde zoom 13. */
+export const HCUERPOS_LABEL_MIN_ZOOM = 13;
+
+export const HCUERPOS_LABEL_TEXT = [
+  "concat",
+  "Cuerpo de agua\n",
+  HIDRO_NOMBRE_LABEL_TEXT,
+];
+
+export const HCUERPOS_LABEL_LAYOUT = {
+  "text-field": HCUERPOS_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 13, 11, 16, 12, 18, 13],
+  "text-anchor": "center",
+  "text-justify": "center",
+  "text-max-width": 16,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "text-line-height": 1.15,
+  "symbol-placement": "point",
+  "visibility": "none",
+};
+
+export const HCUERPOS_LABEL_PAINT = {
+  "text-color": "#004080",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": ["step", ["zoom"], 0, HCUERPOS_LABEL_MIN_ZOOM, 1],
+};
+
+export const HCUERPOS_LABEL_PAINT_CLARO = { ...HCUERPOS_LABEL_PAINT };
+
 /** Municipios: visibles pero por debajo del contorno estatal. */
 export const HOME_MUN_LINE_STACK_OPACITY = [
   "interpolate",
@@ -283,6 +453,7 @@ export const MARTIN_TABLES = {
   vialidades: "c_e",
   rnc: "c_rnc",
   saneamientoAgua: "c_agua_sanea",
+  residuoSolido: "c_residuo_solido",
   clima: "clima",
   hcorrientes: "hcorrientes",
   hcuerpos: "hcuerpos",
@@ -539,7 +710,8 @@ export const LAYER_PAINT = {
   },
   saneamiento: { "circle-color": "#0066cc", "circle-radius": 5 },
   locsPunto: {
-    "circle-color": "#0066cc",
+    /* Legado circle — el mapa usa chincheta vía mapLocsPuntoIcons.js */
+    "circle-color": "#e65100",
     "circle-radius": 6,
     "circle-stroke-width": 1,
     "circle-stroke-color": "#fff",
