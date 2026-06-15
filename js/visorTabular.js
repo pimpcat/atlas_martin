@@ -3,6 +3,7 @@
  * Botón en el panel «Capas» → modal → selección de capa → tabla + exportación Excel.
  */
 import { fetchVisorTabularData, fetchVisorTabularLayers, downloadVisorTabularExcel } from "./visorTabularApi.js";
+import { ensureVisorLayersHeaderToolbar } from "./visorLayersToolbar.js";
 
 let _openBtn = null;
 let _modalEl = null;
@@ -333,17 +334,10 @@ function updateMunBanner() {
 }
 
 function ensureOpenButton() {
-  const header = document.querySelector("#dashboardVisor .visor-layers-card .card-header");
-  if (!header) return null;
+  const toolbar = ensureVisorLayersHeaderToolbar();
+  if (!toolbar) return null;
 
-  if (!header.classList.contains("visor-layers-card__header")) {
-    header.classList.add("visor-layers-card__header", "d-flex", "align-items-start", "justify-content-between", "gap-2");
-    const titleWrap = document.createElement("div");
-    while (header.firstChild) titleWrap.appendChild(header.firstChild);
-    header.appendChild(titleWrap);
-  }
-
-  let btn = header.querySelector("#visorTabularOpenBtn");
+  let btn = toolbar.querySelector("#visorTabularOpenBtn");
   if (!btn) {
     btn = document.createElement("button");
     btn.type = "button";
@@ -353,7 +347,7 @@ function ensureOpenButton() {
     btn.setAttribute("aria-label", "Abrir consulta tabular de capas");
     btn.innerHTML = TABLE_ICON_SVG;
     btn.addEventListener("click", () => void openTabularModal());
-    header.appendChild(btn);
+    toolbar.appendChild(btn);
   }
   _openBtn = btn;
   return btn;

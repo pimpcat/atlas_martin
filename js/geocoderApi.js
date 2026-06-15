@@ -66,17 +66,10 @@ export async function fetchBuscarGeocoder(q, cveMun) {
 
   const cve = cveMun != null ? String(cveMun).trim() : "";
 
-  if (!cve) {
-
-    return { ok: true, query: term, count: 0, rows: [] };
-
+  let url = `${API_BUSCAR_URL}?q=${encodeURIComponent(term)}`;
+  if (cve) {
+    url += `&cve_mun=${encodeURIComponent(cve)}`;
   }
-
-  const url =
-
-    `${API_BUSCAR_URL}?q=${encodeURIComponent(term)}` +
-
-    `&cve_mun=${encodeURIComponent(cve)}`;
 
   const res = await fetch(url, { headers: { Accept: "application/json" } });
 

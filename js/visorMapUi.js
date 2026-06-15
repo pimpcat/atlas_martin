@@ -2,7 +2,12 @@
  * Controles de zoom y aviso contextual en el Visor geográfico.
  * Mismo patrón visual que invViv.js (indicador de zoom + hint por capa activa).
  */
-import { getLeafletMap, whenAtlasMapReady, syncVisorOverlayLayersFromState } from "./map.js";
+import {
+  getLeafletMap,
+  getVisorStateWideMode,
+  whenAtlasMapReady,
+  syncVisorOverlayLayersFromState,
+} from "./map.js";
 import { scheduleVisorCompareSync } from "./visorMapCompare.js";
 import { syncVisorMapLegend } from "./visorMapLegend.js";
 
@@ -33,6 +38,12 @@ function syncVisorMapUi() {
   _zoomEl.style.display = "";
 
   if (!_hintEl?.isConnected) return;
+
+  if (getVisorStateWideMode()) {
+    _hintEl.textContent = "Vista estatal de Guerrero — capas sin filtro municipal.";
+    _hintEl.style.display = "";
+    return;
+  }
 
   const activeLayers = _getActiveLayersWithMinZoom();
   const hint = pickZoomHint(activeLayers, z);
@@ -117,9 +128,11 @@ export function attachVisorMapUi(options = {}) {
   whenAtlasMapReady(() => {
     requestAnimationFrame(() => tryAttach(0));
   });
+  document.addEventListener("atlasgro-visor-statewide-change", syncVisorMapUi);
 }
 
 export function teardownVisorMapUi() {
+  document.removeEventListener("atlasgro-visor-statewide-change", syncVisorMapUi);
   const map = getLeafletMap();
   detachMapHandlers(map);
   _getActiveLayersWithMinZoom = () => [];

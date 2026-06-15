@@ -33,6 +33,8 @@ import {
   getRncLayerActive,
   setSaneamientoAguaLayerActive,
   getSaneamientoAguaLayerActive,
+  setCluesLayerActive,
+  getCluesLayerActive,
   setResiduoSolidoLayerActive,
   getResiduoSolidoLayerActive,
   setUsoSueloLayerActive,
@@ -130,6 +132,14 @@ const VISOR_LAYER_DEFS = [
     setActive: setSaneamientoAguaLayerActive,
   },
   {
+    id: "clues",
+    overlayKey: "clues",
+    checkboxId: "visorClues",
+    label: "Establecimientos de salud",
+    getActive: getCluesLayerActive,
+    setActive: setCluesLayerActive,
+  },
+  {
     id: "residuo_solido",
     overlayKey: "residuoSolido",
     checkboxId: "visorResiduoSolido",
@@ -174,8 +184,9 @@ const VISOR_LAYER_DEFS = [
  * @param {VisorLayerDef} def
  * @param {() => string | null} getCveMun — CVE 3 dígitos para WMS
  * @param {() => { cve_mun?: string, nomgeo?: string } | null} getMunicipio — para export y nombre de archivo
+ * @param {() => boolean} [getStateWideMode]
  */
-function appendVisorLayerRow(container, def, getCveMun, getMunicipio) {
+function appendVisorLayerRow(container, def, getCveMun, getMunicipio, getStateWideMode) {
   const row = document.createElement("div");
   row.className = "visor-layer-row";
 
@@ -193,15 +204,16 @@ function appendVisorLayerRow(container, def, getCveMun, getMunicipio) {
   label.setAttribute("for", def.checkboxId);
   label.textContent = def.label;
 
-  // Sin municipio seleccionado no se puede activar capa temática (mismo criterio que WMS).
+  // Sin municipio seleccionado no se puede activar capa temática (salvo vista estatal).
   function applyToggle() {
+    const stateWide = typeof getStateWideMode === "function" && getStateWideMode();
     const cve = getCveMun();
-    if (cb.checked && !cve) {
+    if (cb.checked && !cve && !stateWide) {
       cb.checked = false;
       def.setActive(false, null);
       return;
     }
-    def.setActive(cb.checked, cve || undefined);
+    def.setActive(cb.checked, stateWide ? null : cve || undefined);
     notifyVisorLayerToggled();
   }
 
@@ -255,11 +267,13 @@ export function renderVisorLayerPanel(container, options = {}) {
     typeof options.getMunicipio === "function"
       ? options.getMunicipio
       : () => null;
+  const getStateWideMode =
+    typeof options.getStateWideMode === "function" ? options.getStateWideMode : () => false;
 
   container.innerHTML = "";
 
   for (const def of VISOR_LAYER_DEFS) {
-    appendVisorLayerRow(container, def, getCveMun, getMunicipio);
+    appendVisorLayerRow(container, def, getCveMun, getMunicipio, getStateWideMode);
   }
 }
 
@@ -283,4 +297,18 @@ export function getActiveVisorLayersWithMinZoom() {
 /** Apaga todas las capas temáticas del visor al salir del indicador. */
 export function clearVisorThematicLayers() {
   clearVisorThematicLayersOnMap();
+}
+
+/** Sincroniza los checkboxes del panel con el estado real de las capas. */
+export function syncVisorLayerPanelCheckboxes() {
+  for (const def of VISOR_LAYER_DEFS) {
+    const cb = document.getElementById(def.checkboxId);
+    if (cb) cb.checked = def.getActive();
+  }
+}
+
+/** Apaga todas las capas temáticas y desmarca el panel lateral. */
+export function clearVisorThematicLayersFromPanel() {
+  clearVisorThematicLayersOnMap();
+  syncVisorLayerPanelCheckboxes();
 }

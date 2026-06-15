@@ -271,6 +271,7 @@ function resolveApiLayerId(mapLayerId) {
     agebUrbanas: "ageb_urbanas",
     agebRurales: "ageb_rurales",
     saneamientoAgua: "saneamiento_agua",
+    clues: "clues",
     residuoSolido: "residuo_solido",
   };
   if (map[key]) return map[key];

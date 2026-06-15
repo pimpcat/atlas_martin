@@ -5,7 +5,7 @@
  * @see geocoderApi.js
  * @see app_api/geocoder.py
  */
-import { getLeafletMap, whenAtlasMapReady } from "./map.js";
+import { getLeafletMap, getVisorStateWideMode, whenAtlasMapReady } from "./map.js";
 import { fetchBuscarGeocoder, geocoderRowsToFeatureCollection } from "./geocoderApi.js";
 import { ensureVisorToolsExtrasHost } from "./visorDraw.js";
 
@@ -42,6 +42,7 @@ function escapeHtml(text) {
 }
 
 function getActiveCveMun() {
+  if (getVisorStateWideMode()) return null;
   const fn = _visorOptions.getCveMun;
   if (typeof fn !== "function") return null;
   const raw = fn();
@@ -49,6 +50,7 @@ function getActiveCveMun() {
 }
 
 function buildPlaceholder() {
+  if (getVisorStateWideMode()) return "Buscar en Guerrero…";
   const m = _visorOptions.getMunicipio?.();
   const nom = m?.nomgeo?.trim();
   if (nom) return `Buscar en ${nom}…`;
@@ -58,7 +60,10 @@ function buildPlaceholder() {
 async function forwardGeocode(config) {
   const q = String(config?.query || "").trim();
   const cveMun = getActiveCveMun();
-  if (q.length < 2 || !cveMun) {
+  if (q.length < 2) {
+    return { type: "FeatureCollection", features: [] };
+  }
+  if (!getVisorStateWideMode() && !cveMun) {
     return { type: "FeatureCollection", features: [] };
   }
   try {
@@ -286,13 +291,16 @@ function updateGeocoderUi() {
   } catch {
     /* control aún no montado */
   }
+  const stateWide = getVisorStateWideMode();
   const cve = getActiveCveMun();
   const input = _geocoder._inputEl;
   if (input) {
-    input.disabled = !cve;
-    input.title = cve
-      ? "Buscar localidades y colonias del municipio seleccionado"
-      : "Seleccione un municipio en el panel izquierdo";
+    input.disabled = !stateWide && !cve;
+    input.title = stateWide
+      ? "Buscar localidades y colonias en todo Guerrero"
+      : cve
+        ? "Buscar localidades y colonias del municipio seleccionado"
+        : "Seleccione un municipio en el panel izquierdo";
   }
 }
 

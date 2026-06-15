@@ -1,12 +1,23 @@
 /**
  * Icono MapLibre para localidades (c_loc_punto) — chincheta de ubicación.
  */
+import {
+  getSymbolIconRasterPx,
+  loadSvgAsMapSymbol,
+  symbolLayoutIconSize,
+} from "./mapSvgIcons.js";
 
 export const LOCS_PUNTO_ICON = "atlas-locs-punto-pin";
 
+const ICON_LOGICAL_PX = 32;
+const ICON_MAX_SCALE = 2.63;
+const ICON_SUPERSAMPLE = 3;
+const ICON_DISPLAY_BASE = ICON_LOGICAL_PX / 2;
+const iconSz = (v) => symbolLayoutIconSize(v, ICON_MAX_SCALE, ICON_SUPERSAMPLE);
+
 export const LOCS_PUNTO_SYMBOL_LAYOUT = {
   "icon-image": LOCS_PUNTO_ICON,
-  "icon-size": ["interpolate", ["linear"], ["zoom"], 8, 1.38, 12, 1.8, 16, 2.25, 20, 2.63],
+  "icon-size": ["interpolate", ["linear"], ["zoom"], 8, iconSz(1.38), 12, iconSz(1.8), 16, iconSz(2.25), 20, iconSz(2.63)],
   "icon-allow-overlap": true,
   "icon-ignore-placement": true,
   "icon-anchor": "bottom",
@@ -24,63 +35,15 @@ const PIN_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" ari
 </svg>`;
 
 /** Tamaño lógico del viewBox SVG (32×32). */
-const ICON_LOGICAL_PX = 32;
-const ICON_MAX_SCALE = 2.63;
-const ICON_SUPERSAMPLE = 3;
+const ICON_RASTER_PX = getSymbolIconRasterPx(ICON_DISPLAY_BASE, ICON_MAX_SCALE, ICON_SUPERSAMPLE);
 
-function getIconRasterConfig() {
-  const dpr =
-    typeof window !== "undefined"
-      ? Math.min(Math.max(window.devicePixelRatio || 1, 2), 3)
-      : 2;
-  const displayBase = ICON_LOGICAL_PX / 2;
-  const rasterPx = Math.round(displayBase * ICON_MAX_SCALE * dpr * ICON_SUPERSAMPLE);
-  return {
-    rasterPx,
-    pixelRatio: rasterPx / displayBase,
-  };
-}
-
-function loadSvgAsMapImage(map, id, svg) {
-  const { rasterPx, pixelRatio } = getIconRasterConfig();
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = rasterPx;
-        canvas.height = rasterPx;
-        const ctx = canvas.getContext("2d", { alpha: true });
-        if (!ctx) {
-          reject(new Error("Canvas 2D no disponible"));
-          return;
-        }
-        ctx.clearRect(0, 0, rasterPx, rasterPx);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(img, 0, 0, rasterPx, rasterPx);
-        if (map.hasImage(id)) map.removeImage(id);
-        map.addImage(id, ctx.getImageData(0, 0, rasterPx, rasterPx), {
-          pixelRatio,
-          sdf: false,
-        });
-        resolve();
-      } catch (err) {
-        reject(err);
-      }
-    };
-    img.onerror = () => reject(new Error(`No se pudo cargar icono ${id}`));
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  });
-}
-
-const LOCS_PUNTO_ICONS_VERSION = 4;
+const LOCS_PUNTO_ICONS_VERSION = 5;
 
 /** Registra la chincheta en el estilo MapLibre (idempotente). */
 export async function ensureLocsPuntoMapIcons(map) {
   if (!map) return;
   if (map.__atlasLocsPuntoIconsVersion === LOCS_PUNTO_ICONS_VERSION) return;
-  await loadSvgAsMapImage(map, LOCS_PUNTO_ICON, PIN_SVG);
+  await loadSvgAsMapSymbol(map, LOCS_PUNTO_ICON, PIN_SVG, ICON_RASTER_PX);
   map.__atlasLocsPuntoIconsVersion = LOCS_PUNTO_ICONS_VERSION;
 }
 

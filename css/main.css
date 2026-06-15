@@ -4508,8 +4508,14 @@ html[data-theme="claro"] .visor-spatial-field-list {
   font-size: 11px;
 }
 
-/* Visor — consulta tabular (panel Capas + modal) */
-.visor-layers-card__header .visor-tabular-open-btn {
+/* Visor — barra de acciones del panel Capas */
+.visor-layers-toolbar {
+  margin-top: 2px;
+}
+
+.visor-layers-card__header .visor-tabular-open-btn,
+.visor-layers-card__header .visor-statewide-toggle-btn,
+.visor-layers-card__header .visor-clear-layers-btn {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
@@ -4521,18 +4527,50 @@ html[data-theme="claro"] .visor-spatial-field-list {
   border: 1px solid rgba(var(--accent-rgb), 0.4);
   background: rgba(var(--accent-rgb), 0.12);
   color: rgba(var(--accent-rgb), 0.95);
-  transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+  transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease, border-color 0.15s ease;
 }
 
-.visor-layers-card__header .visor-tabular-open-btn:hover {
+.visor-layers-card__header .visor-tabular-open-btn:hover,
+.visor-layers-card__header .visor-statewide-toggle-btn:hover,
+.visor-layers-card__header .visor-clear-layers-btn:hover {
   background: rgba(var(--accent-rgb), 0.22);
   transform: translateY(-1px);
   box-shadow: 0 2px 8px rgba(0, 60, 80, 0.15);
 }
 
-html[data-theme="claro"] .visor-layers-card__header .visor-tabular-open-btn {
+.visor-layers-card__header .visor-clear-layers-btn:hover {
+  background: rgba(229, 57, 53, 0.2);
+  border-color: rgba(239, 83, 80, 0.65);
+  color: #ef9a9a;
+  box-shadow: 0 2px 8px rgba(183, 28, 28, 0.18);
+}
+
+.visor-layers-card__header .visor-statewide-toggle-btn.is-active {
+  background: rgba(21, 101, 192, 0.28);
+  border-color: rgba(100, 181, 246, 0.75);
+  color: #90caf9;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.2);
+}
+
+html[data-theme="claro"] .visor-layers-card__header .visor-tabular-open-btn,
+html[data-theme="claro"] .visor-layers-card__header .visor-statewide-toggle-btn,
+html[data-theme="claro"] .visor-layers-card__header .visor-clear-layers-btn {
   background: rgba(13, 138, 138, 0.08);
   color: #0d6e6e;
+}
+
+html[data-theme="claro"] .visor-layers-card__header .visor-clear-layers-btn:hover {
+  background: rgba(198, 40, 40, 0.1);
+  border-color: rgba(198, 40, 40, 0.45);
+  color: #c62828;
+  box-shadow: 0 2px 8px rgba(198, 40, 40, 0.12);
+}
+
+html[data-theme="claro"] .visor-layers-card__header .visor-statewide-toggle-btn.is-active {
+  background: rgba(21, 101, 192, 0.14);
+  border-color: rgba(21, 101, 192, 0.45);
+  color: #1565c0;
+  box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.12);
 }
 
 .modal-content.visor-tabular-modal {
@@ -5425,6 +5463,12 @@ html[data-theme="claro"] .invviv-map-tip {
   display: block;
 }
 
+.invviv-ico-entorno {
+  width: 1.1rem;
+  height: auto;
+  max-height: 1.35rem;
+}
+
 .invviv-radio__label {
   font-size: 0.78rem;
   line-height: 1.15;
@@ -5433,8 +5477,17 @@ html[data-theme="claro"] .invviv-map-tip {
 
 /* Leyenda INV — control colapsable sobre el mapa (Entorno urbano) */
 .invviv-map-legend {
+  position: absolute;
+  right: 10px;
+  left: auto;
+  bottom: var(--inv-legend-bottom, 48px);
+  z-index: 10001;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
   clear: both;
   font-family: inherit;
+  pointer-events: auto;
 }
 
 .invviv-map-legend__btn {

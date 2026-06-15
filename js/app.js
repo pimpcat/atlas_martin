@@ -202,6 +202,17 @@ import {
   refreshVisorTabular,
 } from "./visorTabular.js";
 import {
+  attachVisorStateWide,
+  teardownVisorStateWide,
+  refreshVisorStateWide,
+} from "./visorStateWide.js";
+import {
+  attachVisorClearLayers,
+  teardownVisorClearLayers,
+  refreshVisorClearLayers,
+} from "./visorClearLayers.js";
+import { getVisorStateWideMode, setVisorStateWideMode } from "./map.js";
+import {
   attachVisorMapCompare,
   teardownVisorMapCompare,
   refreshVisorMapCompare,
@@ -279,10 +290,11 @@ function isVisorIndicator(indicator) {
 }
 
 function updateVisorMunicipioLabel() {
-  const el = document.getElementById("visorMunicipioLabel");
-  if (!el) return;
-  const nom = state.selectedMunicipio?.nomgeo?.trim();
-  el.textContent = nom || "—";
+  const nom = state.selectedMunicipio?.nomgeo?.trim() || "—";
+  for (const id of ["visorMunicipioLabel", "invVivMunicipioLabel"]) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = nom;
+  }
 }
 
 function isInvVivIndicator(indicator) {
@@ -458,6 +470,7 @@ function visorLayerPanelOptions() {
         ? String(state.selectedMunicipio.cve_mun)
         : null,
     getMunicipio: () => state.selectedMunicipio,
+    getStateWideMode: () => getVisorStateWideMode(),
   };
 }
 
@@ -470,12 +483,21 @@ function spatialAnalysisOptions() {
   };
 }
 
+function onVisorLayersPanelRefresh() {
+  refreshVisorLayerPanel();
+}
+
 /** Plugins de mapa compartidos entre visor geográfico e inventario de viviendas. */
 function attachMapViewerPlugins({ includeMapUi = false } = {}) {
+  if (!includeMapUi) {
+    teardownVisorMapLegend();
+    setOverlayTipsVisorModeActive(() => false);
+  } else {
+    setOverlayTipsVisorModeActive(() => isVisorIndicator(state.activeIndicator));
+  }
   if (includeMapUi) {
     attachVisorMapUi({ getActiveLayersWithMinZoom: getActiveVisorLayersWithMinZoom });
     attachVisorMapLegend();
-    setOverlayTipsVisorModeActive(() => isVisorIndicator(state.activeIndicator));
     attachVisorFeaturePickBuffer();
   }
   attachVisorGeocoder(visorLayerPanelOptions());
@@ -484,7 +506,10 @@ function attachMapViewerPlugins({ includeMapUi = false } = {}) {
   attachVisorBuffer();
   attachVisorSpatialAnalysis(spatialAnalysisOptions());
   attachVisorTabular(visorLayerPanelOptions());
+  attachVisorStateWide();
+  attachVisorClearLayers();
   attachVisorMapCompare();
+  document.addEventListener("atlasgro-visor-layers-panel-refresh", onVisorLayersPanelRefresh);
 }
 
 function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
@@ -498,6 +523,8 @@ function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
   refreshVisorBuffer();
   refreshVisorSpatialAnalysis();
   refreshVisorTabular(visorLayerPanelOptions());
+  refreshVisorStateWide();
+  refreshVisorClearLayers();
   refreshVisorMapCompare();
   refreshVisorGeocoder();
 }
@@ -512,8 +539,11 @@ function teardownMapViewerPlugins() {
   teardownVisorBuffer();
   teardownVisorSpatialAnalysis();
   teardownVisorTabular();
+  teardownVisorStateWide();
+  teardownVisorClearLayers();
   teardownVisorMapCompare();
   teardownVisorGeocoder();
+  document.removeEventListener("atlasgro-visor-layers-panel-refresh", onVisorLayersPanelRefresh);
 }
 
 function refreshVisorLayerPanel() {
@@ -561,6 +591,9 @@ function scheduleAppMunicipioFocus(profile) {
  * En visor: solo contorno municipal (Marco WMS). Quita capas temáticas y alinea el panel.
  */
 function resetVisorMapForMunicipioChange() {
+  if (getVisorStateWideMode()) {
+    setVisorStateWideMode(false);
+  }
   setLocsAtlasLayerActive(false, null);
   setMarcoWmsVisible(true);
   refreshVisorLayerPanel();
@@ -714,8 +747,10 @@ async function applyMunicipioSelection(m) {
     }
   }
 
-  if (onVisor) {
+  if (onVisor || onInv) {
     updateVisorMunicipioLabel();
+  }
+  if (onVisor) {
     clearVisorGeocoderSearch();
     refreshVisorGeocoder();
   }
@@ -909,10 +944,12 @@ async function onIndicatorSelected(indicator) {
       renderInvVivPanel(host, visorLayerPanelOptions());
     }
     attachInvVivMap(visorLayerPanelOptions());
+    updateVisorMunicipioLabel();
 
     const mapElInv = document.getElementById("mapFrame");
     requestAnimationFrame(() => {
       teardownVisorMapUi();
+      teardownVisorMapLegend();
       attachMapViewerPlugins({ includeMapUi: false });
       invalidateMapSize();
       if (state.selectedMunicipio?.cve_mun && mapElInv) {

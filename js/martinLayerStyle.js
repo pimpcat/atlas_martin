@@ -226,6 +226,70 @@ export const SANEAMIENTO_AGUA_LABEL_PAINT = {
 
 export const SANEAMIENTO_AGUA_LABEL_PAINT_CLARO = { ...SANEAMIENTO_AGUA_LABEL_PAINT };
 
+/** Establecimientos de salud (c_clues) — etiquetas fijas desde zoom 14 (icono siempre visible). */
+export const CLUES_LABEL_MIN_ZOOM = 14;
+
+export const CLUES_LABEL_TEXT = [
+  "case",
+  [
+    "all",
+    [">", ["length", ["coalesce", ["get", "nom_insti"], ["get", "NOM_INSTI"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nom_comer"], ["get", "NOM_COMER"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nom_insadm"], ["get", "NOM_INSADM"], ""]], 0],
+  ],
+  [
+    "concat",
+    ["coalesce", ["get", "nom_insti"], ["get", "NOM_INSTI"], ""],
+    " ",
+    ["coalesce", ["get", "nom_comer"], ["get", "NOM_COMER"], ""],
+    "\n",
+    ["coalesce", ["get", "nom_insadm"], ["get", "NOM_INSADM"], ""],
+  ],
+  [
+    "all",
+    [">", ["length", ["coalesce", ["get", "nom_insti"], ["get", "NOM_INSTI"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nom_comer"], ["get", "NOM_COMER"], ""]], 0],
+  ],
+  [
+    "concat",
+    ["coalesce", ["get", "nom_insti"], ["get", "NOM_INSTI"], ""],
+    " ",
+    ["coalesce", ["get", "nom_comer"], ["get", "NOM_COMER"], ""],
+  ],
+  [">", ["length", ["coalesce", ["get", "nom_insti"], ["get", "NOM_INSTI"], ""]], 0],
+  ["coalesce", ["get", "nom_insti"], ["get", "NOM_INSTI"], "—"],
+  [">", ["length", ["coalesce", ["get", "nom_comer"], ["get", "NOM_COMER"], ""]], 0],
+  ["coalesce", ["get", "nom_comer"], ["get", "NOM_COMER"], "—"],
+  [">", ["length", ["coalesce", ["get", "nom_insadm"], ["get", "NOM_INSADM"], ""]], 0],
+  ["coalesce", ["get", "nom_insadm"], ["get", "NOM_INSADM"], "—"],
+  "—",
+];
+
+export const CLUES_LABEL_LAYOUT = {
+  "text-field": CLUES_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 14, 12, 16, 13, 18, 14],
+  "text-anchor": "bottom",
+  "text-offset": [0, -2.1],
+  "text-justify": "center",
+  "text-max-width": 18,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "text-line-height": 1.15,
+  "symbol-placement": "point",
+  "visibility": "none",
+};
+
+export const CLUES_LABEL_PAINT = {
+  "text-color": "#004d40",
+  "text-halo-color": "#ffffff",
+  "text-halo-width": 2,
+  "text-halo-blur": 0.5,
+  "text-opacity": ["step", ["zoom"], 0, CLUES_LABEL_MIN_ZOOM, 1],
+};
+
+export const CLUES_LABEL_PAINT_CLARO = { ...CLUES_LABEL_PAINT };
+
 /** Hidrografía — texto «NOMBRE: …» (hover y etiquetas del visor geográfico). */
 export const HIDRO_NOMBRE_LABEL_TEXT = [
   "case",
@@ -454,6 +518,7 @@ export const MARTIN_TABLES = {
   rnc: "c_rnc",
   saneamientoAgua: "c_agua_sanea",
   residuoSolido: "c_residuo_solido",
+  clues: "c_clues",
   clima: "clima",
   hcorrientes: "hcorrientes",
   hcuerpos: "hcuerpos",
@@ -709,6 +774,13 @@ export const LAYER_PAINT = {
     "line-opacity": 0.95,
   },
   saneamiento: { "circle-color": "#0066cc", "circle-radius": 5 },
+  clues: {
+    "circle-color": "#00897b",
+    "circle-radius": ["interpolate", ["linear"], ["zoom"], 8, 4, 12, 6, 16, 8],
+    "circle-stroke-width": 1.5,
+    "circle-stroke-color": "#ffffff",
+    "circle-opacity": 0.96,
+  },
   locsPunto: {
     /* Legado circle — el mapa usa chincheta vía mapLocsPuntoIcons.js */
     "circle-color": "#e65100",

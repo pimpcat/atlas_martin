@@ -6,6 +6,7 @@ import { getLeafletMap, whenAtlasMapReady } from "./map.js";
 import { getActiveVisorLayers } from "./visorLayers.js";
 import { RESIDUO_SOLIDO_LEGEND_ITEMS } from "./mapResiduoSolidoIcons.js";
 import { LOCS_PUNTO_LEGEND_ITEM } from "./mapLocsPuntoIcons.js";
+import { CLUES_LEGEND_ITEM } from "./mapCluesIcons.js";
 
 let _legendRoot = null;
 let _legendOpen = false;
@@ -59,6 +60,9 @@ const VISOR_SYMBOLOGY = {
   },
   saneamiento_agua: {
     items: [{ kind: "circle", color: "#0066cc", label: "Servicio de agua o saneamiento" }],
+  },
+  clues: {
+    iconItems: [{ label: CLUES_LEGEND_ITEM.label, svg: CLUES_LEGEND_ITEM.svg }],
   },
   residuo_solido: {
     iconItems: true,
@@ -129,7 +133,7 @@ function buildLayerSectionHtml(layerDef) {
   let listHtml = "";
   if (sym.iconItems) {
     const items = sym.iconItems === true ? RESIDUO_SOLIDO_LEGEND_ITEMS : sym.iconItems;
-    const largePin = layerDef.id === "locspunto";
+    const largePin = layerDef.id === "locspunto" || layerDef.id === "clues";
     listHtml = items
       .map(
         (item) =>

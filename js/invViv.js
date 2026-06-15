@@ -218,6 +218,23 @@ function bindInvMapTooltips(map, layerIds) {
   }
 }
 
+function layoutInvEntornoMapLegend(map) {
+  if (!_entornoLegendCtl) return;
+  const root = _entornoLegendCtl.getContainer();
+  if (!root?.isConnected || !map) return;
+  const container = map.getContainer();
+  const attrib = container.querySelector(".maplibregl-ctrl-attrib");
+  let bottomPx = 48;
+  if (attrib) {
+    const cRect = container.getBoundingClientRect();
+    const aRect = attrib.getBoundingClientRect();
+    if (cRect.height > 0 && aRect.height > 0) {
+      bottomPx = Math.ceil(cRect.bottom - aRect.top + 10);
+    }
+  }
+  root.style.setProperty("--inv-legend-bottom", `${bottomPx}px`);
+}
+
 function buildMapEntornoLegendListHtml() {
   return INV_ENTORNO_CODES.map(
     (c) =>
@@ -280,12 +297,16 @@ function syncEntornoMapLegend(map) {
     map.getContainer().appendChild(wrap);
     _entornoLegendCtl = { getContainer: () => wrap };
     _entornoLegendOpen = false;
+    layoutInvEntornoMapLegend(map);
     return;
   }
 
   const root = _entornoLegendCtl.getContainer();
   const title = root && root.querySelector(".invviv-map-legend__title");
+  const list = root && root.querySelector(".invviv-map-legend__list");
   if (title) title.textContent = layerDef.label;
+  if (list) list.innerHTML = buildMapEntornoLegendListHtml();
+  layoutInvEntornoMapLegend(map);
   setEntornoLegendPanelOpen(false);
 }
 
@@ -314,9 +335,11 @@ function ensureControls(map) {
     if (zEl) zEl.textContent = `Zoom ${Math.round(z * 10) / 10}`;
     syncInvVivHint(map);
     enforceInvZoomVisibility(map);
+    layoutInvEntornoMapLegend(map);
   };
   map.on("zoom", _syncZoomUiHandler);
   map.on("zoomend", _syncZoomUiHandler);
+  map.on("resize", _syncZoomUiHandler);
   _syncZoomUiHandler();
 }
 
@@ -324,6 +347,7 @@ function removeInvVivMapControls(map) {
   if (map && _syncZoomUiHandler) {
     map.off("zoom", _syncZoomUiHandler);
     map.off("zoomend", _syncZoomUiHandler);
+    map.off("resize", _syncZoomUiHandler);
     _syncZoomUiHandler = null;
   }
   if (_zoomCtl) {

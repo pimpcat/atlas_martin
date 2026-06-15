@@ -14,10 +14,13 @@ const TIP_DEFS = [
   { primary: "ly-vialidades", tipHtml: vialidadesTipHtml },
   { primary: "ly-rnc", tipHtml: rncTipHtml },
   { primary: "ly-saneamientoAgua", tipHtml: saneamientoTipHtml },
+  { primary: "ly-clues", tipHtml: cluesTipHtml },
   { primary: "ly-residuoSolido", tipHtml: residuoSolidoTipHtml },
   { primary: MARTIN_USO_SUELO.layerId, tipHtml: usoSueloTipHtml },
   { primary: "ly-hidro", tipHtml: hidroCorrienteTipHtml, visorOnly: true },
   { primary: "ly-hcuerpos", tipHtml: hidroCuerpoTipHtml, visorOnly: true },
+  { primary: "ly-curnivel", tipHtml: curnivelTipHtml, visorOnly: true },
+  { primary: "ly-curnivel-ma", tipHtml: curnivelTipHtml, visorOnly: true },
 ];
 
 /** @type {WeakMap<import("maplibre-gl").Map, Set<string>>} */
@@ -141,6 +144,15 @@ export function saneamientoTipHtml(props) {
   return overlayTipShell("Agua/saneamiento", tipColonJoin(props, ["tipo"], ["nom_tipo"]));
 }
 
+export function cluesTipHtml(props) {
+  const lines = ["nom_insti", "nom_comer", "nom_insadm"]
+    .map((key) => featureProp(props, key))
+    .filter(Boolean)
+    .map(escapeHtml);
+  const body = lines.length ? lines.join("<br>") : "—";
+  return overlayTipShell("Establecimientos de salud", body);
+}
+
 export function residuoSolidoTipHtml(props) {
   return overlayTipShell(
     "Residuos solidos urbanos",
@@ -160,6 +172,19 @@ export function hidroCuerpoTipHtml(props) {
   return overlayTipShell("Cuerpo de agua", `NOMBRE: ${tipValue(props, "nombre")}`);
 }
 
+function formatElevMeters(props) {
+  const raw = featureProp(props, "elev", "ELEV");
+  if (!raw) return "—";
+  const n = Number(raw);
+  if (Number.isFinite(n)) return `${Math.trunc(n)} m.`;
+  const m = /^-?\d+/.exec(String(raw).trim());
+  return m ? `${m[0]} m.` : "—";
+}
+
+export function curnivelTipHtml(props) {
+  return overlayTipShell("Elevación", escapeHtml(formatElevMeters(props)));
+}
+
 let _visorGeograficoActiveFn = () => false;
 
 /** Solo hover/etiquetas de hidrografía en el visor geográfico (no en Datos geográficos). */
@@ -174,7 +199,7 @@ function overlayFeatureKey(feature) {
   if (gid) return `gid:${gid}`;
   const cvegeo = featureProp(feature.properties, "cvegeo");
   if (cvegeo) return `cve:${cvegeo}`;
-  const nom = featureProp(feature.properties, "nom_asen", "nomvial", "nombre", "descripcio", "nom_tipo");
+  const nom = featureProp(feature.properties, "nom_asen", "nomvial", "nombre", "descripcio", "nom_tipo", "elev");
   return nom ? `nom:${nom}` : null;
 }
 

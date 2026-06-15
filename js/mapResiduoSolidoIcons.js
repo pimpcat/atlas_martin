@@ -1,6 +1,11 @@
 /**
  * Iconos MapLibre para c_residuo_solido según el campo «tipo».
  */
+import {
+  getSymbolIconRasterPx,
+  loadSvgAsMapSymbol,
+  symbolLayoutIconSize,
+} from "./mapSvgIcons.js";
 
 export const RESIDUO_ICON_DISPOSICION = "atlas-residuo-disposicion";
 export const RESIDUO_ICON_RECOLECCION = "atlas-residuo-recoleccion";
@@ -29,10 +34,17 @@ export const RESIDUO_SOLIDO_ICON_IMAGE = [
   RESIDUO_ICON_DEFAULT,
 ];
 
+const ICON_LOGICAL_PX = 32;
+/** Máximo icon-size visual (debe coincidir con zoom 18). */
+const ICON_MAX_SCALE = 3.5;
+const ICON_SHARPNESS = 4;
+const ICON_DISPLAY_BASE = ICON_LOGICAL_PX / 2;
+const iconSz = (v) => symbolLayoutIconSize(v, ICON_MAX_SCALE, ICON_SHARPNESS);
+
 export const RESIDUO_SOLIDO_SYMBOL_LAYOUT = {
   "icon-image": RESIDUO_SOLIDO_ICON_IMAGE,
   // Escala base ×3.5 (350 %) respecto al tamaño inicial.
-  "icon-size": ["interpolate", ["linear"], ["zoom"], 6, 1.75, 10, 2.275, 14, 2.975, 18, 3.5],
+  "icon-size": ["interpolate", ["linear"], ["zoom"], 6, iconSz(1.75), 10, iconSz(2.275), 14, iconSz(2.975), 18, iconSz(3.5)],
   "icon-allow-overlap": true,
   "icon-ignore-placement": true,
   "icon-anchor": "bottom",
@@ -43,27 +55,7 @@ export const RESIDUO_SOLIDO_SYMBOL_PAINT = {
   "icon-opacity": 0.96,
 };
 
-/** Tamaño lógico del viewBox SVG (32×32). */
-const ICON_LOGICAL_PX = 32;
-/** Máximo icon-size del layout (debe coincidir con zoom 18). */
-const ICON_MAX_SCALE = 3.5;
-/** Supersampling extra para icon-size alto sin borrosidad. */
-const ICON_SHARPNESS = 4;
-
-function getResiduoIconRasterConfig() {
-  const dpr =
-    typeof window !== "undefined"
-      ? Math.min(Math.max(window.devicePixelRatio || 1, 2), 3)
-      : 2;
-  const displayBase = ICON_LOGICAL_PX / 2;
-  const rasterPx = Math.round(
-    displayBase * ICON_MAX_SCALE * dpr * ICON_SHARPNESS,
-  );
-  return {
-    rasterPx,
-    pixelRatio: rasterPx / displayBase,
-  };
-}
+const ICON_RASTER_PX = getSymbolIconRasterPx(ICON_DISPLAY_BASE, ICON_MAX_SCALE, ICON_SHARPNESS);
 
 const ICON_SPECS = [
   {
@@ -101,43 +93,11 @@ const ICON_SPECS = [
   },
 ];
 
-function loadSvgAsMapImage(map, id, svg) {
-  const { rasterPx, pixelRatio } = getResiduoIconRasterConfig();
-
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = rasterPx;
-        canvas.height = rasterPx;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) {
-          reject(new Error("Canvas 2D no disponible"));
-          return;
-        }
-        ctx.clearRect(0, 0, rasterPx, rasterPx);
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(img, 0, 0, rasterPx, rasterPx);
-
-        if (map.hasImage(id)) {
-          map.removeImage(id);
-        }
-        map.addImage(id, ctx.getImageData(0, 0, rasterPx, rasterPx), {
-          pixelRatio,
-        });
-        resolve();
-      } catch (err) {
-        reject(err);
-      }
-    };
-    img.onerror = () => reject(new Error(`No se pudo cargar icono ${id}`));
-    img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-  });
+function loadResiduoIcon(map, id, svg) {
+  return loadSvgAsMapSymbol(map, id, svg, ICON_RASTER_PX);
 }
 
-const RESIDUO_ICONS_VERSION = 2;
+const RESIDUO_ICONS_VERSION = 3;
 
 /** Registra iconos en el estilo MapLibre (idempotente). */
 export async function ensureResiduoSolidoMapIcons(map) {
@@ -145,7 +105,7 @@ export async function ensureResiduoSolidoMapIcons(map) {
   if (map.__atlasResiduoIconsVersion === RESIDUO_ICONS_VERSION) return;
 
   await Promise.all(
-    ICON_SPECS.map(({ id, svg }) => loadSvgAsMapImage(map, id, svg)),
+    ICON_SPECS.map(({ id, svg }) => loadResiduoIcon(map, id, svg)),
   );
   map.__atlasResiduoIconsVersion = RESIDUO_ICONS_VERSION;
 }
