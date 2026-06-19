@@ -33,12 +33,15 @@ export const LOCS_PUNTO_LABEL_TEXT = [
   "—",
 ];
 
+/** Etiquetas symbol sobre icono (misma altura: localidades, CLUES, DENUE). Y negativo = arriba del punto. */
+export const SYMBOL_POINT_LABEL_TEXT_OFFSET = [0, -2.55];
+
 export const LOCS_PUNTO_LABEL_LAYOUT = {
   "text-field": LOCS_PUNTO_LABEL_TEXT,
   "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
   "text-size": ["interpolate", ["linear"], ["zoom"], 13, 13, 15, 14, 17, 15],
   "text-anchor": "bottom",
-  "text-offset": [0, -1.45],
+  "text-offset": SYMBOL_POINT_LABEL_TEXT_OFFSET,
   "text-justify": "center",
   "text-max-width": 20,
   "text-allow-overlap": true,
@@ -207,7 +210,7 @@ export const SANEAMIENTO_AGUA_LABEL_LAYOUT = {
   "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
   "text-size": ["interpolate", ["linear"], ["zoom"], 14, 12, 16, 13, 18, 14],
   "text-anchor": "bottom",
-  "text-offset": [0, -1.2],
+  "text-offset": SYMBOL_POINT_LABEL_TEXT_OFFSET,
   "text-justify": "center",
   "text-max-width": 18,
   "text-allow-overlap": true,
@@ -226,8 +229,8 @@ export const SANEAMIENTO_AGUA_LABEL_PAINT = {
 
 export const SANEAMIENTO_AGUA_LABEL_PAINT_CLARO = { ...SANEAMIENTO_AGUA_LABEL_PAINT };
 
-/** Establecimientos de salud (c_clues) — etiquetas fijas desde zoom 14 (icono siempre visible). */
-export const CLUES_LABEL_MIN_ZOOM = 14;
+/** Establecimientos de salud (c_clues) — etiquetas fijas desde zoom 16 (icono siempre visible). */
+export const CLUES_LABEL_MIN_ZOOM = 16;
 
 export const CLUES_LABEL_TEXT = [
   "case",
@@ -268,9 +271,9 @@ export const CLUES_LABEL_TEXT = [
 export const CLUES_LABEL_LAYOUT = {
   "text-field": CLUES_LABEL_TEXT,
   "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
-  "text-size": ["interpolate", ["linear"], ["zoom"], 14, 12, 16, 13, 18, 14],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 16, 12, 18, 13, 20, 14],
   "text-anchor": "bottom",
-  "text-offset": [0, -2.1],
+  "text-offset": SYMBOL_POINT_LABEL_TEXT_OFFSET,
   "text-justify": "center",
   "text-max-width": 18,
   "text-allow-overlap": true,
@@ -289,6 +292,45 @@ export const CLUES_LABEL_PAINT = {
 };
 
 export const CLUES_LABEL_PAINT_CLARO = { ...CLUES_LABEL_PAINT };
+
+/** DENUE (c_denue) — etiqueta nom_estab desde zoom 16. */
+export const DENUE_LABEL_MIN_ZOOM = 16;
+
+export const DENUE_LABEL_TEXT = [
+  "case",
+  [">", ["length", ["coalesce", ["get", "nom_estab"], ["get", "NOM_ESTAB"], ""]], 0],
+  ["coalesce", ["get", "nom_estab"], ["get", "NOM_ESTAB"], "—"],
+  "—",
+];
+
+export const DENUE_LABEL_LAYOUT = {
+  "text-field": DENUE_LABEL_TEXT,
+  "text-font": ["Open Sans Bold", "Arial Unicode MS Bold", "Open Sans Regular"],
+  "text-size": ["interpolate", ["linear"], ["zoom"], 16, 12, 18, 13, 20, 14],
+  "text-anchor": "bottom",
+  "text-offset": SYMBOL_POINT_LABEL_TEXT_OFFSET,
+  "text-justify": "center",
+  "text-max-width": 18,
+  "text-allow-overlap": true,
+  "text-ignore-placement": true,
+  "text-line-height": 1.15,
+  "symbol-placement": "point",
+  "visibility": "none",
+};
+
+export function denueLabelPaint(textColor = "#333333") {
+  return {
+    "text-color": textColor,
+    "text-halo-color": "#ffffff",
+    "text-halo-width": 2,
+    "text-halo-blur": 0.5,
+    "text-opacity": ["step", ["zoom"], 0, DENUE_LABEL_MIN_ZOOM, 1],
+  };
+}
+
+export function denueLabelPaintClaro(textColor = "#333333") {
+  return denueLabelPaint(textColor);
+}
 
 /** Hidrografía — texto «NOMBRE: …» (hover y etiquetas del visor geográfico). */
 export const HIDRO_NOMBRE_LABEL_TEXT = [
@@ -476,6 +518,46 @@ const DETAIL_LINE_CORE = lineWidthZoom(10, 0.75, 13, 1.35, 16, 2.2, 18, 3.5);
 const ROAD_LINE_HALO = lineWidthZoom(10, 2.2, 13, 3.4, 16, 5, 18, 7);
 const ROAD_LINE_CORE = lineWidthZoom(10, 1.1, 13, 2, 16, 3.2, 18, 4.8);
 
+/** RNC — detalle urbano (calles) desde este zoom; por debajo solo red troncal / estatal. */
+export const RNC_DETAIL_MIN_ZOOM = 12;
+
+/** RNC — red troncal intermedia (municipio alejado) desde este zoom. */
+export const RNC_TRONCAL_MIN_ZOOM = 10;
+
+/** Vista estatal / zoom lejano: solo ejes principales. */
+export const RNC_ESTATAL_TIPO_VIAL = ["Boulevard", "Camino", "Carretera", "Vereda"];
+
+/** Zoom medio (sin calles urbanas). */
+export const RNC_TRONCAL_TIPO_VIAL = [
+  "Carretera",
+  "Autopista",
+  "Corredor",
+  "Camino",
+  "Periférico",
+  "Circuito",
+  "Circunvalación",
+  "Boulevard",
+  "Viaducto",
+  "Calzada",
+  "Enlace",
+  "Vereda",
+];
+
+function rncTipoVialMatchFilter(tipos) {
+  const tipo = ["coalesce", ["get", "tipo_vial"], ["get", "TIPO_VIAL"], ""];
+  return ["match", tipo, ...tipos.flatMap((t) => [t, true]), false];
+}
+
+/** Filtro MapLibre: red mínima para vista estatal (zoom < 10). */
+export function rncEstatalTipoFilter() {
+  return rncTipoVialMatchFilter(RNC_ESTATAL_TIPO_VIAL);
+}
+
+/** Filtro MapLibre: vialidades troncales sin calles urbanas (zoom 10–11). */
+export function rncTroncalTipoFilter() {
+  return rncTipoVialMatchFilter(RNC_TRONCAL_TIPO_VIAL);
+}
+
 /** Hidrografía (corrientes). */
 const HYDRO_LINE_HALO = lineWidthZoom(8, 1.8, 11, 3, 14, 4.5, 16, 6);
 const HYDRO_LINE_CORE = lineWidthZoom(8, 0.9, 11, 1.6, 14, 2.8, 16, 4);
@@ -519,6 +601,7 @@ export const MARTIN_TABLES = {
   saneamientoAgua: "c_agua_sanea",
   residuoSolido: "c_residuo_solido",
   clues: "c_clues",
+  denue: "c_denue",
   clima: "clima",
   hcorrientes: "hcorrientes",
   hcuerpos: "hcuerpos",

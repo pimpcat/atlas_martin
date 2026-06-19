@@ -261,7 +261,8 @@ html[data-theme="oscuro"] .menu-section-icon{
 }
 
 /* Visor geográfico: mapa amplio + panel de capas */
-.dashboard-visor {
+.dashboard-visor,
+.dashboard-ruteo {
   min-height: 0;
   height: 100%;
   max-height: 100%;
@@ -276,6 +277,17 @@ html[data-theme="oscuro"] .menu-section-icon{
   width: 100%;
   height: 100%;
   max-height: 100%;
+  min-height: 0;
+  --visor-map-ui-top: 10px;
+  --visor-map-ui-right: 10px;
+  --visor-map-nav-col-width: 29px;
+  --visor-map-ui-stack-gap: 6px;
+}
+
+.visor-map-frame-wrap > .map-frame {
+  display: block;
+  width: 100%;
+  height: 100%;
   min-height: 0;
 }
 
@@ -4065,8 +4077,10 @@ html[data-theme="oscuro"] .superficie-agricultura-viz-foot {
 .visor-zoom,
 .visor-hint {
   position: absolute;
-  top: 10px;
-  right: 52px;
+  top: var(--visor-map-ui-top, 10px);
+  right: calc(
+    var(--visor-map-ui-right, 10px) + var(--visor-map-nav-col-width, 29px) + var(--visor-map-ui-stack-gap, 6px)
+  );
   left: auto;
   max-width: 11rem;
   margin: 0;
@@ -4089,7 +4103,7 @@ html[data-theme="oscuro"] .superficie-agricultura-viz-foot {
 
 .invviv-hint,
 .visor-hint {
-  top: 38px;
+  top: calc(var(--visor-map-ui-top, 10px) + 28px);
   max-width: min(24rem, calc(100% - 58px));
   white-space: normal;
   overflow: visible;
@@ -4573,6 +4587,301 @@ html[data-theme="claro"] .visor-layers-card__header .visor-statewide-toggle-btn.
   box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.12);
 }
 
+/* Visor — panel de ruteo (combos origen/destino) */
+#ruteoPanel.ruteo-panel-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+.dashboard-ruteo .visor-layers-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+
+.dashboard-ruteo .visor-layers-card > .card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.ruteo-panel-top {
+  flex: 0 0 auto;
+  padding: 0.75rem 0.75rem 0.5rem;
+  border-bottom: 1px solid rgba(127, 140, 160, 0.18);
+}
+
+.ruteo-panel-scroll {
+  flex: 1 1 auto;
+  min-height: 140px;
+  max-height: min(48vh, 520px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 0.65rem 0.75rem 0.75rem;
+  scrollbar-gutter: stable;
+}
+
+#ruteoPanel .ruteo-loc-input {
+  font-size: 13px;
+}
+
+.ruteo-combobox-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 220px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: rgba(15, 27, 51, 0.98);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.ruteo-combobox-item {
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--text);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.ruteo-combobox-item:hover,
+.ruteo-combobox-item:focus {
+  background: rgba(var(--accent-rgb), 0.18);
+}
+
+.ruteo-combobox-empty {
+  padding: 8px 10px;
+  color: var(--muted);
+}
+
+.ruteo-summary {
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 255, 200, 0.25);
+  background: rgba(0, 255, 200, 0.08);
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text);
+}
+
+.ruteo-summary .text-muted {
+  color: rgba(var(--text-rgb, 236, 241, 248), 0.72) !important;
+}
+
+.ruteo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.ruteo-peaje-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: none;
+  margin-bottom: 0;
+}
+
+.ruteo-peaje-switch-label {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ruteo-peaje-switch-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.ruteo-peaje-switch-slider {
+  position: relative;
+  flex: 0 0 42px;
+  width: 42px;
+  height: 22px;
+  border-radius: 999px;
+  background: rgba(120, 130, 145, 0.55);
+  transition: background 0.2s ease;
+}
+
+.ruteo-peaje-switch-slider::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+
+.ruteo-peaje-switch-input:checked + .ruteo-peaje-switch-slider {
+  background: #00c9a0;
+}
+
+.ruteo-peaje-switch-input:checked + .ruteo-peaje-switch-slider::after {
+  transform: translateX(20px);
+}
+
+.ruteo-resumen-detalle {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-right: 2px;
+}
+
+.ruteo-resumen-block {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(127, 140, 160, 0.22);
+  background: rgba(127, 140, 160, 0.06);
+}
+
+.ruteo-resumen-title {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+.ruteo-breakdown-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.ruteo-breakdown-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 2px 0;
+}
+
+.ruteo-breakdown-km {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+html[data-theme="claro"] .ruteo-resumen-block {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+html[data-theme="oscuro"] #ruteoPanel .form-label {
+  color: rgba(236, 241, 248, 0.92);
+}
+
+html[data-theme="oscuro"] #ruteoPanel .text-muted {
+  color: rgba(236, 241, 248, 0.62) !important;
+}
+
+html[data-theme="oscuro"] #ruteoPanel .ruteo-loc-input {
+  background-color: rgba(10, 18, 32, 0.92);
+  border-color: rgba(255, 255, 255, 0.22);
+  color: #ecf1f8;
+}
+
+html[data-theme="oscuro"] #ruteoPanel .ruteo-loc-input:focus {
+  background-color: rgba(10, 18, 32, 0.98);
+  border-color: rgba(var(--accent-rgb), 0.55);
+  color: #fff;
+  box-shadow: 0 0 0 0.2rem rgba(var(--accent-rgb), 0.22);
+}
+
+html[data-theme="oscuro"] #ruteoPanel .ruteo-loc-input::placeholder {
+  color: rgba(236, 241, 248, 0.45);
+}
+
+html[data-theme="oscuro"] #ruteoPanel .btn-outline-secondary {
+  color: rgba(236, 241, 248, 0.88);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+html[data-theme="oscuro"] #ruteoPanel .ruteo-run-btn {
+  background: linear-gradient(135deg, rgba(0, 200, 160, 0.35), rgba(13, 138, 138, 0.45));
+  border-color: rgba(0, 255, 200, 0.55);
+  color: #e0fff8;
+}
+
+html[data-theme="oscuro"] #ruteoPanel .ruteo-run-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(0, 220, 180, 0.45), rgba(13, 160, 160, 0.55));
+  border-color: rgba(0, 255, 200, 0.75);
+  color: #fff;
+}
+
+html[data-theme="claro"] #ruteoPanel .ruteo-loc-input {
+  background-color: #fff;
+  color: rgba(0, 30, 40, 0.92);
+  border-color: rgba(13, 138, 138, 0.28);
+}
+
+html[data-theme="claro"] #ruteoPanel .ruteo-loc-input:focus {
+  border-color: rgba(13, 138, 138, 0.55);
+  box-shadow: 0 0 0 0.2rem rgba(13, 138, 138, 0.15);
+}
+
+html[data-theme="claro"] #ruteoPanel .ruteo-loc-input::placeholder {
+  color: rgba(0, 40, 55, 0.45);
+}
+
+html[data-theme="claro"] #ruteoPanel .text-muted {
+  color: rgba(0, 40, 55, 0.65) !important;
+}
+
+html[data-theme="claro"] .ruteo-combobox-list {
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(0, 40, 55, 0.12);
+}
+
+html[data-theme="claro"] .ruteo-combobox-item {
+  color: rgba(0, 30, 40, 0.92);
+}
+
+html[data-theme="claro"] .ruteo-combobox-item:hover {
+  background: rgba(13, 138, 138, 0.1);
+}
+
+html[data-theme="claro"] .ruteo-summary {
+  background: rgba(13, 138, 138, 0.08);
+  border-color: rgba(13, 138, 138, 0.25);
+  color: rgba(0, 30, 40, 0.92);
+}
+
+html[data-theme="claro"] #ruteoPanel .ruteo-run-btn {
+  background: #0d8a8a;
+  border-color: #0d6e6e;
+  color: #fff;
+}
+
+html[data-theme="claro"] #ruteoPanel .ruteo-run-btn:hover:not(:disabled) {
+  background: #0a7575;
+  border-color: #065656;
+}
+
 .modal-content.visor-tabular-modal {
   overflow: hidden;
 }
@@ -5017,13 +5326,19 @@ html[data-theme="claro"] .visor-buffer-panel .form-select {
 }
 
 .visor-map-frame-wrap .maplibregl-ctrl-top-right {
-  top: 10px;
-  right: 10px;
+  top: var(--visor-map-ui-top, 10px);
+  right: var(--visor-map-ui-right, 10px);
   z-index: 11;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--visor-map-ui-stack-gap, 6px);
 }
 
-.visor-map-frame-wrap .maplibregl-ctrl-top-right .maplibregl-ctrl-group + .maplibregl-ctrl {
-  margin-top: 6px;
+.visor-map-frame-wrap .maplibregl-ctrl-top-right > .maplibregl-ctrl {
+  margin: 0 !important;
+  float: none !important;
+  clear: none !important;
 }
 
 /* Visor — zoom / export MapLibre en tema oscuro (excluye MapboxDraw: misma clase ctrl-group) */
@@ -5179,6 +5494,112 @@ html[data-theme="oscuro"] .visor-map-frame-wrap .atlas-geocoder-info {
   color: var(--text, #e8ecf0);
 }
 
+/* Ficha de identificación por clic (bajo el buscador) */
+.visor-map-frame-wrap .atlas-map-identify {
+  min-width: min(320px, calc(100vw - 2rem));
+  max-width: 360px;
+  width: 100%;
+  margin-top: 0;
+  padding: 8px 28px 10px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.35;
+  border-radius: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+  position: relative;
+  pointer-events: auto;
+}
+
+html[data-theme="claro"] .visor-map-frame-wrap .atlas-map-identify {
+  background: #fff;
+  color: #1a2332;
+  border: 1px solid rgba(13, 138, 138, 0.22);
+}
+
+html[data-theme="oscuro"] .visor-map-frame-wrap .atlas-map-identify {
+  background: #161c24;
+  color: #e8ecf0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.atlas-map-identify__close {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.atlas-map-identify__close:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.12);
+}
+
+.atlas-map-identify__content .atlas-loc-tip {
+  display: block;
+}
+
+.atlas-map-identify__content .atlas-loc-tip__title {
+  font-size: 13px;
+  font-weight: 800;
+  margin-bottom: 4px;
+  color: inherit;
+  opacity: 1;
+}
+
+.atlas-map-identify__content .atlas-loc-tip__body {
+  font-size: 12px;
+  font-weight: 500;
+  color: inherit;
+  opacity: 1;
+  white-space: normal;
+}
+
+.atlas-map-identify__content .atlas-loc-tip__coords {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(128, 128, 128, 0.22);
+  font-size: 11px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: inherit;
+  opacity: 0.92;
+}
+
+.atlas-map-identify__actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.atlas-map-identify__zoom {
+  margin: 0;
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--accent, #0d9488);
+  background: var(--accent, #0d9488);
+  color: #fff;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  line-height: 1.2;
+}
+
+.atlas-map-identify__zoom:hover {
+  filter: brightness(1.06);
+}
+
 html[data-theme="claro"] .visor-map-frame-wrap .maplibregl-ctrl-geocoder {
   background: #fff;
 }
@@ -5282,6 +5703,20 @@ html[data-theme="claro"] .atlas-overlay-tip {
   font-size: 12px;
   font-weight: 500;
   white-space: normal;
+}
+
+.atlas-loc-tip__coords {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--border, rgba(255, 255, 255, 0.12));
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+html[data-theme="claro"] .atlas-loc-tip__coords {
+  border-top-color: rgba(13, 138, 138, 0.2);
 }
 
 .atlas-loc-tip-popup.maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
@@ -5708,5 +6143,127 @@ html[data-theme="claro"] .visor-map-legend__title {
 
 html[data-theme="claro"] .visor-map-legend__section + .visor-map-legend__section {
   border-top-color: rgba(0, 60, 80, 0.12);
+}
+
+/* Transparencia global — capas temáticas activas del visor */
+.visor-map-opacity {
+  position: absolute;
+  right: 10px;
+  left: auto;
+  bottom: var(--visor-opacity-bottom, 88px);
+  z-index: 10001;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  font-family: inherit;
+  pointer-events: auto;
+}
+
+.visor-map-opacity__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.15rem;
+  height: 2.15rem;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: rgba(15, 27, 51, 0.94);
+  color: rgba(236, 241, 248, 0.96);
+  cursor: pointer;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.32);
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.visor-map-opacity__btn:hover,
+.visor-map-opacity__btn.is-open {
+  background: rgba(22, 38, 68, 0.98);
+  transform: translateY(-1px);
+}
+
+.visor-map-opacity__btn-ico {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+  opacity: 0.92;
+}
+
+.visor-map-opacity__panel {
+  margin-bottom: 0.4rem;
+  padding: 0.55rem 0.65rem 0.6rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(15, 27, 51, 0.96);
+  color: rgba(236, 241, 248, 0.96);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
+  width: min(240px, calc(100vw - 2rem));
+}
+
+.visor-map-opacity__title {
+  font-size: 11px;
+  font-weight: 800;
+  margin-bottom: 0.45rem;
+  color: var(--home-highlight, rgba(61, 189, 189, 0.95));
+}
+
+.visor-map-opacity__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.visor-map-opacity__edge {
+  font-size: 10px;
+  opacity: 0.72;
+  white-space: nowrap;
+}
+
+.visor-map-opacity__slider {
+  width: 100%;
+  accent-color: var(--home-highlight, #3dbdbd);
+  cursor: pointer;
+}
+
+.visor-map-opacity__slider:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.visor-map-opacity__value {
+  margin-top: 0.4rem;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: rgba(236, 241, 248, 0.92);
+}
+
+.visor-map-opacity__hint {
+  margin: 0.35rem 0 0;
+  font-size: 10px;
+  line-height: 1.35;
+  opacity: 0.72;
+  text-align: center;
+}
+
+html[data-theme="claro"] .visor-map-opacity__btn,
+html[data-theme="claro"] .visor-map-opacity__panel {
+  background: rgba(255, 255, 255, 0.96);
+  color: rgba(20, 35, 55, 0.96);
+  border-color: rgba(0, 60, 80, 0.16);
+  box-shadow: 0 2px 12px rgba(0, 60, 80, 0.12);
+}
+
+html[data-theme="claro"] .visor-map-opacity__title {
+  color: rgba(0, 100, 110, 0.95);
+}
+
+html[data-theme="claro"] .visor-map-opacity__value {
+  color: rgba(20, 35, 55, 0.92);
+}
+
+body.modal-open .visor-map-opacity {
+  z-index: 9990;
 }
 

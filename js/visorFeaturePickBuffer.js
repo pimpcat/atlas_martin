@@ -104,7 +104,7 @@ const HIGHLIGHT_ORANGE_DARK = "#e65100";
 const HIGHLIGHT_ORANGE_HALO = "#ffb74d";
 
 const SKIP_LAYER_RE =
-  /(gl-draw|atlas-visor-buffer|atlas-mun|atlas-ent|gm-|osm|clima|visor-labels|-labels$)/i;
+  /(gl-draw|atlas-visor-buffer|atlas-identify-highlight|atlas-mun|atlas-ent|gm-|osm|clima|visor-labels|-labels$)/i;
 
 function isLineGeometry(feature) {
   const t = feature?.geometry?.type;
@@ -248,7 +248,7 @@ function describePicked(feature, layerId) {
   return label ? `${kind}: ${label}` : kind;
 }
 
-function pickSourceGid(props) {
+export function pickVisorFeatureGid(props) {
   if (!props) return null;
   for (const k of ["gid", "GID", "ogc_fid", "OGC_FID"]) {
     if (props[k] != null && String(props[k]).trim()) return String(props[k]).trim();
@@ -257,7 +257,7 @@ function pickSourceGid(props) {
 }
 
 /** Capa del API (/api/visor/export) a partir del id MapLibre ly-*. */
-function resolveApiLayerId(mapLayerId) {
+export function resolveVisorApiLayerId(mapLayerId) {
   if (!mapLayerId) return null;
   if (mapLayerId === MARTIN_USO_SUELO.layerId) return "uso_suelo";
   const key = mapLayerId.replace(/^ly-/, "").replace(/-visor-labels$/, "").replace(/-labels$/, "");
@@ -273,6 +273,14 @@ function resolveApiLayerId(mapLayerId) {
     saneamientoAgua: "saneamiento_agua",
     clues: "clues",
     residuoSolido: "residuo_solido",
+    denueRastros: "denue_rastros",
+    denueGasolinerias: "denue_gasolinerias",
+    denueGaseras: "denue_gaseras",
+    denueEscuelas: "denue_escuelas",
+    denueHospitales: "denue_hospitales",
+    denueMuseos: "denue_museos",
+    denueCementerios: "denue_cementerios",
+    denueIglesias: "denue_iglesias",
   };
   if (map[key]) return map[key];
   if (map[base]) return map[base];
@@ -537,8 +545,8 @@ async function refreshPickHighlight(feature, layerId) {
     return;
   }
 
-  const apiLayer = resolveApiLayerId(layerId);
-  const gid = pickSourceGid(feature.properties);
+  const apiLayer = resolveVisorApiLayerId(layerId);
+  const gid = pickVisorFeatureGid(feature.properties);
   const gen = _highlightFetchGen;
 
   if (isPolygonGeometry(feature)) {
@@ -686,8 +694,8 @@ function onMapClick(ev) {
   _pickedFeature = cloneMapFeature(best);
   if (_pickedFeature) {
     _pickedFeature._layerId = best.layer?.id || "";
-    _pickedFeature._apiLayerId = resolveApiLayerId(_pickedFeature._layerId);
-    _pickedFeature._sourceGid = pickSourceGid(_pickedFeature.properties);
+    _pickedFeature._apiLayerId = resolveVisorApiLayerId(_pickedFeature._layerId);
+    _pickedFeature._sourceGid = pickVisorFeatureGid(_pickedFeature.properties);
   }
   setStatus("");
   syncPickPanelUi();
@@ -715,7 +723,7 @@ function parseDistanceMeters() {
 
 function bufferApiPayload(feature, distanceM, lineSide = "both") {
   const apiLayer = feature._apiLayerId || null;
-  const sourceGid = feature._sourceGid || pickSourceGid(feature.properties);
+  const sourceGid = feature._sourceGid || pickVisorFeatureGid(feature.properties);
   const payload = {
     distance_m: distanceM,
     layer_id: apiLayer,
@@ -977,6 +985,11 @@ export function refreshVisorFeaturePickBuffer() {
 }
 
 /** Cierra el modo selección (p. ej. al abrir buffer por dibujo). */
+/** Verdadero cuando el panel de selección para buffer está activo (evita conflicto con map-on-click). */
+export function isVisorFeaturePickBusy() {
+  return _pickActive && _panelOpen;
+}
+
 export function closeVisorFeaturePickBuffer() {
   setPickPanelOpen(false);
 }

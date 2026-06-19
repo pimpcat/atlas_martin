@@ -10,6 +10,7 @@ import {
 } from "./map.js";
 import { scheduleVisorCompareSync } from "./visorMapCompare.js";
 import { syncVisorMapLegend } from "./visorMapLegend.js";
+import { dismissVisorMapIdentifyIfLayerHidden } from "./visorMapIdentify.js";
 
 let _zoomEl = null;
 let _hintEl = null;
@@ -143,6 +144,7 @@ export function teardownVisorMapUi() {
 export function notifyVisorLayerToggled() {
   syncVisorOverlayLayersFromState();
   scheduleVisorCompareSync();
+  dismissVisorMapIdentifyIfLayerHidden();
   const map = getLeafletMap();
   if (!map) return;
   if (!controlsConnected()) {

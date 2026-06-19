@@ -45,8 +45,12 @@ import {
   LINE_LAYOUT_SMOOTH,
   MARTIN_TABLES,
   MARTIN_USO_SUELO,
+  RNC_DETAIL_MIN_ZOOM,
+  RNC_TRONCAL_MIN_ZOOM,
   curnivelMaestroFilter,
   martinSourceLayer,
+  rncEstatalTipoFilter,
+  rncTroncalTipoFilter,
 } from "./martinLayerStyle.js";
 import { bindAllOverlayTipHovers, refreshOverlayTipBindings } from "./mapOverlayTips.js";
 import {
@@ -94,6 +98,19 @@ import {
   CLUES_SYMBOL_PAINT,
   cluesLayerUsesLegacyCircle,
 } from "./mapCluesIcons.js";
+import {
+  ensureSaneamientoAguaMapIcons,
+  SANEAMIENTO_AGUA_SYMBOL_LAYOUT,
+  SANEAMIENTO_AGUA_SYMBOL_PAINT,
+  saneamientoAguaLayerUsesLegacyCircle,
+} from "./mapSaneamientoAguaIcons.js";
+import {
+  buildDenueOverlayDefs,
+  buildDenueOverlayLabelByKey,
+  codigoActFilter,
+  isDenueOverlayKey,
+} from "./denueLayers.js";
+import { ensureDenueMapIcons, denueLayerUsesLegacyCircle } from "./mapDenueIcons.js";
 
 const SRC_ENT = "src-c_ent";
 const SRC_ENT_DISP = "src-c_ent-disp";
@@ -182,6 +199,7 @@ const OVERLAY_LABEL_BY_KEY = {
     paint: CLUES_LABEL_PAINT,
     paintClaro: CLUES_LABEL_PAINT_CLARO,
   },
+  ...buildDenueOverlayLabelByKey(),
 };
 
 function coloniasLabelsCtx() {
@@ -283,6 +301,7 @@ function visorOnlyLabelPaintForTheme(spec) {
 function applyVisorOnlyLabelSpec(map, layerKey) {
   const spec = VISOR_ONLY_LABEL_SPECS[layerKey];
   if (!spec || !map?.getLayer(spec.labelId)) return;
+  clearVisorOpacityBaseCacheForLayer(spec.labelId);
   for (const [prop, val] of Object.entries(spec.layout)) {
     if (prop === "visibility") continue;
     try {
@@ -375,6 +394,7 @@ function applyOverlayLabelSpec(map, overlayKey) {
   if (!labelDef || !map) return;
   const labelId = overlayLabelLayerId(`ly-${overlayKey}`);
   if (!map.getLayer(labelId)) return;
+  clearVisorOpacityBaseCacheForLayer(labelId);
   for (const [prop, val] of Object.entries(labelDef.layout)) {
     if (prop === "visibility") continue;
     try {
@@ -397,6 +417,7 @@ function applyOverlayLabelSpec(map, overlayKey) {
   } catch {
     /* noop */
   }
+  reapplyVisorThematicOpacityToMap(map);
 }
 
 function applyOverlayLabelTheme(map) {
@@ -407,6 +428,7 @@ function applyOverlayLabelTheme(map) {
   for (const key of Object.keys(VISOR_ONLY_LABEL_SPECS)) {
     applyVisorOnlyLabelSpec(map, key);
   }
+  reapplyVisorThematicOpacityToMap(map);
 }
 
 function ensureMapGlyphs(map) {
@@ -422,8 +444,23 @@ function ensureMapGlyphs(map) {
 
 function overlayKeyFromLayerId(layerId) {
   if (!layerId.startsWith("ly-")) return null;
-  const key = layerId.slice(3);
+  let key = layerId.slice(3);
+  if (key.endsWith("-labels")) key = key.slice(0, -7);
+  if (key === "rnc" || key.startsWith("rnc-estatal") || key.startsWith("rnc-troncal")) return "rnc";
+  if (isDenueOverlayKey(key)) return key;
   return OVERLAY_LABEL_BY_KEY[key] ? key : null;
+}
+
+function overlayDefFromLayerId(layerId) {
+  if (!layerId?.startsWith("ly-")) return null;
+  let key = layerId.slice(3);
+  if (key.endsWith("-labels")) key = key.slice(0, -7);
+  if (key.endsWith("-halo")) key = key.replace(/-halo$/, "");
+  if (key.endsWith("-fill")) key = key.replace(/-fill$/, "");
+  if (key === "rnc" || key.startsWith("rnc-")) {
+    return OVERLAY_DEFS.find((d) => d.key === "rnc") ?? null;
+  }
+  return OVERLAY_DEFS.find((d) => d.key === key) ?? null;
 }
 
 function ensureOverlayLabelLayer(map, def) {
@@ -731,15 +768,16 @@ const OVERLAY_DEFS = [
     table: MARTIN_TABLES.rnc,
     type: "line",
     lineStack: true,
+    rncTiered: true,
     paintHalo: LAYER_PAINT.rncHalo,
     paint: LAYER_PAINT.rnc,
   },
   {
     key: "saneamientoAgua",
     table: MARTIN_TABLES.saneamientoAgua,
-    type: "circle",
-    paint: LAYER_PAINT.saneamiento,
-    labelMinZoom: SANEAMIENTO_AGUA_LABEL_MIN_ZOOM,
+    type: "symbol",
+    layout: SANEAMIENTO_AGUA_SYMBOL_LAYOUT,
+    paint: SANEAMIENTO_AGUA_SYMBOL_PAINT,
   },
   {
     key: "clues",
@@ -747,7 +785,6 @@ const OVERLAY_DEFS = [
     type: "symbol",
     layout: CLUES_SYMBOL_LAYOUT,
     paint: CLUES_SYMBOL_PAINT,
-    labelMinZoom: CLUES_LABEL_MIN_ZOOM,
   },
   {
     key: "residuoSolido",
@@ -755,9 +792,37 @@ const OVERLAY_DEFS = [
     type: "symbol",
     layout: RESIDUO_SOLIDO_SYMBOL_LAYOUT,
     paint: RESIDUO_SOLIDO_SYMBOL_PAINT,
-    labelMinZoom: RESIDUO_SOLIDO_LABEL_MIN_ZOOM,
   },
+  ...buildDenueOverlayDefs(MARTIN_TABLES.denue),
 ];
+
+/** Overlays symbol que esperan iconos antes de addLayer (el resto se crea al cargar el mapa). */
+const OVERLAY_SYMBOL_ICON_KEYS = new Set(["residuoSolido", "locsPunto", "clues", "saneamientoAgua"]);
+
+function overlayNeedsIconBootstrap(def) {
+  if (isDenueOverlayKey(def.key)) return true;
+  return def.type === "symbol" || OVERLAY_SYMBOL_ICON_KEYS.has(def.key);
+}
+
+function ensureOverlayLayersExceptSymbols(map) {
+  for (const def of OVERLAY_DEFS) {
+    if (!overlayNeedsIconBootstrap(def)) ensureOverlayLayer(map, def);
+  }
+}
+
+function getRncOverlayDef() {
+  return OVERLAY_DEFS.find((d) => d.key === "rnc");
+}
+
+/** Capas RNC por nivel de zoom (estatal / troncal / detalle). */
+function rncTierLayerIds(map) {
+  const out = [];
+  for (const suffix of ["-estatal-halo", "-estatal", "-troncal-halo", "-troncal", "-warm", "-halo", ""]) {
+    const id = suffix ? `ly-rnc${suffix}` : "ly-rnc";
+    if (map.getLayer(id)) out.push(id);
+  }
+  return out;
+}
 
 const _overlayActive = {};
 const _overlayKeyGen = Object.create(null);
@@ -850,7 +915,41 @@ function resolveVisorOverlayCve(explicitCve) {
 
 function applyOverlayLayerMunFilter(map, layerId, visible, cve) {
   if (!map?.getLayer(layerId) || !visible || isOverlayGeoLabelLayer(layerId)) return;
+  const isRncEstatal = layerId.includes("ly-rnc-estatal");
+  const isRncTroncal = layerId.includes("ly-rnc-troncal");
+  const isRncDetail = layerId === "ly-rnc" || layerId === "ly-rnc-halo";
+  const isRncWarm = layerId.endsWith("-warm");
   try {
+    if (isRncWarm) {
+      if (_visorStateWideMode) {
+        map.setFilter(layerId, null);
+      } else if (cve) {
+        map.setFilter(layerId, munFilter(cve));
+      }
+      return;
+    }
+    if (isRncEstatal || isRncTroncal || isRncDetail) {
+      const parts = [];
+      if (!_visorStateWideMode && cve) parts.push(munFilter(cve));
+      if (isRncEstatal) parts.push(rncEstatalTipoFilter());
+      else if (isRncTroncal) parts.push(rncTroncalTipoFilter());
+      if (!parts.length) {
+        map.setFilter(layerId, null);
+      } else if (parts.length === 1) {
+        map.setFilter(layerId, parts[0]);
+      } else {
+        map.setFilter(layerId, ["all", ...parts]);
+      }
+      return;
+    }
+    const def = overlayDefFromLayerId(layerId);
+    if (def?.codigoAct?.length) {
+      const parts = [];
+      if (!_visorStateWideMode && cve) parts.push(munFilter(cve));
+      parts.push(codigoActFilter(def.codigoAct));
+      map.setFilter(layerId, parts.length === 1 ? parts[0] : ["all", ...parts]);
+      return;
+    }
     if (_visorStateWideMode) {
       map.setFilter(layerId, null);
     } else if (cve) {
@@ -1720,6 +1819,10 @@ function collectOverlayLayerIds(map, layerId) {
 }
 
 function overlayLayerIds(map, layerId) {
+  if (layerId === "ly-rnc") {
+    const rncIds = rncTierLayerIds(map);
+    if (rncIds.length) return rncIds;
+  }
   const ids = [];
   if (map.getLayer(`${layerId}-fill`)) ids.push(`${layerId}-fill`);
   if (map.getLayer(`${layerId}-halo`)) ids.push(...lineLayerIds(layerId));
@@ -1749,9 +1852,11 @@ function ensureOverlayFillHitLayer(map, def, layerId, spec) {
 }
 
 function overlayUsesLegacyCircle(def, map) {
+  if (isDenueOverlayKey(def.key)) return denueLayerUsesLegacyCircle(map, def.key);
   if (def.key === "residuoSolido") return residuoSolidoLayerUsesLegacyCircle(map);
   if (def.key === "locsPunto") return locsPuntoLayerUsesLegacyCircle(map);
   if (def.key === "clues") return cluesLayerUsesLegacyCircle(map);
+  if (def.key === "saneamientoAgua") return saneamientoAguaLayerUsesLegacyCircle(map);
   return false;
 }
 
@@ -1796,15 +1901,85 @@ function migrateCluesSourceTable(map, def) {
 }
 
 function overlaySymbolIconLoader(def) {
+  if (isDenueOverlayKey(def.key)) return ensureDenueMapIcons;
   if (def.key === "residuoSolido") return ensureResiduoSolidoMapIcons;
   if (def.key === "locsPunto") return ensureLocsPuntoMapIcons;
   if (def.key === "clues") return ensureCluesMapIcons;
+  if (def.key === "saneamientoAgua") return ensureSaneamientoAguaMapIcons;
   return async () => {};
+}
+
+function ensureRncOverlayLayers(map, def) {
+  const src = `src-${def.table}`;
+  const layerId = `ly-${def.key}`;
+  const estatalId = `${layerId}-estatal`;
+  const troncalId = `${layerId}-troncal`;
+  const warmId = `${layerId}-warm`;
+  addMartinSource(map, src, def.table);
+  const baseSpec = {
+    source: src,
+    "source-layer": martinSourceLayer(def.table),
+  };
+  const lineLayout = { visibility: "none", ...LINE_LAYOUT_SMOOTH };
+  const estatalSpec = {
+    ...baseSpec,
+    minzoom: 0,
+    maxzoom: RNC_TRONCAL_MIN_ZOOM,
+  };
+  const troncalSpec = {
+    ...baseSpec,
+    minzoom: RNC_TRONCAL_MIN_ZOOM,
+    maxzoom: RNC_DETAIL_MIN_ZOOM,
+  };
+  const detailSpec = {
+    ...baseSpec,
+    minzoom: RNC_DETAIL_MIN_ZOOM,
+  };
+
+  const addLinePair = (id, spec) => {
+    if (!map.getLayer(`${id}-halo`)) {
+      map.addLayer({
+        ...spec,
+        id: `${id}-halo`,
+        type: "line",
+        paint: def.paintHalo,
+        layout: lineLayout,
+      });
+    }
+    if (!map.getLayer(id)) {
+      map.addLayer({
+        ...spec,
+        id,
+        type: "line",
+        paint: def.paint,
+        layout: lineLayout,
+      });
+    }
+  };
+
+  addLinePair(estatalId, estatalSpec);
+  addLinePair(troncalId, troncalSpec);
+  addLinePair(layerId, detailSpec);
+
+  if (!map.getLayer(warmId)) {
+    map.addLayer({
+      ...baseSpec,
+      id: warmId,
+      type: "line",
+      minzoom: 0,
+      paint: { "line-opacity": 0, "line-width": 0.1 },
+      layout: lineLayout,
+    });
+  }
+  return layerId;
 }
 
 function ensureOverlayLayer(map, def) {
   const src = `src-${def.table}`;
   const layerId = `ly-${def.key}`;
+  if (def.rncTiered) {
+    return ensureRncOverlayLayers(map, def);
+  }
   if (def.key === "clues") migrateCluesSourceTable(map, def);
   if (overlayUsesLegacyCircle(def, map)) {
     try {
@@ -2160,8 +2335,146 @@ export function registerCompareOverlaySyncHook(fn) {
   _compareOverlaySyncHook = typeof fn === "function" ? fn : null;
 }
 
+/** Opacidad global de capas temáticas activas del visor (1 = opaco, 0 = transparente). */
+let _visorThematicOpacityFactor = 1;
+const _visorOpacityBaseCache = new Map();
+
+const VISOR_THEMATIC_OPACITY_PROPS = {
+  fill: ["fill-opacity"],
+  line: ["line-opacity"],
+  circle: ["circle-opacity"],
+  symbol: ["icon-opacity", "text-opacity"],
+  raster: ["raster-opacity"],
+};
+
+function isMapLayerVisible(map, layerId) {
+  if (!map.getLayer(layerId)) return false;
+  try {
+    return map.getLayoutProperty(layerId, "visibility") === "visible";
+  } catch {
+    return false;
+  }
+}
+
+function clearVisorOpacityBaseCacheForLayer(layerId) {
+  for (const key of [..._visorOpacityBaseCache.keys()]) {
+    if (key.startsWith(`${layerId}|`)) _visorOpacityBaseCache.delete(key);
+  }
+}
+
+function scaleVisorOpacityExpression(base, factor) {
+  if (base == null) return factor;
+  if (typeof base === "number") return Math.max(0, Math.min(1, base * factor));
+  if (Array.isArray(base)) return ["*", base, factor];
+  return base;
+}
+
+function getVisorOpacityBase(map, layerId, prop) {
+  const key = `${layerId}|${prop}`;
+  if (!_visorOpacityBaseCache.has(key)) {
+    let val;
+    try {
+      val = map.getPaintProperty(layerId, prop);
+    } catch {
+      val = 1;
+    }
+    _visorOpacityBaseCache.set(key, val ?? 1);
+  }
+  return _visorOpacityBaseCache.get(key);
+}
+
+function collectActiveVisorThematicLayerIds(map) {
+  if (!map) return [];
+  const ids = new Set();
+
+  for (const d of OVERLAY_DEFS) {
+    if (!_overlayActive[d.key]) continue;
+    for (const id of collectOverlayLayerIds(map, `ly-${d.key}`)) {
+      if (isMapLayerVisible(map, id)) ids.add(id);
+    }
+  }
+
+  if (_usoSueloActive) {
+    const usoId = MARTIN_USO_SUELO.layerId;
+    if (isMapLayerVisible(map, usoId)) ids.add(usoId);
+  }
+
+  for (const key of Object.keys(_visorSharedActive)) {
+    if (!_visorSharedActive[key]) continue;
+    if (key === "hidro_corrientes") {
+      for (const id of collectOverlayLayerIds(map, HIDRO_CORRIENTES_ID)) {
+        if (isMapLayerVisible(map, id)) ids.add(id);
+      }
+      const labelId = VISOR_ONLY_LABEL_SPECS.hidro_corrientes?.labelId;
+      if (labelId && isMapLayerVisible(map, labelId)) ids.add(labelId);
+    } else if (key === "hidro_cuerpos") {
+      for (const id of collectOverlayLayerIds(map, HIDRO_CUERPOS_ID)) {
+        if (isMapLayerVisible(map, id)) ids.add(id);
+      }
+      const labelId = VISOR_ONLY_LABEL_SPECS.hidro_cuerpos?.labelId;
+      if (labelId && isMapLayerVisible(map, labelId)) ids.add(labelId);
+    } else if (key === "curvas_nivel") {
+      for (const base of [CURNIVEL_LAYERS.base, CURNIVEL_LAYERS.master]) {
+        for (const id of lineLayerIds(base)) {
+          if (isMapLayerVisible(map, id)) ids.add(id);
+        }
+      }
+    }
+  }
+
+  return [...ids];
+}
+
+export function getVisorThematicOpacityFactor() {
+  return _visorThematicOpacityFactor;
+}
+
+export function countActiveVisorThematicOverlayKeys() {
+  let n = Object.values(_overlayActive).filter(Boolean).length;
+  if (_usoSueloActive) n += 1;
+  n += Object.values(_visorSharedActive).filter(Boolean).length;
+  return n;
+}
+
+export function setVisorThematicOpacityFactor(factor) {
+  const f = Math.max(0, Math.min(1, Number(factor)));
+  _visorThematicOpacityFactor = f;
+  if (_map?.isStyleLoaded?.()) applyVisorThematicOpacityToMap(_map);
+  window.dispatchEvent(new CustomEvent("atlas:visor-opacity-changed", { detail: { factor: f } }));
+}
+
+export function applyVisorThematicOpacityToMap(map) {
+  if (!map?.getStyle?.()) return;
+  const factor = _visorThematicOpacityFactor;
+  const layerIds = collectActiveVisorThematicLayerIds(map);
+
+  for (const layerId of layerIds) {
+    const layer = map.getStyle().layers?.find((l) => l.id === layerId);
+    if (!layer) continue;
+    const props = VISOR_THEMATIC_OPACITY_PROPS[layer.type];
+    if (!props) continue;
+    for (const prop of props) {
+      try {
+        const base = getVisorOpacityBase(map, layerId, prop);
+        map.setPaintProperty(
+          layerId,
+          prop,
+          factor >= 0.999 ? base : scaleVisorOpacityExpression(base, factor),
+        );
+      } catch {
+        /* capa sin propiedad de opacidad */
+      }
+    }
+  }
+}
+
+export function reapplyVisorThematicOpacityToMap(map) {
+  if (_visorThematicOpacityFactor < 0.999) applyVisorThematicOpacityToMap(map);
+}
+
 function notifyVisorOverlaysChanged() {
   window.dispatchEvent(new CustomEvent("atlas:map-overlays-changed"));
+  if (_map?.isStyleLoaded?.()) reapplyVisorThematicOpacityToMap(_map);
   if (_compareOverlaySyncHook) {
     requestAnimationFrame(() => {
       try {
@@ -2196,12 +2509,17 @@ export function clearVisorThematicLayersOnMap() {
 function setLayerVisible(map, layerId, visible, cve) {
   const ids = collectOverlayLayerIds(map, layerId);
   const emptyFilter = ["literal", false];
+
   ids.forEach((id) => {
     if (!map.getLayer(id)) return;
     map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+  });
+
+  ids.forEach((id) => {
+    if (!map.getLayer(id)) return;
     if (visible) {
       applyOverlayLayerMunFilter(map, id, true, cve);
-    } else if (!visible && !isOverlayGeoLabelLayer(id)) {
+    } else if (!isOverlayGeoLabelLayer(id)) {
       try {
         map.setFilter(id, emptyFilter);
       } catch {
@@ -2209,6 +2527,7 @@ function setLayerVisible(map, layerId, visible, cve) {
       }
     }
   });
+
   if (visible) {
     for (const id of ids) {
       try {
@@ -2267,21 +2586,24 @@ function ensureMap(containerEl) {
     ensureMarcoLayers(_map);
     applyHomeVectorRenderQuality(_map);
     ensureThematicMartinLayers(_map);
+    ensureOverlayLayersExceptSymbols(_map);
     OVERLAY_DEFS.forEach((d) => ensureOverlayLabelLayer(_map, d));
     bindColoniasLabelsSync(_map, coloniasLabelsCtx, munFilter, ensureColoniasLabelsLayer);
     bindLocsAtlasLabelsSync(_map, locsAtlasLabelsCtx, munFilter, ensureLocsAtlasLabelsLayer);
     applyOverlayLabelTheme(_map);
     bringMarcoEntToFront(_map);
+    _atlasLayersReady = true;
+    flushStyleReadyQueue();
     void Promise.all([
       ensureResiduoSolidoMapIcons(_map),
       ensureLocsPuntoMapIcons(_map),
       ensureCluesMapIcons(_map),
+      ensureDenueMapIcons(_map),
+      ensureSaneamientoAguaMapIcons(_map),
     ]).finally(() => {
       OVERLAY_DEFS.forEach((d) => ensureOverlayLayer(_map, d));
       syncOverlayLayersFromState(_map, resolveVisorOverlayCve(_focusCve));
     });
-    _atlasLayersReady = true;
-    flushStyleReadyQueue();
     if (_pendingHomeMode !== null) {
       const pending = _pendingHomeMode;
       _pendingHomeMode = null;
@@ -2666,6 +2988,10 @@ export async function setMunicipioMapFocus(containerEl, cve_mun, profile = "defa
     duration: fitProfile.duration ?? 1200,
     animate: true,
   });
+  if (profile === "visor" || profile === "inv") {
+    const rncDef = getRncOverlayDef();
+    if (rncDef) ensureRncOverlayLayers(map, rncDef);
+  }
   syncOverlayLayersFromState(map, _focusCve);
 }
 
@@ -3016,6 +3342,13 @@ function setOverlayActive(key, active, cve_mun) {
       forceOverlayGroupOff(map, key);
     }
     syncOverlayLayersFromState(map, cve);
+    if (active && key === "rnc") {
+      try {
+        map.triggerRepaint();
+      } catch {
+        /* noop */
+      }
+    }
     refreshOverlayTipBindings(map, overlayLayerIds);
     notifyVisorOverlaysChanged();
   };
@@ -3027,10 +3360,10 @@ function setOverlayActive(key, active, cve_mun) {
   whenAtlasMapReady(apply);
 }
 
-/** Zoom mínimo de una capa Martin del visor (p. ej. manzanas → 14). */
+/** Zoom mínimo de geometría de una capa del visor (p. ej. manzanas → 14). No incluye etiquetas. */
 export function getOverlayMinZoom(key) {
   const def = OVERLAY_DEFS.find((d) => d.key === key);
-  if (def) return def?.labelMinZoom ?? def?.minzoom ?? null;
+  if (def?.minzoom != null) return def.minzoom;
   if (VISOR_SHARED_LAYER_MIN_ZOOM[key] != null) return VISOR_SHARED_LAYER_MIN_ZOOM[key];
   return null;
 }
@@ -3078,6 +3411,16 @@ export function setVialidadesLayerActive(a, c) { setOverlayActive("vialidades", 
 export function getVialidadesLayerActive() { return !!_overlayActive.vialidades; }
 export function setRncLayerActive(a, c) { setOverlayActive("rnc", a, c); }
 export function getRncLayerActive() { return !!_overlayActive.rnc; }
+
+/** Estado de cualquier overlay temático (p. ej. capas DENUE). */
+export function getOverlayActive(key) {
+  return !!_overlayActive[key];
+}
+
+/** Activa/desactiva overlay por clave (capas DENUE y otras temáticas). */
+export function setOverlayActiveByKey(key, active, cve_mun) {
+  setOverlayActive(key, active, cve_mun);
+}
 export function setSaneamientoAguaLayerActive(a, c) { setOverlayActive("saneamientoAgua", a, c); }
 export function getSaneamientoAguaLayerActive() { return !!_overlayActive.saneamientoAgua; }
 export function setCluesLayerActive(a, c) { setOverlayActive("clues", a, c); }

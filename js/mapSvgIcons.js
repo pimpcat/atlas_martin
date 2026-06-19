@@ -4,6 +4,33 @@
  * debe controlarse solo con icon-size y un raster sin pixelRatio.
  */
 
+/** @type {Map<string, Promise<string>>} */
+const svgTextCache = new Map();
+
+/** URL pública de un icono SVG del visor (assets/icons/map/). */
+export function atlasMapIconUrl(filename) {
+  return new URL(`../assets/icons/map/${filename}`, import.meta.url).href;
+}
+
+/** Descarga texto SVG con caché en memoria (mismo origen). */
+export function fetchSvgText(url) {
+  const cached = svgTextCache.get(url);
+  if (cached) return cached;
+  const promise = fetch(url).then((res) => {
+    if (!res.ok) throw new Error(`SVG ${url}: HTTP ${res.status}`);
+    return res.text();
+  });
+  svgTextCache.set(url, promise);
+  return promise;
+}
+
+/** Carga un SVG desde assets/icons/map/ y lo registra en MapLibre. */
+export async function loadSvgFileAsMapSymbol(map, id, filename, rasterPx) {
+  const url = atlasMapIconUrl(filename);
+  const svg = await fetchSvgText(url);
+  return loadSvgAsMapSymbol(map, id, svg, rasterPx);
+}
+
 /** Tamaño en px del bitmap (alta resolución para el icon-size máximo). */
 export function getSymbolIconRasterPx(displayBasePx, maxIconScale, supersample) {
   return Math.round(displayBasePx * maxIconScale * supersample);

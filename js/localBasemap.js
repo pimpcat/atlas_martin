@@ -1,18 +1,43 @@
 /**
- * Mapa base "Local" desde MBTiles servido por Martin (fuente id: mexico).
- * Estilo mínimo compatible con OpenMapTiles / Planetiler; capas genéricas de respaldo.
+ * Mapa base "Local": MBTiles (Martin, id mexico) + estilo OSM Bright (OpenMapTiles).
+ * Assets estáticos: /atlas_gro/basemap/ (montaje Docker desde vector tiles/assets).
  */
 
 import { martinTileJson, martinTileUrl, MARTIN_BASE } from "./atlasConfig.js";
+import { MAPLIBRE_GLYPHS_URL } from "./martinLayerStyle.js";
 
 export const LOCAL_MBTILES_ID = "mexico";
-const LOCAL_SOURCE_ID = "base-local";
+const OMT_SOURCE_ID = "openmaptiles";
+const RASTER_SOURCE_ID = "base-local";
+const LAYER_PREFIX = "base-bright-";
+const BRIGHT_STYLE_PATH = "/atlas_gro/basemap/style-local.json";
+
+/** CDN de respaldo si faltan PNG/PBF locales. */
+const SPRITE_CDN = "https://cdn.jsdelivr.net/gh/openmaptiles/osm-bright-gl-style@master/sprite";
+const GLYPHS_CDN = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
+
+let _basemapAssetsProbed = false;
+let _basemapUseLocalFonts = false;
+let _basemapUseLocalSprite = false;
 
 /** @type {string[]} */
 let _localLayerIds = [];
 /** @type {Promise<any> | null} */
 let _tileJsonPromise = null;
+/** @type {Promise<any> | null} */
+let _stylePromise = null;
 let _isVector = true;
+/** @type {string | null} */
+let _basemapGlyphsUrl = null;
+/** @type {string | null} */
+let _basemapSpriteUrl = null;
+
+function basemapAssetsBase() {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/atlas_gro/basemap`;
+  }
+  return "/atlas_gro/basemap";
+}
 
 function localTileJsonUrl() {
   const base = martinTileJson(LOCAL_MBTILES_ID);
@@ -56,9 +81,100 @@ function isVectorTileJson(tj) {
   return !/\.(png|jpe?g|webp|gif)(\?|$)/.test(tile0);
 }
 
-/** Estilo compacto tipo OpenMapTiles (Planetiler / tippecanoe OSM). */
+function loadBrightStyleJson() {
+  if (!_stylePromise) {
+    const url = `${basemapAssetsBase()}/style-local.json`;
+    _stylePromise = fetch(url, { cache: "no-store" })
+      .then((res) => {
+        if (!res.ok) throw new Error(`style HTTP ${res.status}`);
+        return res.json();
+      })
+      .catch((err) => {
+        _stylePromise = null;
+        throw err;
+      });
+  }
+  return _stylePromise;
+}
+
+/** @param {import("maplibre-gl").Map} map @param {string} spriteUrl */
+async function applyBasemapSprite(map, spriteUrl) {
+  if (typeof map.setSprite === "function") {
+    await map.setSprite(spriteUrl);
+    return;
+  }
+  await new Promise((resolve, reject) => {
+    if (!map.style?.loadSprite) {
+      reject(new Error("loadSprite no disponible"));
+      return;
+    }
+    map.style.loadSprite(spriteUrl, (err) => (err ? reject(err) : resolve()));
+  });
+}
+
+/** @param {string} url */
+async function resourceExists(url) {
+  try {
+    const res = await fetch(url, { method: "HEAD", cache: "no-store" });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+/** @param {import("maplibre-gl").Map} map */
+async function configureBasemapSpriteAndGlyphs(map) {
+  const base = basemapAssetsBase();
+
+  if (!_basemapAssetsProbed) {
+    _basemapUseLocalSprite = await resourceExists(`${base}/sprite.json`);
+    _basemapUseLocalFonts = await resourceExists(
+      `${base}/fonts/Noto%20Sans%20Regular/0-255.pbf`,
+    );
+    _basemapAssetsProbed = true;
+  }
+
+  const spriteUrl = _basemapUseLocalSprite ? `${base}/sprite` : SPRITE_CDN;
+  const glyphsUrl = _basemapUseLocalFonts
+    ? `${base}/fonts/{fontstack}/{range}.pbf`
+    : GLYPHS_CDN;
+
+  if (!_basemapUseLocalSprite) {
+    console.info("[local-basemap] Sprites locales no encontrados; usando CDN.");
+  }
+  if (!_basemapUseLocalFonts) {
+    console.info("[local-basemap] Fuentes locales no encontradas; usando OpenFreeMap.");
+  }
+
+  _basemapSpriteUrl = spriteUrl;
+  _basemapGlyphsUrl = glyphsUrl;
+
+  try {
+    await applyBasemapSprite(map, spriteUrl);
+  } catch (err) {
+    console.warn("[local-basemap] sprite:", err);
+    if (spriteUrl !== SPRITE_CDN) {
+      _basemapSpriteUrl = SPRITE_CDN;
+      await applyBasemapSprite(map, SPRITE_CDN);
+    }
+  }
+
+  if (typeof map.setGlyphs === "function") {
+    map.setGlyphs(glyphsUrl);
+  }
+}
+
+/** @param {any[]} layers */
+function brightLayerDefs(layers) {
+  return layers.map((layer) => ({
+    ...layer,
+    id: `${LAYER_PREFIX}${layer.id}`,
+    layout: { ...(layer.layout || {}), visibility: "none" },
+  }));
+}
+
+/** Estilo mínimo si falla style-local.json (raster o vector). */
 function openMapTilesLayerDefs(sourceId, available) {
-  /** @type {Array<object>} */
   const defs = [
     { id: "base-local-bg", type: "background", paint: { "background-color": "#f2efe9" } },
     {
@@ -69,114 +185,128 @@ function openMapTilesLayerDefs(sourceId, available) {
       paint: { "fill-color": "#aad3df" },
     },
     {
-      id: "base-local-ocean",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "ocean",
-      paint: { "fill-color": "#aad3df" },
-    },
-    {
-      id: "base-local-landcover",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "landcover",
-      paint: { "fill-color": "#cfe8c4", "fill-opacity": 0.75 },
-    },
-    {
-      id: "base-local-land",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "land",
-      paint: { "fill-color": "#f2efe9" },
-    },
-    {
-      id: "base-local-landuse",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "landuse",
-      paint: { "fill-color": "#e6e2dc", "fill-opacity": 0.7 },
-    },
-    {
-      id: "base-local-urban",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "urban",
-      paint: { "fill-color": "#e0dcd6", "fill-opacity": 0.85 },
-    },
-    {
-      id: "base-local-woods",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "woods",
-      paint: { "fill-color": "#add19e", "fill-opacity": 0.75 },
-    },
-    {
-      id: "base-local-waterway",
-      type: "line",
-      source: sourceId,
-      "source-layer": "waterway",
-      paint: { "line-color": "#6baed6", "line-width": 1 },
-    },
-    {
       id: "base-local-transportation",
       type: "line",
       source: sourceId,
       "source-layer": "transportation",
       paint: { "line-color": "#ffffff", "line-width": 1.2 },
     },
-    {
-      id: "base-local-roads",
-      type: "line",
-      source: sourceId,
-      "source-layer": "roads",
-      paint: { "line-color": "#ffffff", "line-width": 1 },
-    },
-    {
-      id: "base-local-building",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "building",
-      paint: { "fill-color": "#d9d5cf", "fill-opacity": 0.65 },
-    },
-    {
-      id: "base-local-buildings",
-      type: "fill",
-      source: sourceId,
-      "source-layer": "buildings",
-      paint: { "fill-color": "#d9d5cf", "fill-opacity": 0.65 },
-    },
-    {
-      id: "base-local-boundary",
-      type: "line",
-      source: sourceId,
-      "source-layer": "boundary",
-      paint: { "line-color": "#9e9cab", "line-width": 0.6, "line-dasharray": [2, 1] },
-    },
   ];
-
   if (!available?.size) return defs;
+  return defs;
+}
 
-  const slKnown = new Set(
-    defs.filter((d) => d["source-layer"]).map((d) => d["source-layer"]),
-  );
-  for (const sl of available) {
-    if (slKnown.has(sl)) continue;
-    defs.push({
-      id: `base-local-fill-${sl}`,
-      type: "fill",
-      source: sourceId,
-      "source-layer": sl,
-      paint: { "fill-color": "#e8e4e0", "fill-opacity": 0.55 },
-    });
-    defs.push({
-      id: `base-local-line-${sl}`,
-      type: "line",
-      source: sourceId,
-      "source-layer": sl,
-      paint: { "line-color": "#888", "line-width": 0.4 },
+/**
+ * @param {import("maplibre-gl").Map} map
+ * @param {any} tj
+ * @param {string | undefined} anchor
+ */
+function installRasterBasemap(map, tj, anchor) {
+  const tiles = Array.isArray(tj.tiles) && tj.tiles.length ? tj.tiles : [localTileTemplate()];
+  if (!map.getSource(RASTER_SOURCE_ID)) {
+    map.addSource(RASTER_SOURCE_ID, {
+      type: "raster",
+      tiles,
+      tileSize: tj.tileSize || 256,
+      minzoom: tj.minzoom ?? 0,
+      maxzoom: tj.maxzoom ?? 19,
+      attribution: tj.attribution || "© OpenStreetMap · MBTiles local",
     });
   }
-  return defs;
+  if (!map.getLayer("base-local-raster")) {
+    map.addLayer(
+      {
+        id: "base-local-raster",
+        type: "raster",
+        source: RASTER_SOURCE_ID,
+        layout: { visibility: "none" },
+        paint: {
+          "raster-opacity": 1,
+          "raster-fade-duration": 0,
+          "raster-resampling": "linear",
+        },
+      },
+      anchor,
+    );
+  }
+  _localLayerIds = ["base-local-raster"];
+}
+
+/**
+ * @param {import("maplibre-gl").Map} map
+ * @param {any} tj
+ * @param {string | undefined} anchor
+ */
+async function installMinimalVectorBasemap(map, tj, anchor) {
+  const sourceId = RASTER_SOURCE_ID;
+  if (!map.getSource(sourceId)) {
+    map.addSource(sourceId, {
+      type: "vector",
+      tiles: [localTileTemplate()],
+      minzoom: tj.minzoom ?? 0,
+      maxzoom: tj.maxzoom ?? 14,
+      attribution: tj.attribution || "© OpenStreetMap · MBTiles local",
+    });
+  }
+  const available = vectorLayerIdsFromTileJson(tj);
+  const defs = openMapTilesLayerDefs(sourceId, available);
+  const added = [];
+  let below = anchor;
+  for (let i = defs.length - 1; i >= 0; i--) {
+    const def = defs[i];
+    if (map.getLayer(def.id)) {
+      added.push(def.id);
+      continue;
+    }
+    map.addLayer({ ...def, layout: { visibility: "none" } }, below);
+    added.push(def.id);
+    below = def.id;
+  }
+  _localLayerIds = added;
+}
+
+/**
+ * @param {import("maplibre-gl").Map} map
+ * @param {any} tj
+ * @param {string | undefined} anchor
+ */
+async function installBrightVectorBasemap(map, tj, anchor) {
+  const style = await loadBrightStyleJson();
+  await configureBasemapSpriteAndGlyphs(map);
+
+  if (!map.getSource(OMT_SOURCE_ID)) {
+    map.addSource(OMT_SOURCE_ID, {
+      type: "vector",
+      tiles: [localTileTemplate()],
+      minzoom: tj.minzoom ?? 0,
+      maxzoom: tj.maxzoom ?? 14,
+      attribution: tj.attribution || "© OpenStreetMap · MBTiles local (OSM Bright)",
+    });
+  }
+
+  const layers = brightLayerDefs(style.layers || []);
+  const added = [];
+  let below = anchor;
+
+  for (let i = layers.length - 1; i >= 0; i--) {
+    const def = layers[i];
+    if (map.getLayer(def.id)) {
+      added.push(def.id);
+      continue;
+    }
+    try {
+      map.addLayer(def, below);
+      added.push(def.id);
+      below = def.id;
+    } catch (err) {
+      console.warn(`[local-basemap] capa omitida ${def.id}:`, err);
+    }
+  }
+
+  _localLayerIds = added;
+  if (!added.length) {
+    throw new Error("ninguna capa OSM Bright se pudo añadir");
+  }
 }
 
 export function fetchLocalBasemapTileJson() {
@@ -196,6 +326,7 @@ export function fetchLocalBasemapTileJson() {
 
 export function prefetchLocalBasemapCatalog() {
   void fetchLocalBasemapTileJson().catch(() => {});
+  void loadBrightStyleJson().catch(() => {});
 }
 
 export function getLocalBasemapLayerIds() {
@@ -220,6 +351,12 @@ export function setLocalBasemapVisible(map, visible) {
       /* noop */
     }
   }
+  if (typeof map.setGlyphs !== "function") return;
+  if (visible && _basemapGlyphsUrl) {
+    map.setGlyphs(_basemapGlyphsUrl);
+  } else if (!visible) {
+    map.setGlyphs(MAPLIBRE_GLYPHS_URL);
+  }
 }
 
 /**
@@ -228,7 +365,12 @@ export function setLocalBasemapVisible(map, visible) {
  */
 export async function ensureLocalBasemap(map, beforeLayerId = "base-osm") {
   if (!map) return false;
-  if (map.getSource(LOCAL_SOURCE_ID) && _localLayerIds.length) return true;
+
+  const brightReady = map.getLayer(`${LAYER_PREFIX}background`);
+  const rasterReady = map.getLayer("base-local-raster");
+  if ((brightReady || rasterReady) && _localLayerIds.length) {
+    return true;
+  }
 
   let tj;
   try {
@@ -242,72 +384,18 @@ export async function ensureLocalBasemap(map, beforeLayerId = "base-osm") {
   const anchor = map.getLayer(beforeLayerId) ? beforeLayerId : undefined;
 
   if (!_isVector) {
-    const tiles = Array.isArray(tj.tiles) && tj.tiles.length ? tj.tiles : [localTileTemplate()];
-    if (!map.getSource(LOCAL_SOURCE_ID)) {
-      map.addSource(LOCAL_SOURCE_ID, {
-        type: "raster",
-        tiles,
-        tileSize: tj.tileSize || 256,
-        minzoom: tj.minzoom ?? 0,
-        maxzoom: tj.maxzoom ?? 19,
-        attribution: tj.attribution || "© OpenStreetMap · MBTiles local",
-      });
-    }
-    if (!map.getLayer("base-local-raster")) {
-      map.addLayer(
-        {
-          id: "base-local-raster",
-          type: "raster",
-          source: LOCAL_SOURCE_ID,
-          layout: { visibility: "none" },
-          paint: {
-            "raster-opacity": 1,
-            "raster-fade-duration": 0,
-            "raster-resampling": "linear",
-          },
-        },
-        anchor,
-      );
-    }
-    _localLayerIds = ["base-local-raster"];
+    installRasterBasemap(map, tj, anchor);
     return true;
   }
 
-  if (!map.getSource(LOCAL_SOURCE_ID)) {
-    map.addSource(LOCAL_SOURCE_ID, {
-      type: "vector",
-      tiles: [localTileTemplate()],
-      minzoom: tj.minzoom ?? 0,
-      maxzoom: tj.maxzoom ?? 14,
-      attribution: tj.attribution || "© OpenStreetMap · MBTiles local",
-    });
+  try {
+    await installBrightVectorBasemap(map, tj, anchor);
+    return true;
+  } catch (err) {
+    console.warn("[local-basemap] OSM Bright no disponible; estilo mínimo:", err);
+    await installMinimalVectorBasemap(map, tj, anchor);
+    return _localLayerIds.length > 0;
   }
-
-  const available = vectorLayerIdsFromTileJson(tj);
-  const defs = openMapTilesLayerDefs(LOCAL_SOURCE_ID, available);
-  /** @type {string[]} */
-  const added = [];
-
-  let below = anchor;
-  for (let i = defs.length - 1; i >= 0; i--) {
-    const def = defs[i];
-    if (map.getLayer(def.id)) {
-      added.push(def.id);
-      continue;
-    }
-    const sl = def["source-layer"];
-    if (sl && available.size && !available.has(sl)) continue;
-    map.addLayer({ ...def, layout: { visibility: "none" } }, below);
-    added.push(def.id);
-    below = def.id;
-  }
-
-  _localLayerIds = added;
-  if (!_localLayerIds.length) {
-    console.warn("[local-basemap] sin capas compatibles en el MBTiles");
-    return false;
-  }
-  return true;
 }
 
 /** URL de comprobación (catálogo Martin). */

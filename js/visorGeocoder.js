@@ -387,3 +387,8 @@ export function refreshVisorGeocoder() {
     tryAttach(0);
   }
 }
+
+/** Contenedor del input del buscador (anclar panel de identificación por clic). */
+export function getVisorGeocoderContainer() {
+  return _geocoder?.container ?? null;
+}

@@ -3,6 +3,7 @@
  * Eventos mouseenter/mousemove/mouseleave por capa (cursor + globo).
  */
 import { MARTIN_USO_SUELO } from "./martinLayerStyle.js";
+import { buildDenueTipDefs } from "./denueLayers.js";
 
 const TIP_DEFS = [
   { primary: "ly-locsPunto", tipHtml: locsPuntoTipHtml },
@@ -13,9 +14,12 @@ const TIP_DEFS = [
   { primary: "ly-manzanas", tipHtml: manzanasTipHtml },
   { primary: "ly-vialidades", tipHtml: vialidadesTipHtml },
   { primary: "ly-rnc", tipHtml: rncTipHtml },
+  { primary: "ly-rnc-estatal", tipHtml: rncTipHtml },
+  { primary: "ly-rnc-troncal", tipHtml: rncTipHtml },
   { primary: "ly-saneamientoAgua", tipHtml: saneamientoTipHtml },
   { primary: "ly-clues", tipHtml: cluesTipHtml },
   { primary: "ly-residuoSolido", tipHtml: residuoSolidoTipHtml },
+  ...buildDenueTipDefs(),
   { primary: MARTIN_USO_SUELO.layerId, tipHtml: usoSueloTipHtml },
   { primary: "ly-hidro", tipHtml: hidroCorrienteTipHtml, visorOnly: true },
   { primary: "ly-hcuerpos", tipHtml: hidroCuerpoTipHtml, visorOnly: true },
@@ -23,10 +27,18 @@ const TIP_DEFS = [
   { primary: "ly-curnivel-ma", tipHtml: curnivelTipHtml, visorOnly: true },
 ];
 
+const TIP_DEF_BY_PRIMARY = Object.fromEntries(TIP_DEFS.map((d) => [d.primary, d]));
+
 /** @type {WeakMap<import("maplibre-gl").Map, Set<string>>} */
 const _boundLayersByMap = new WeakMap();
+/** @type {WeakMap<import("maplibre-gl").Map, Set<string>>} */
+const _boundIdentifyLayersByMap = new WeakMap();
 /** @type {WeakMap<import("maplibre-gl").Map, Map<string, { depth: number, primary: string, tipHtml: (p: object) => string }>>} */
 const _handlersByMap = new WeakMap();
+
+let _identifyActiveFn = () => false;
+/** @type {((map: import("maplibre-gl").Map, lngLat: { lng: number, lat: number }, html: string, feature: object, meta?: { layerId?: string, point?: { x: number, y: number } }) => void)|null} */
+let _onIdentifyClick = null;
 
 function boundLayerSet(map) {
   let set = _boundLayersByMap.get(map);
@@ -35,6 +47,25 @@ function boundLayerSet(map) {
     _boundLayersByMap.set(map, set);
   }
   return set;
+}
+
+function boundIdentifyLayerSet(map) {
+  let set = _boundIdentifyLayersByMap.get(map);
+  if (!set) {
+    set = new Set();
+    _boundIdentifyLayersByMap.set(map, set);
+  }
+  return set;
+}
+
+/** Activa/desactiva identificación por clic (visor geográfico). */
+export function setOverlayIdentifyActive(fn) {
+  _identifyActiveFn = typeof fn === "function" ? fn : () => false;
+}
+
+/** Callback al identificar un elemento por clic (popup en visorMapIdentify.js). */
+export function setOverlayIdentifyClickHandler(fn) {
+  _onIdentifyClick = typeof fn === "function" ? fn : null;
 }
 
 function handlerMap(map) {
@@ -192,6 +223,59 @@ export function setOverlayTipsVisorModeActive(fn) {
   _visorGeograficoActiveFn = typeof fn === "function" ? fn : () => false;
 }
 
+function normalizeLayerIdToPrimary(layerId) {
+  if (!layerId) return null;
+  if (TIP_DEF_BY_PRIMARY[layerId]) return layerId;
+
+  const visorLabels = /^ly-(.+)-visor-labels$/.exec(layerId);
+  if (visorLabels && TIP_DEF_BY_PRIMARY[`ly-${visorLabels[1]}`]) {
+    return `ly-${visorLabels[1]}`;
+  }
+
+  let base = layerId;
+  if (base.endsWith("-labels")) base = base.slice(0, -7);
+  if (base.endsWith("-halo")) base = base.slice(0, -5);
+  if (base.endsWith("-fill")) base = base.slice(0, -5);
+  if (TIP_DEF_BY_PRIMARY[base]) return base;
+
+  for (const def of TIP_DEFS) {
+    if (layerId.startsWith(def.primary)) return def.primary;
+  }
+
+  return null;
+}
+
+/**
+ * HTML del tooltip para una capa y sus propiedades (identificación por clic).
+ * @param {string} layerId
+ * @param {object} [properties]
+ * @returns {string|null}
+ */
+export function buildOverlayIdentifyHtml(layerId, properties) {
+  const primary = normalizeLayerIdToPrimary(layerId);
+  if (!primary) return null;
+  const def = TIP_DEF_BY_PRIMARY[primary];
+  if (!def) return null;
+  if (def.visorOnly && !_visorGeograficoActiveFn()) return null;
+  return def.tipHtml(properties || {});
+}
+
+/**
+ * Añade coordenadas WGS84 al HTML del tooltip (map-on-click).
+ * @param {string} tipHtml
+ * @param {number} lng
+ * @param {number} lat
+ */
+export function appendIdentifyCoords(tipHtml, lng, lat) {
+  if (!tipHtml || !Number.isFinite(lng) || !Number.isFinite(lat)) return tipHtml;
+  if (tipHtml.includes("atlas-loc-tip__coords")) return tipHtml;
+  const coords = `Lat: ${lat.toFixed(6)}<br>Lon: ${lng.toFixed(6)}`;
+  return tipHtml.replace(
+    /<\/div>\s*$/,
+    `<div class="atlas-loc-tip__coords">${coords}</div></div>`,
+  );
+}
+
 function overlayFeatureKey(feature) {
   if (!feature) return null;
   if (feature.id != null) return String(feature.id);
@@ -309,6 +393,41 @@ function bindLayerTipHandlers(map, layerId, primary, tipHtml, visorOnly = false)
   bound.add(layerId);
 }
 
+function bindLayerIdentifyClick(map, layerId, primary, tipHtml, visorOnly = false) {
+  const bound = boundIdentifyLayerSet(map);
+  if (!map.getLayer(layerId) || bound.has(layerId)) return;
+
+  const onClick = (e) => {
+    if (!_identifyActiveFn()) return;
+    if (visorOnly && !_visorGeograficoActiveFn()) return;
+    if (!_onIdentifyClick) return;
+    if (!_overlayLayerIdsFn || !isGroupVisible(map, _overlayLayerIdsFn, primary)) return;
+    const f = e.features?.[0];
+    if (!f) return;
+    const html = tipHtml(f.properties || {});
+    if (!html) return;
+    _onIdentifyClick(map, e.lngLat, html, f, { layerId, point: e.point });
+  };
+
+  map.on("click", layerId, onClick);
+  bound.add(layerId);
+}
+
+function refreshOverlayIdentifyBindings(map, overlayLayerIds) {
+  if (!map || !_onIdentifyClick) return;
+  for (const def of TIP_DEFS) {
+    for (const layerId of overlayLayerIds(map, def.primary)) {
+      bindLayerIdentifyClick(map, layerId, def.primary, def.tipHtml, Boolean(def.visorOnly));
+    }
+  }
+}
+
+/** Re-enlaza clics de identificación (p. ej. tras attachVisorMapIdentify). */
+export function rebindOverlayIdentifyForMap(map) {
+  if (!map || !_overlayLayerIdsFn) return;
+  refreshOverlayIdentifyBindings(map, _overlayLayerIdsFn);
+}
+
 let _overlayLayerIdsFn = null;
 
 /**
@@ -330,6 +449,8 @@ export function refreshOverlayTipBindings(map, overlayLayerIds) {
     map.getCanvas().addEventListener("mouseleave", () => hideTip(map));
     map.__overlayTipCanvasLeaveBound = true;
   }
+
+  refreshOverlayIdentifyBindings(map, overlayLayerIds);
 }
 
 /**

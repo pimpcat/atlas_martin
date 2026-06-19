@@ -7,6 +7,10 @@ import { getActiveVisorLayers } from "./visorLayers.js";
 import { RESIDUO_SOLIDO_LEGEND_ITEMS } from "./mapResiduoSolidoIcons.js";
 import { LOCS_PUNTO_LEGEND_ITEM } from "./mapLocsPuntoIcons.js";
 import { CLUES_LEGEND_ITEM } from "./mapCluesIcons.js";
+import { buildDenueLegendSymbology } from "./denueLayers.js";
+import { SANEAMIENTO_AGUA_LEGEND_ITEMS } from "./mapSaneamientoAguaIcons.js";
+
+const DENUE_LEGEND_SYMBOLOGY = buildDenueLegendSymbology();
 
 let _legendRoot = null;
 let _legendOpen = false;
@@ -18,12 +22,12 @@ let _observedAttribEl = null;
 const LEGEND_ATTRIB_GAP_PX = 10;
 
 /** @typedef {{ kind: 'chip'|'line'|'circle'|'fill', color: string, label: string, outline?: string }} VisorLegendItem */
-/** @typedef {{ kind: 'icon', label: string, svg: string }} VisorLegendIconItem */
+/** @typedef {{ kind: 'icon', label: string, icon: string }} VisorLegendIconItem */
 
 /** Catálogo de simbología por id de capa (coincide con VISOR_LAYER_DEFS). */
 const VISOR_SYMBOLOGY = {
   locspunto: {
-    iconItems: [{ label: LOCS_PUNTO_LEGEND_ITEM.label, svg: LOCS_PUNTO_LEGEND_ITEM.svg }],
+    iconItems: [{ label: LOCS_PUNTO_LEGEND_ITEM.label, icon: LOCS_PUNTO_LEGEND_ITEM.icon }],
   },
   locsatlas: {
     items: [{ kind: "line", color: "#3399ff", label: "Límite de localidad con amanzanamiento" }],
@@ -59,10 +63,10 @@ const VISOR_SYMBOLOGY = {
     ],
   },
   saneamiento_agua: {
-    items: [{ kind: "circle", color: "#0066cc", label: "Servicio de agua o saneamiento" }],
+    iconItems: SANEAMIENTO_AGUA_LEGEND_ITEMS,
   },
   clues: {
-    iconItems: [{ label: CLUES_LEGEND_ITEM.label, svg: CLUES_LEGEND_ITEM.svg }],
+    iconItems: [{ label: CLUES_LEGEND_ITEM.label, icon: CLUES_LEGEND_ITEM.icon }],
   },
   residuo_solido: {
     iconItems: true,
@@ -95,6 +99,7 @@ const VISOR_SYMBOLOGY = {
       { kind: "chip", color: "rgb(204, 204, 204)", label: "Otro uso de suelo" },
     ],
   },
+  ...DENUE_LEGEND_SYMBOLOGY,
 };
 
 function escapeHtml(text) {
@@ -119,8 +124,16 @@ function swatchHtml(item) {
   return `<span class="visor-map-legend__swatch visor-map-legend__chip" style="background:${item.color}"></span>`;
 }
 
-function iconSwatchHtml(svg, { large = false } = {}) {
-  const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+function legendIconSrc(icon) {
+  if (!icon) return "";
+  if (icon.startsWith("<")) {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(icon)}`;
+  }
+  return icon;
+}
+
+function iconSwatchHtml(icon, { large = false } = {}) {
+  const src = legendIconSrc(icon);
   const size = large ? 28 : 18;
   const cls = large ? "visor-map-legend__icon visor-map-legend__icon--pin" : "visor-map-legend__icon";
   return `<img class="${cls}" src="${src}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async">`;
@@ -133,11 +146,15 @@ function buildLayerSectionHtml(layerDef) {
   let listHtml = "";
   if (sym.iconItems) {
     const items = sym.iconItems === true ? RESIDUO_SOLIDO_LEGEND_ITEMS : sym.iconItems;
-    const largePin = layerDef.id === "locspunto" || layerDef.id === "clues";
+    const largePin =
+      layerDef.id === "locspunto" ||
+      layerDef.id === "clues" ||
+      layerDef.id === "saneamiento_agua" ||
+      layerDef.id.startsWith("denue_");
     listHtml = items
       .map(
         (item) =>
-          `<li>${iconSwatchHtml(item.svg, { large: largePin })}<span>${escapeHtml(item.label)}</span></li>`,
+          `<li>${iconSwatchHtml(item.icon, { large: largePin })}<span>${escapeHtml(item.label)}</span></li>`,
       )
       .join("");
   } else if (sym.items?.length) {
@@ -164,6 +181,11 @@ function setLegendPanelOpen(open) {
   const btn = _legendRoot.querySelector(".visor-map-legend__btn");
   if (panel) panel.classList.toggle("d-none", !_legendOpen);
   if (btn) btn.setAttribute("aria-expanded", _legendOpen ? "true" : "false");
+  requestAnimationFrame(() => {
+    const map = getLeafletMap();
+    if (map) layoutVisorMapLegend(map);
+    window.dispatchEvent(new CustomEvent("atlas:visor-map-ui-layout"));
+  });
 }
 
 function teardownLayoutWatchers() {
@@ -288,6 +310,7 @@ export function syncVisorMapLegend() {
 
   ensureLayoutWatchers(map);
   layoutVisorMapLegend(map);
+  window.dispatchEvent(new CustomEvent("atlas:visor-map-ui-layout"));
 }
 
 function tryAttach(attempt) {

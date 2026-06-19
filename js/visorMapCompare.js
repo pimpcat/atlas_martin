@@ -11,6 +11,7 @@ import {
   createCompareMapInstance,
   getLeafletMap,
   registerCompareOverlaySyncHook,
+  reapplyVisorThematicOpacityToMap,
   setMapBaseLayer,
   syncVisorOverlayLayersOnMap,
   whenAtlasMapReady,
@@ -33,6 +34,7 @@ let _lastPointerClientX = 0;
 let _compareOpGen = 0;
 let _enablePromise = null;
 let _syncCompareRaf = 0;
+let _opacitySyncHandler = null;
 
 function getCompareDividerX() {
   if (!_compareHost) return 0;
@@ -224,6 +226,7 @@ function syncCompareMapsNow() {
   if (!primary) return;
 
   syncVisorOverlayLayersOnMap(_compareMap);
+  reapplyVisorThematicOpacityToMap(_compareMap);
   applySideBase(primary, "osm");
   applySideBase(_compareMap, "inegi");
   bindCompareOverlayTips();
@@ -507,6 +510,12 @@ export function attachVisorMapCompare() {
     };
     window.addEventListener("atlas:map-resize", _resizeHandler);
   }
+  if (!_opacitySyncHandler) {
+    _opacitySyncHandler = () => {
+      if (_compareMap?.isStyleLoaded?.()) reapplyVisorThematicOpacityToMap(_compareMap);
+    };
+    window.addEventListener("atlas:visor-opacity-changed", _opacitySyncHandler);
+  }
   whenAtlasMapReady(() => {
     requestAnimationFrame(() => tryAttach(0));
   });
@@ -522,6 +531,10 @@ export function teardownVisorMapCompare() {
   if (_resizeHandler) {
     window.removeEventListener("atlas:map-resize", _resizeHandler);
     _resizeHandler = null;
+  }
+  if (_opacitySyncHandler) {
+    window.removeEventListener("atlas:visor-opacity-changed", _opacitySyncHandler);
+    _opacitySyncHandler = null;
   }
   _toggleBtn?.remove();
   _toggleBtn = null;

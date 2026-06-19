@@ -73,6 +73,7 @@
   .dashboard-poblacion,
   .dashboard-visor,
   .dashboard-inv,
+  .dashboard-ruteo,
   .dashboard-geo,
   #dashboardNormal.dashboard-normal-fit {
     flex: 1 1 auto;
@@ -84,6 +85,7 @@
 
   .dashboard-visor > .row,
   .dashboard-inv > .row,
+  .dashboard-ruteo > .row,
   .dashboard-geo > .row {
     height: 100%;
     min-height: 0;
@@ -97,6 +99,12 @@
   }
 
   .dashboard-inv {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .dashboard-ruteo {
     display: flex;
     flex-direction: column;
     min-height: 0;

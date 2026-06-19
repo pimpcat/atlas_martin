@@ -46,10 +46,13 @@ import {
   setCurvasNivelVisorLayerActive,
   getCurvasNivelVisorLayerActive,
   getOverlayMinZoom,
+  getOverlayActive,
+  setOverlayActiveByKey,
   clearVisorThematicLayersOnMap,
 } from "./map.js";
 import { downloadVisorLayerExport } from "./visorExport.js";
 import { notifyVisorLayerToggled, refreshVisorMapUi } from "./visorMapUi.js";
+import { buildDenueVisorPanelDefs } from "./denueLayers.js";
 
 /**
  * @typedef {object} VisorLayerDef
@@ -175,6 +178,7 @@ const VISOR_LAYER_DEFS = [
     getActive: getCurvasNivelVisorLayerActive,
     setActive: setCurvasNivelVisorLayerActive,
   },
+  ...buildDenueVisorPanelDefs(getOverlayActive, setOverlayActiveByKey),
 ];
 
 /**

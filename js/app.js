@@ -178,7 +178,18 @@ import {
   teardownVisorMapLegend,
   refreshVisorMapLegend,
 } from "./visorMapLegend.js";
+import {
+  attachVisorMapOpacity,
+  teardownVisorMapOpacity,
+  refreshVisorMapOpacity,
+} from "./visorMapOpacity.js";
 import { setOverlayTipsVisorModeActive } from "./mapOverlayTips.js";
+import {
+  attachVisorMapIdentify,
+  teardownVisorMapIdentify,
+  refreshVisorMapIdentify,
+  setVisorMapIdentifyActive,
+} from "./visorMapIdentify.js";
 import {
   attachVisorMapExport,
   teardownVisorMapExport,
@@ -492,13 +503,17 @@ function attachMapViewerPlugins({ includeMapUi = false } = {}) {
   if (!includeMapUi) {
     teardownVisorMapLegend();
     setOverlayTipsVisorModeActive(() => false);
+    setVisorMapIdentifyActive(() => false);
   } else {
     setOverlayTipsVisorModeActive(() => isVisorIndicator(state.activeIndicator));
+    setVisorMapIdentifyActive(() => isVisorIndicator(state.activeIndicator));
   }
   if (includeMapUi) {
     attachVisorMapUi({ getActiveLayersWithMinZoom: getActiveVisorLayersWithMinZoom });
     attachVisorMapLegend();
+    attachVisorMapOpacity();
     attachVisorFeaturePickBuffer();
+    attachVisorMapIdentify();
   }
   attachVisorGeocoder(visorLayerPanelOptions());
   attachVisorMapExport();
@@ -516,7 +531,9 @@ function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
   if (includeMapUi) {
     refreshVisorMapUi();
     refreshVisorMapLegend();
+    refreshVisorMapOpacity();
     refreshVisorFeaturePickBuffer();
+    refreshVisorMapIdentify();
   }
   refreshVisorMapExport();
   refreshVisorDraw();
@@ -531,9 +548,12 @@ function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
 
 function teardownMapViewerPlugins() {
   setOverlayTipsVisorModeActive(() => false);
+  setVisorMapIdentifyActive(() => false);
   teardownVisorMapUi();
   teardownVisorMapLegend();
+  teardownVisorMapOpacity();
   teardownVisorFeaturePickBuffer();
+  teardownVisorMapIdentify();
   teardownVisorMapExport();
   teardownVisorDraw();
   teardownVisorBuffer();
@@ -789,7 +809,7 @@ async function onIndicatorSelected(indicator) {
   state.activeIndicatorId = indicator.id;
   state.activeIndicator = indicator;
 
-  // Si estamos saliendo del INV, asegúrate de ocultar su layout.
+  // Si estamos saliendo del INV, ocultar su layout.
   if (!isInvVivIndicator(indicator)) {
     setInvVivLayout(false);
     teardownInvVivMode();
