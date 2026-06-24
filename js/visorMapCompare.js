@@ -1,30 +1,39 @@
 /**
  * Comparador de mapas base en el Visor geográfico (maplibre-gl-compare).
  *
- * Izquierda: OpenStreetMap · Derecha: INEGI.
- * Las capas vectoriales activas se replican en ambos mapas; solo cambia el raster base.
+ * Permite elegir el mapa base de cada lado (izquierda / derecha).
+ * Las capas vectoriales activas se replican en ambos mapas.
  *
  * @see assets/maplibre-gl-compare.js · css/maplibre-gl-compare.css
  */
 import {
+  applyMapInstanceBaseLayer,
   bindAtlasOverlayTips,
   createCompareMapInstance,
+  getActiveMapBase,
   getLeafletMap,
+  rebootstrapOverlaySymbolIconsOnMap,
   registerCompareOverlaySyncHook,
   reapplyVisorThematicOpacityToMap,
   setMapBaseLayer,
   syncVisorOverlayLayersOnMap,
+  VISOR_BASEMAP_CHOICES,
   whenAtlasMapReady,
 } from "./map.js";
 
 let _toggleBtn = null;
 let _labelsEl = null;
+let _pickerEl = null;
+let _leftSelect = null;
+let _rightSelect = null;
 let _compareHost = null;
 let _comparePaneB = null;
 let _compareMap = null;
 let _compareCtrl = null;
 let _active = false;
 let _savedBase = null;
+let _leftBase = "osm";
+let _rightBase = "inegi";
 let _styleSyncHandler = null;
 let _resizeHandler = null;
 let _dragEndHandler = null;
@@ -35,7 +44,7 @@ let _compareOpGen = 0;
 let _enablePromise = null;
 let _syncCompareRaf = 0;
 let _opacitySyncHandler = null;
-
+let _pickerOutsideHandler = null;
 function getCompareDividerX() {
   if (!_compareHost) return 0;
   const rect = _compareHost.getBoundingClientRect();
@@ -170,21 +179,128 @@ function viewState(map) {
   };
 }
 
-function applySideBase(map, baseKey) {
-  if (!map?.getStyle()?.layers) return;
-  for (const layer of map.getStyle().layers) {
-    if (!layer.id.startsWith("base-")) continue;
-    let visible = false;
-    if (baseKey === "osm") visible = layer.id === "base-osm";
-    else if (baseKey === "inegi") visible = layer.id === "base-inegi";
-    try {
-      map.setLayoutProperty(layer.id, "visibility", visible ? "visible" : "none");
-    } catch {
-      /* capa ausente en clon */
-    }
+function defaultRightBase(leftKey) {
+  const alt = VISOR_BASEMAP_CHOICES.find((c) => c.key !== leftKey);
+  return alt?.key || "inegi";
+}
+
+function fillBasemapSelect(select, selectedKey) {
+  if (!select) return;
+  select.replaceChildren();
+  for (const choice of VISOR_BASEMAP_CHOICES) {
+    const opt = document.createElement("option");
+    opt.value = choice.key;
+    opt.textContent = choice.short;
+    opt.title = choice.label;
+    if (choice.key === selectedKey) opt.selected = true;
+    select.appendChild(opt);
   }
 }
 
+function hideComparePicker() {
+  if (_pickerOutsideHandler) {
+    document.removeEventListener("mousedown", _pickerOutsideHandler, true);
+    _pickerOutsideHandler = null;
+  }
+  _pickerEl?.remove();
+  _pickerEl = null;
+}
+
+function showComparePicker() {
+  if (_active || _enablePromise) return;
+  hideComparePicker();
+
+  const shell = getMapUiShell();
+  if (!shell || !_toggleBtn) return;
+
+  _leftBase = getActiveMapBase() || "osm";
+  _rightBase = defaultRightBase(_leftBase);
+
+  const picker = document.createElement("div");
+  picker.className = "visor-compare-picker";
+  picker.setAttribute("role", "dialog");
+  picker.setAttribute("aria-label", "Elegir mapas base para comparar");
+
+  const title = document.createElement("div");
+  title.className = "visor-compare-picker__title";
+  title.textContent = "Comparar mapas base";
+
+  const grid = document.createElement("div");
+  grid.className = "visor-compare-picker__grid";
+
+  const mkField = (labelText, side) => {
+    const field = document.createElement("label");
+    field.className = "visor-compare-picker__field";
+    const span = document.createElement("span");
+    span.textContent = labelText;
+    const select = document.createElement("select");
+    select.className = "visor-compare-picker__select";
+    select.dataset.side = side;
+    fillBasemapSelect(select, side === "left" ? _leftBase : _rightBase);
+    field.append(span, select);
+    return { field, select };
+  };
+
+  const leftField = mkField("Izquierda", "left");
+  const rightField = mkField("Derecha", "right");
+  _leftSelect = leftField.select;
+  _rightSelect = rightField.select;
+  grid.append(leftField.field, rightField.field);
+
+  const actions = document.createElement("div");
+  actions.className = "visor-compare-picker__actions";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "visor-compare-picker__btn visor-compare-picker__btn--ghost";
+  cancelBtn.textContent = "Cancelar";
+  cancelBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    hideComparePicker();
+  });
+
+  const startBtn = document.createElement("button");
+  startBtn.type = "button";
+  startBtn.className = "visor-compare-picker__btn visor-compare-picker__btn--primary";
+  startBtn.textContent = "Comenzar";
+  startBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    _leftBase = _leftSelect?.value || "osm";
+    _rightBase = _rightSelect?.value || defaultRightBase(_leftBase);
+    hideComparePicker();
+    void enableCompare().catch((err) => console.warn("visor compare:", err));
+  });
+
+  actions.append(cancelBtn, startBtn);
+  picker.append(title, grid, actions);
+  shell.appendChild(picker);
+  _pickerEl = picker;
+
+  _pickerOutsideHandler = (ev) => {
+    if (picker.contains(ev.target) || _toggleBtn?.contains(ev.target)) return;
+    hideComparePicker();
+  };
+  document.addEventListener("mousedown", _pickerOutsideHandler, true);
+}
+
+async function applyCompareBasemaps() {
+  const primary = getLeafletMap();
+  if (!primary || !_compareMap) return;
+  await applyMapInstanceBaseLayer(primary, _leftBase);
+  await applyMapInstanceBaseLayer(_compareMap, _rightBase);
+  syncBasemapSelectValues();
+}
+
+function syncBasemapSelectValues() {
+  if (_leftSelect?.isConnected) _leftSelect.value = _leftBase;
+  if (_rightSelect?.isConnected) _rightSelect.value = _rightBase;
+}
+
+function onCompareBaseSelectChange(side, value) {
+  if (side === "left") _leftBase = value;
+  else _rightBase = value;
+  void syncCompareMapsNow();
+}
 /** Quita controles compare huérfanos (p. ej. doble clic rápido en el botón). */
 function removeOrphanCompareControls(host) {
   if (!host) return;
@@ -220,17 +336,25 @@ function preserveSliderOnResize() {
   updateCompareHitTarget(_lastPointerClientX || getCompareDividerX());
 }
 
-function syncCompareMapsNow() {
-  if (!_active || !_compareMap) return;
+async function syncCompareMapsNow() {
+  if (!_compareMap) return;
   const primary = getLeafletMap();
   if (!primary) return;
 
-  syncVisorOverlayLayersOnMap(_compareMap);
+  // Bases primero: el mapa local recarga sprite y borra iconos addImage.
+  await applyCompareBasemaps();
+  if (_leftBase === "local") {
+    await rebootstrapOverlaySymbolIconsOnMap(primary);
+  }
+  if (_rightBase === "local") {
+    await rebootstrapOverlaySymbolIconsOnMap(_compareMap);
+  }
+
+  await syncVisorOverlayLayersOnMap(_compareMap);
   reapplyVisorThematicOpacityToMap(_compareMap);
-  applySideBase(primary, "osm");
-  applySideBase(_compareMap, "inegi");
   bindCompareOverlayTips();
   try {
+    primary.triggerRepaint?.();
     _compareMap.triggerRepaint();
   } catch {
     /* noop */
@@ -241,7 +365,7 @@ function scheduleSyncCompareMaps() {
   if (_syncCompareRaf) cancelAnimationFrame(_syncCompareRaf);
   _syncCompareRaf = requestAnimationFrame(() => {
     _syncCompareRaf = 0;
-    syncCompareMapsNow();
+    void syncCompareMapsNow();
   });
 }
 
@@ -255,14 +379,14 @@ function updateToggleUi() {
   if (!_toggleBtn) return;
   if (_active) {
     _toggleBtn.textContent = "✕ Salir comparación";
-    _toggleBtn.title = "Desactivar comparación OSM / INEGI";
+    _toggleBtn.title = "Desactivar comparación de mapas base";
     _toggleBtn.setAttribute("aria-label", "Salir del modo comparación");
     _toggleBtn.classList.add("is-active");
     _toggleBtn.setAttribute("aria-pressed", "true");
   } else {
     _toggleBtn.textContent = "⇆ Comparar bases";
-    _toggleBtn.title = "Comparar mapas base OSM e INEGI";
-    _toggleBtn.setAttribute("aria-label", "Comparar mapas base OSM e INEGI");
+    _toggleBtn.title = "Elegir y comparar dos mapas base";
+    _toggleBtn.setAttribute("aria-label", "Comparar mapas base");
     _toggleBtn.classList.remove("is-active");
     _toggleBtn.setAttribute("aria-pressed", "false");
   }
@@ -302,11 +426,40 @@ function ensureLabels(host) {
   if (_labelsEl?.isConnected) return _labelsEl;
   const el = document.createElement("div");
   el.className = "visor-compare-labels";
-  el.innerHTML =
-    '<span class="visor-compare-label visor-compare-label--left">OpenStreetMap</span><span class="visor-compare-label visor-compare-label--right">INEGI</span>';
   host.appendChild(el);
   _labelsEl = el;
+  updateCompareLabelsUi();
   return el;
+}
+
+function updateCompareLabelsUi() {
+  if (!_labelsEl) return;
+  _labelsEl.replaceChildren();
+
+  const mkSide = (side, labelText) => {
+    const wrap = document.createElement("div");
+    wrap.className = `visor-compare-label-wrap visor-compare-label-wrap--${side}`;
+
+    const tag = document.createElement("span");
+    tag.className = "visor-compare-label-tag";
+    tag.textContent = labelText;
+
+    const select = document.createElement("select");
+    select.className = "visor-compare-label-select";
+    select.title = `Mapa base ${labelText.toLowerCase()}`;
+    select.dataset.side = side;
+    fillBasemapSelect(select, side === "left" ? _leftBase : _rightBase);
+    select.addEventListener("change", () => {
+      onCompareBaseSelectChange(side, select.value);
+    });
+    if (side === "left") _leftSelect = select;
+    else _rightSelect = select;
+
+    wrap.append(tag, select);
+    return wrap;
+  };
+
+  _labelsEl.append(mkSide("left", "Izquierda"), mkSide("right", "Derecha"));
 }
 
 function unwrapCompareDom() {
@@ -322,6 +475,8 @@ function unwrapCompareDom() {
   host.querySelector("#mapFrameCompare")?.remove();
   _labelsEl?.remove();
   _labelsEl = null;
+  _leftSelect = null;
+  _rightSelect = null;
   host.remove();
   _compareHost = null;
   _comparePaneB = null;
@@ -388,12 +543,12 @@ async function doEnableCompare(opGen) {
   _savedBase = null;
   try {
     const activeBtn = document.querySelector(".atlas-basemap-ctrl__btn.is-active");
-    _savedBase = activeBtn?.dataset?.base || "osm";
+    _savedBase = activeBtn?.dataset?.base || getActiveMapBase() || "osm";
   } catch {
-    _savedBase = "osm";
+    _savedBase = getActiveMapBase() || "osm";
   }
 
-  setMapBaseLayer("osm");
+  await applyMapInstanceBaseLayer(primary, _leftBase);
   await waitMapReady(primary);
   if (opGen !== _compareOpGen) return;
 
@@ -405,7 +560,7 @@ async function doEnableCompare(opGen) {
   removeOrphanCompareControls(_compareHost);
   clearComparePaneMaps(_comparePaneB);
   ensureLabels(_compareHost);
-  mountToggleButton(_compareHost);
+  mountToggleButton(getMapUiShell());
 
   const styleSnapshot = primary.getStyle();
   _compareMap = createCompareMapInstance(_comparePaneB, styleSnapshot, viewState(primary));
@@ -416,9 +571,7 @@ async function doEnableCompare(opGen) {
     return;
   }
 
-  applySideBase(primary, "osm");
-  applySideBase(_compareMap, "inegi");
-  syncCompareMapsNow();
+  await applyMapInstanceBaseLayer(_compareMap, _rightBase);
 
   /* Solo arrastrar el control; sin seguir el cursor sobre el mapa. */
   _compareCtrl = new Compare(primary, _compareMap, _compareHost, { mousemove: false });
@@ -431,7 +584,10 @@ async function doEnableCompare(opGen) {
   bindComparePointerRouting();
   _active = true;
   updateToggleUi();
+  if (_toggleBtn) _toggleBtn.disabled = false;
   setBasemapCtrlHidden(true);
+
+  await syncCompareMapsNow();
 
   requestAnimationFrame(() => {
     if (opGen !== _compareOpGen || !_active) return;
@@ -439,19 +595,26 @@ async function doEnableCompare(opGen) {
     _compareMap?.resize();
     setSliderCenter();
     updateCompareHitTarget(getCompareDividerX());
-    syncCompareMapsNow();
+    void syncCompareMapsNow();
   });
+}
+
+function isCompareUiOpen() {
+  return Boolean(_active || _compareHost || document.querySelector(".visor-compare-host"));
 }
 
 function disableCompare() {
   _compareOpGen += 1;
-  if (!_active && !_enablePromise) return;
+  _enablePromise = null;
+  hideComparePicker();
+  if (!isCompareUiOpen()) return;
+
   _active = false;
+  if (_toggleBtn) _toggleBtn.disabled = false;
   updateToggleUi();
   setBasemapCtrlHidden(false);
   destroyCompareMap();
-  const restore = _savedBase && _savedBase !== "osm" ? _savedBase : null;
-  if (restore) setMapBaseLayer(restore);
+  if (_savedBase) setMapBaseLayer(_savedBase);
   _savedBase = null;
   const primary = getLeafletMap();
   primary?.resize();
@@ -459,9 +622,15 @@ function disableCompare() {
 }
 
 function toggleCompare() {
-  if (_enablePromise) return;
-  if (_active) disableCompare();
-  else void enableCompare().catch((err) => console.warn("visor compare:", err));
+  if (isCompareUiOpen()) {
+    disableCompare();
+    return;
+  }
+  if (_enablePromise) {
+    disableCompare();
+    return;
+  }
+  showComparePicker();
 }
 
 function ensureToggleButton() {
@@ -495,7 +664,9 @@ function tryAttach(attempt) {
 }
 
 export function attachVisorMapCompare() {
-  registerCompareOverlaySyncHook(syncCompareMapsNow);
+  registerCompareOverlaySyncHook(() => {
+    void syncCompareMapsNow();
+  });
   if (!_styleSyncHandler) {
     _styleSyncHandler = () => scheduleSyncCompareMaps();
     window.addEventListener("atlas:map-overlays-changed", _styleSyncHandler);
@@ -523,6 +694,7 @@ export function attachVisorMapCompare() {
 
 export function teardownVisorMapCompare() {
   registerCompareOverlaySyncHook(null);
+  hideComparePicker();
   disableCompare();
   if (_styleSyncHandler) {
     window.removeEventListener("atlas:map-overlays-changed", _styleSyncHandler);
@@ -548,7 +720,7 @@ export function refreshVisorMapCompare() {
   if (!getLeafletMap()) return;
   ensureToggleButton();
   if (_active) {
-    mountToggleButton(_compareHost || getMapUiShell());
+    mountToggleButton(getMapUiShell());
     scheduleSyncCompareMaps();
   }
 }

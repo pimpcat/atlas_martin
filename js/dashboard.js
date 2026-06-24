@@ -9,6 +9,7 @@ import {
   invalidateGeoMacroMapSize,
   invalidateMapSize,
   restoreMapZoomControls,
+  setGeoMapViewLock,
 } from "./map.js";
 
 /** No sacar el mapa de Explorador municipal si otro layout se desactiva en cadena. */
@@ -402,9 +403,13 @@ export function setGeoLayout(active) {
     main.classList.remove("unidades-medicas-mode");
     main.classList.remove("escolaridad-mode");
     main.classList.remove("analfabetismo-mode");
+    main.classList.add("geo-mode");
+    setGeoMapViewLock(true);
   } else {
     geo.classList.add("d-none");
     geo.setAttribute("aria-hidden", "true");
+    main.classList.remove("geo-mode");
+    setGeoMapViewLock(false);
     revealDashboardNormal();
     appendMapFrameUnlessInHome(mountN);
     destroyGeoMacroMap();
@@ -414,6 +419,8 @@ export function setGeoLayout(active) {
   if (active) {
     restoreMapZoomControls();
     requestAnimationFrame(() => invalidateGeoMacroMapSize(null));
+  } else if (!main.classList.contains("home-mode")) {
+    restoreMapZoomControls();
   }
 }
 
@@ -1479,6 +1486,61 @@ function applyAppShellHomeColumns(active) {
   shellRow.classList.toggle("app-shell__row--home", !!active);
 }
 
+export function setSitiosInteresLayout(active) {
+  const normal = document.getElementById("dashboardNormal");
+  const geo = document.getElementById("dashboardGeo");
+  const visor = document.getElementById("dashboardVisor");
+  const pob = document.getElementById("dashboardPoblacion");
+  const crec = document.getElementById("dashboardCrecimiento");
+  const edad = document.getElementById("dashboardEdadMediana");
+  const nacim = document.getElementById("dashboardNacimientos");
+  const defun = document.getElementById("dashboardDefunciones");
+  const um = document.getElementById("dashboardUnidadesMedicas");
+  const esc = document.getElementById("dashboardEscolaridad");
+  const alf = document.getElementById("dashboardAnalfabetismo");
+  const sitios = document.getElementById("dashboardSitiosInteres");
+  const main = document.getElementById("main");
+
+  if (!sitios || !main) return;
+
+  if (active) {
+    normal?.classList.add("d-none");
+    geo?.classList.add("d-none");
+    geo?.setAttribute("aria-hidden", "true");
+    visor?.classList.add("d-none");
+    visor?.setAttribute("aria-hidden", "true");
+    pob?.classList.add("d-none");
+    pob?.setAttribute("aria-hidden", "true");
+    crec?.classList.add("d-none");
+    crec?.setAttribute("aria-hidden", "true");
+    edad?.classList.add("d-none");
+    edad?.setAttribute("aria-hidden", "true");
+    nacim?.classList.add("d-none");
+    nacim?.setAttribute("aria-hidden", "true");
+    defun?.classList.add("d-none");
+    defun?.setAttribute("aria-hidden", "true");
+    um?.classList.add("d-none");
+    um?.setAttribute("aria-hidden", "true");
+    esc?.classList.add("d-none");
+    esc?.setAttribute("aria-hidden", "true");
+    alf?.classList.add("d-none");
+    alf?.setAttribute("aria-hidden", "true");
+    hideDashboardViviendaParticipacion();
+    hideDashboardInvViv();
+    sitios.classList.remove("d-none");
+    sitios.setAttribute("aria-hidden", "false");
+    main.classList.remove("visor-mode");
+    main.classList.remove("invviv-mode");
+    main.classList.remove("home-mode");
+    main.classList.add("sitios-interes-mode");
+  } else {
+    sitios.classList.add("d-none");
+    sitios.setAttribute("aria-hidden", "true");
+    main.classList.remove("sitios-interes-mode");
+    revealDashboardNormal();
+  }
+}
+
 export function setHomeLayout(active) {
   const home = document.getElementById("dashboardHome");
   const normal = document.getElementById("dashboardNormal");
@@ -1524,6 +1586,8 @@ export function setHomeLayout(active) {
     esc?.setAttribute("aria-hidden", "true");
     alf?.classList.add("d-none");
     alf?.setAttribute("aria-hidden", "true");
+    document.getElementById("dashboardSitiosInteres")?.classList.add("d-none");
+    document.getElementById("dashboardSitiosInteres")?.setAttribute("aria-hidden", "true");
     hideDashboardViviendaParticipacion();
     hideDashboardInvViv();
     home.classList.remove("d-none");

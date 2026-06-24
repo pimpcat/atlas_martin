@@ -316,8 +316,56 @@ html[data-theme="claro"] .app-sidebar .menu-item {
   background: rgba(255, 255, 255, 0.45);
 }
 
+html[data-theme="claro"] .app-sidebar .menu-item.is-active {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--accent-rgb), 0.26) 0%,
+    rgba(255, 255, 255, 0.92) 58%,
+    rgba(255, 255, 255, 0.78) 100%
+  );
+  border-color: rgba(0, 110, 120, 0.62);
+  box-shadow:
+    0 0 0 2px rgba(var(--accent-rgb), 0.28),
+    0 4px 12px rgba(0, 70, 80, 0.14);
+}
+
+html[data-theme="claro"] .app-sidebar .menu-item.is-active::before {
+  background: #008b8b;
+  box-shadow: 0 0 8px rgba(0, 139, 139, 0.45);
+}
+
+html[data-theme="claro"] .app-sidebar .menu-item.is-active .title {
+  color: #003d45;
+}
+
+html[data-theme="claro"] .app-sidebar .menu-item.is-active .meta {
+  color: #006974;
+}
+
 html[data-theme="oscuro"] .app-sidebar .menu-item {
   background: rgba(0, 0, 0, 0.1);
+}
+
+html[data-theme="oscuro"] .app-sidebar .menu-item.is-active {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--accent-rgb), 0.38) 0%,
+    rgba(var(--accent-rgb), 0.14) 55%,
+    rgba(var(--accent-rgb), 0.06) 100%
+  );
+  border-color: rgba(var(--accent-rgb), 0.82);
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.5) inset,
+    0 6px 18px rgba(0, 0, 0, 0.35),
+    0 0 20px rgba(var(--accent-rgb), 0.12);
+}
+
+html[data-theme="oscuro"] .app-sidebar .menu-item.is-active .title {
+  color: #ffffff;
+}
+
+html[data-theme="oscuro"] .app-sidebar .menu-item.is-active .meta {
+  color: rgba(180, 240, 245, 0.92);
 }
 
 /* Selector de tema (pie del sidebar, siempre visible en ventana) */

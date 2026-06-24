@@ -14,6 +14,7 @@ import {
   buildBufferFromSource,
   publishVisorBufferFeature,
   clearVisorBuffer,
+  ensureDrawTrashClearsBuffer,
 } from "./visorBuffer.js";
 import { fetchVisorBuffer, fetchVisorFeatureGeometry, fetchVisorFeatureOutline } from "./visorBufferApi.js";
 
@@ -26,6 +27,7 @@ let _pickedFeature = null;
 let _clickHandler = null;
 let _applying = false;
 let _closeListener = null;
+let _bufferClearedListener = null;
 let _highlightFetchGen = 0;
 
 const PICK_HIGHLIGHT_SRC = "atlas-visor-pick-highlight-src";
@@ -816,6 +818,7 @@ async function applyPickBuffer() {
 function injectPickButton(map) {
   const group = findVisorDrawButtonGroup(map);
   if (!group) return false;
+  ensureDrawTrashClearsBuffer(map);
   if (group.querySelector(".mapbox-gl-draw_pick")) {
     _toggleBtn = group.querySelector(".mapbox-gl-draw_pick");
     return true;
@@ -895,17 +898,37 @@ function mountPickPanel(map) {
   return el;
 }
 
+function onVisorBufferCleared() {
+  const map = _mapRef || getLeafletMap();
+  _pickedFeature = null;
+  _highlightFetchGen += 1;
+  clearPickHighlight(map);
+  setStatus("");
+  syncPickPanelUi();
+}
+
 function bindCloseListener() {
-  if (_closeListener || typeof window === "undefined") return;
-  _closeListener = () => closeVisorFeaturePickBuffer();
-  window.addEventListener("atlas:visor-close-pick-buffer", _closeListener);
+  if (typeof window === "undefined") return;
+  if (!_closeListener) {
+    _closeListener = () => closeVisorFeaturePickBuffer();
+    window.addEventListener("atlas:visor-close-pick-buffer", _closeListener);
+  }
+  if (!_bufferClearedListener) {
+    _bufferClearedListener = onVisorBufferCleared;
+    window.addEventListener("atlas:visor-buffer-cleared", _bufferClearedListener);
+  }
 }
 
 function unbindCloseListener() {
-  if (_closeListener && typeof window !== "undefined") {
+  if (typeof window === "undefined") return;
+  if (_closeListener) {
     window.removeEventListener("atlas:visor-close-pick-buffer", _closeListener);
   }
   _closeListener = null;
+  if (_bufferClearedListener) {
+    window.removeEventListener("atlas:visor-buffer-cleared", _bufferClearedListener);
+  }
+  _bufferClearedListener = null;
 }
 
 function attachToMap(map) {
@@ -914,7 +937,6 @@ function attachToMap(map) {
   schedulePickButtonInjection(map);
   bindMapClick(map);
   bindCloseListener();
-  warmPickHighlightLayers(map);
   map.once("idle", () => schedulePickButtonInjection(map));
 }
 

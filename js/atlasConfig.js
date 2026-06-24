@@ -1,8 +1,8 @@
 /**
  * URLs del stack Atlas (Nginx → FastAPI / Martin / Apache).
  *
- * Con Nginx (puerto 80): rutas relativas, mismo origen → sin CORS.
- * Desarrollo legacy (Apache :8080 sin Nginx): FastAPI :8000, Martin :3000.
+ * Con Nginx (PORT_NGINX en .env, p. ej. 850): rutas relativas /api y /tiles → sin CORS.
+ * Desarrollo legacy (Apache :8080 expuesto sin Nginx): FastAPI :8000, Martin :3000.
  *
  * Sobrescribir en index.html antes de cargar módulos si hace falta:
  *   window.ATLAS_API_BASE = "";
@@ -14,9 +14,14 @@ function pagePort() {
   return window.location.port || "";
 }
 
+/** Apache del contenedor expuesto directo al host (sin proxy Nginx). */
+function isLegacyApacheDev() {
+  return pagePort() === "8080";
+}
+
+/** Portal servido por Nginx (cualquier PORT_NGINX: 850, 80, etc.). */
 function isNginxFrontDoor() {
-  const p = pagePort();
-  return !p || p === "80" || p === "443";
+  return !isLegacyApacheDev();
 }
 
 function detectApiBase() {

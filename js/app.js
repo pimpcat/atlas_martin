@@ -5,7 +5,7 @@
  * Dependencias principales: map.js, api.js, dashboard.js, geoContext.js, homeView.js,
  * visorLayers.js, invViv.js, módulos *Viz.js / *Export.js y theme.js.
  */
-import { createMenu, collapseAllMenuSections } from "./menu.js";
+import { createMenu, collapseAllMenuSections, clearActiveMenuItem } from "./menu.js";
 import {
   setMapView,
   getMapBaseUrl,
@@ -165,8 +165,10 @@ import {
   setInversionPublicaLayout,
   setInstitucionesAdminPublicaLayout,
   setHabitantesPoliciaLayout,
+  setSitiosInteresLayout,
   setHomeLayout,
 } from "./dashboard.js";
+import { renderSitiosInteresView } from "./sitiosInteresView.js";
 import {
   renderVisorLayerPanel,
   clearVisorThematicLayers,
@@ -178,6 +180,11 @@ import {
   teardownVisorMapLegend,
   refreshVisorMapLegend,
 } from "./visorMapLegend.js";
+import {
+  attachGeoMapLegend,
+  syncGeoMapLegend,
+  teardownGeoMapLegend,
+} from "./geoMapLegend.js";
 import {
   attachVisorMapOpacity,
   teardownVisorMapOpacity,
@@ -382,6 +389,10 @@ function isInstitucionesAdminPublicaMunicipalIndicator(indicator) {
 
 function isHabitantesPorPoliciaIndicator(indicator) {
   return indicator && indicator.habitantesPorPoliciaVista === true;
+}
+
+function isSitiosInteresIndicator(indicator) {
+  return indicator && indicator.sitiosInteres === true;
 }
 
 // --- Metadatos de cabecera por panel comparativo / vista ---
@@ -590,6 +601,7 @@ function syncGeoMapOverlayLayers() {
       : null;
   const inGeo = isGeoContextIndicator(state.activeIndicator) && Boolean(cve);
   syncGeoThematicLayers(tab, cve, inGeo);
+  syncGeoMapLegend(tab, inGeo);
 }
 
 /** Enfoque municipal con reintentos (layout del dashboard + capas base). */
@@ -664,6 +676,7 @@ async function goToHomeView() {
 
   _goHomeInFlight = (async () => {
     collapseAllMenuSections();
+    clearActiveMenuItem();
     state.viewMode = "home";
     state.activeIndicatorId = null;
     state.activeIndicator = null;
@@ -677,6 +690,7 @@ async function goToHomeView() {
     invalidateMunicipioMapFocus();
     clearVisorThematicLayers();
     clearGeoThematicLayers();
+    teardownGeoMapLegend();
     setMarcoWmsVisible(false);
     const btn = document.getElementById("btnInicio");
     btn?.classList.add("is-active");
@@ -825,6 +839,7 @@ async function onIndicatorSelected(indicator) {
 
   if (!isGeoContextIndicator(indicator)) {
     clearGeoThematicLayers();
+    teardownGeoMapLegend();
   }
 
   // --- Indicador: Datos geográficos (pestañas + mapa macro) ---
@@ -837,6 +852,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -850,7 +866,6 @@ async function onIndicatorSelected(indicator) {
     setInvVivLayout(false);
     setGeoLayout(true);
     setMarcoWmsVisible(true);
-    restoreMapZoomControls();
 
     const mapEl = document.getElementById("mapFrame");
 
@@ -873,6 +888,7 @@ async function onIndicatorSelected(indicator) {
     if (state.selectedMunicipio?.cve_mun) {
       warmGeoThematicTiles(state.selectedMunicipio.cve_mun);
     }
+    attachGeoMapLegend();
 
     scheduleAppMunicipioFocus("geo");
     if (!state.selectedMunicipio?.cve_mun && mapEl) {
@@ -894,6 +910,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -942,6 +959,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1000,6 +1018,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1051,6 +1070,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1102,6 +1122,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1153,6 +1174,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1204,6 +1226,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1255,6 +1278,7 @@ async function onIndicatorSelected(indicator) {
     setDefuncionesLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1306,6 +1330,7 @@ async function onIndicatorSelected(indicator) {
     setDefuncionesLayout(false);
     setUnidadesMedicasLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1358,6 +1383,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setCaracteristicasEconomicasLayout(false);
@@ -1409,6 +1435,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1460,6 +1487,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1511,6 +1539,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1562,6 +1591,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1613,6 +1643,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1664,6 +1695,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setViviendaParticipacionLayout(false);
     setViviendaServiciosLayout(false);
     setPoblacionOcupadaLayout(false);
@@ -1716,6 +1748,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setPoblacionOcupadaLayout(false);
     setCaracteristicasEconomicasLayout(false);
     setUnidadesEconomicasLayout(false);
@@ -1766,6 +1799,7 @@ async function onIndicatorSelected(indicator) {
     setUnidadesMedicasLayout(false);
     setEscolaridadLayout(false);
     setAnalfabetismoLayout(false);
+    setSitiosInteresLayout(false);
     setPoblacionOcupadaLayout(false);
     setCaracteristicasEconomicasLayout(false);
     setUnidadesEconomicasLayout(false);
@@ -1805,6 +1839,34 @@ async function onIndicatorSelected(indicator) {
     return;
   }
 
+  if (isSitiosInteresIndicator(indicator)) {
+    setVisorLayout(false);
+    setGeoLayout(false);
+    setPoblacionLayout(false);
+    setCrecimientoLayout(false);
+    setEdadMedianaLayout(false);
+    setNacimientosLayout(false);
+    setDefuncionesLayout(false);
+    setUnidadesMedicasLayout(false);
+    setEscolaridadLayout(false);
+    setAnalfabetismoLayout(false);
+    setViviendaParticipacionLayout(false);
+    setViviendaServiciosLayout(false);
+    setPoblacionOcupadaLayout(false);
+    setCaracteristicasEconomicasLayout(false);
+    setUnidadesEconomicasLayout(false);
+    setSuperficieAgriculturaLayout(false);
+    setInversionPublicaLayout(false);
+    setInstitucionesAdminPublicaLayout(false);
+    setHabitantesPoliciaLayout(false);
+    setSitiosInteresLayout(true);
+    setLocsAtlasLayerActive(false, null);
+    renderSitiosInteresView(document.getElementById("sitiosInteresRoot"));
+    setActivePill(indicator.title);
+    setTableMeta("—");
+    return;
+  }
+
   if (isAnalfabetismoIndicator(indicator)) {
     setVisorLayout(false);
     setGeoLayout(false);
@@ -1824,6 +1886,7 @@ async function onIndicatorSelected(indicator) {
     setInversionPublicaLayout(false);
     setInstitucionesAdminPublicaLayout(false);
     setHabitantesPoliciaLayout(false);
+    setSitiosInteresLayout(false);
     setAnalfabetismoLayout(true);
     setLocsAtlasLayerActive(false, null);
 
@@ -1864,6 +1927,7 @@ async function onIndicatorSelected(indicator) {
   setUnidadesMedicasLayout(false);
   setEscolaridadLayout(false);
   setAnalfabetismoLayout(false);
+  setSitiosInteresLayout(false);
   setViviendaParticipacionLayout(false);
   setViviendaServiciosLayout(false);
   setPoblacionOcupadaLayout(false);

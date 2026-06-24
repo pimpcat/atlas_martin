@@ -89,6 +89,16 @@ const VISOR_SYMBOLOGY = {
       { kind: "line", color: "#231c16", label: "Curva maestra (múltiplo de 1000 m)" },
     ],
   },
+  clima: {
+    items: [
+      { kind: "chip", color: "rgb(230, 0, 126)", label: "Grupo A - Cálido Subhúmedo" },
+      { kind: "chip", color: "rgb(34, 161, 18)", label: "Grupo C - Semicálido Subhúmedo" },
+      { kind: "chip", color: "rgb(153, 204, 102)", label: "Grupo C - Templado Subhúmedo" },
+      { kind: "chip", color: "rgb(188, 143, 143)", label: "Grupo B - Semiseco" },
+      { kind: "chip", color: "rgb(255, 255, 0)", label: "Grupo B - Muy Seco" },
+      { kind: "chip", color: "rgb(200, 200, 200)", label: "Otro" },
+    ],
+  },
   uso_suelo: {
     items: [
       { kind: "chip", color: "rgb(0, 197, 255)", label: "Cuerpo de agua" },
@@ -339,4 +349,9 @@ export function teardownVisorMapLegend() {
 export function refreshVisorMapLegendLayout() {
   const map = getLeafletMap();
   if (map) layoutVisorMapLegend(map);
+}
+
+/** Construye HTML de leyenda para definiciones { id, label } (visor, datos geográficos, etc.). */
+export function buildLegendPanelHtmlForDefs(layerDefs) {
+  return buildLegendPanelHtml(layerDefs);
 }

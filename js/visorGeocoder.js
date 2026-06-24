@@ -6,8 +6,13 @@
  * @see app_api/geocoder.py
  */
 import { getLeafletMap, getVisorStateWideMode, whenAtlasMapReady } from "./map.js";
-import { fetchBuscarGeocoder, geocoderRowsToFeatureCollection } from "./geocoderApi.js";
+import { fetchBuscarGeocoder, fetchBuscarGeometria, geocoderRowsToFeatureCollection } from "./geocoderApi.js";
 import { ensureVisorToolsExtrasHost } from "./visorDraw.js";
+import {
+  clearGeocoderHighlight,
+  showGeocoderHighlight,
+  teardownGeocoderHighlight,
+} from "./visorGeocoderHighlight.js";
 
 /** @type {import("@maplibre/maplibre-gl-geocoder").MaplibreGeocoder | null} */
 let _geocoder = null;
@@ -228,6 +233,65 @@ function placeSearchMarker(selected, map) {
   }
 }
 
+function getTurf() {
+  if (typeof turf !== "undefined") return turf;
+  if (typeof window !== "undefined" && window.turf) return window.turf;
+  return null;
+}
+
+function isPolygonSearchResult(selected) {
+  const p = selected?.properties || {};
+  if (p.geom_tipo === "polygon") return true;
+  const tabla = String(p.tabla_origen || "").toLowerCase();
+  return tabla === "c_col_ase" || tabla === "c_l" || tabla === "c_mun";
+}
+
+function fitMapToFeature(map, feature) {
+  const turfLib = getTurf();
+  if (!map || !feature?.geometry || !turfLib?.bbox) return false;
+  try {
+    const [west, south, east, north] = turfLib.bbox(feature);
+    if (!Number.isFinite(west) || west >= east || south >= north) return false;
+    map.fitBounds(
+      [
+        [west, south],
+        [east, north],
+      ],
+      { padding: 56, maxZoom: 16, duration: 1200, essential: true }
+    );
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function drawPolygonHighlight(selected, map) {
+  const p = selected?.properties || {};
+  const tabla = String(p.tabla_origen || "").toLowerCase();
+  const cvegeo = String(p.cvegeo || p.id_origen || "").trim();
+  if (!isPolygonSearchResult(selected) || !tabla || !cvegeo) {
+    clearGeocoderHighlight(map);
+    return false;
+  }
+  try {
+    const data = await fetchBuscarGeometria(tabla, cvegeo);
+    const feature = {
+      ...data.feature,
+      properties: {
+        ...(data.feature?.properties || {}),
+        nombre_busqueda: p.nombre_busqueda,
+        tipo: p.tipo,
+      },
+    };
+    showGeocoderHighlight(map, feature);
+    return feature;
+  } catch (err) {
+    console.warn("[visor geocoder] geometría:", err);
+    clearGeocoderHighlight(map);
+    return null;
+  }
+}
+
 function resolveCoords(selected) {
   if (!selected) return null;
   const p = selected.properties || {};
@@ -245,17 +309,26 @@ function resolveCoords(selected) {
   return [lng, lat];
 }
 
-function flyToGeocoderResult(selected, map) {
+async function flyToGeocoderResult(selected, map) {
   const targetMap = map || _geocoder?._map || getLeafletMap();
   const center = resolveCoords(selected);
   if (!targetMap || !center) return;
+
+  placeSearchMarker(selected, targetMap);
+  showSearchInfo(selected);
+
+  if (isPolygonSearchResult(selected)) {
+    const feature = await drawPolygonHighlight(selected, targetMap);
+    if (feature && fitMapToFeature(targetMap, feature)) return;
+  } else {
+    clearGeocoderHighlight(targetMap);
+  }
+
   try {
     targetMap.flyTo({ center, zoom: FLY_ZOOM, speed: 1.25, essential: true });
   } catch (err) {
     console.warn("[visor geocoder] flyTo:", err);
   }
-  placeSearchMarker(selected, targetMap);
-  showSearchInfo(selected);
 }
 
 function bindGeocoderEvents(geocoder) {
@@ -269,6 +342,7 @@ function bindGeocoderEvents(geocoder) {
   geocoder.on("clear", () => {
     removeSearchMarker();
     hideSearchInfo();
+    clearGeocoderHighlight(geocoder._map || getLeafletMap());
   });
 
   geocoder._inputEl?.addEventListener(
@@ -307,6 +381,7 @@ function updateGeocoderUi() {
 function detachGeocoder(map) {
   removeSearchMarker();
   removeInfoPanel();
+  teardownGeocoderHighlight(map);
   if (!_geocoder || !map) return;
   try {
     map.removeControl(_geocoder);
@@ -369,6 +444,7 @@ export function teardownVisorGeocoder() {
 export function clearVisorGeocoderSearch() {
   removeSearchMarker();
   hideSearchInfo();
+  clearGeocoderHighlight(getLeafletMap());
   if (_geocoder) {
     try {
       _geocoder.clear();

@@ -645,6 +645,60 @@ const BASE_LAYER_PAINT = {
 
 const BASE_LAYER_IDS = ["base-osm", "base-inegi", "base-sat"];
 
+/** Opciones de mapa base disponibles en el visor (comparador y selector). */
+export const VISOR_BASEMAP_CHOICES = [
+  { key: "osm", label: "OpenStreetMap", short: "OSM" },
+  { key: "inegi", label: "Mapa base INEGI", short: "INEGI" },
+  { key: "sat", label: "Imagen satelital Esri", short: "Satélite" },
+  { key: "local", label: "Mapa base local (MBTiles)", short: "Local" },
+];
+
+function normalizeBaseKind(kind) {
+  return kind === "sat" || kind === "inegi" || kind === "local" ? kind : "osm";
+}
+
+function applyBaseVisibilityOnMap(map, kind) {
+  if (!map) return;
+  const normalized = normalizeBaseKind(kind);
+  BASE_LAYER_IDS.forEach((id) => {
+    const on = id === `base-${normalized}`;
+    safeSetLayout(map, id, "visibility", on ? "visible" : "none");
+  });
+  setLocalBasemapVisible(map, normalized === "local");
+}
+
+/**
+ * Aplica un mapa base en cualquier instancia MapLibre (p. ej. mapa del comparador).
+ * No modifica `_activeBase` del mapa principal.
+ * @param {import("maplibre-gl").Map} map
+ * @param {string} kind
+ * @returns {Promise<boolean>}
+ */
+export async function applyMapInstanceBaseLayer(map, kind) {
+  if (!map) return false;
+  const normalized = normalizeBaseKind(kind);
+  ensureBaseLayers(map);
+
+  if (normalized === "local") {
+    const ok = await ensureLocalBasemap(map);
+    if (!ok) {
+      applyBaseVisibilityOnMap(map, "osm");
+      return false;
+    }
+    // OSM Bright recarga sprite/glyphs y puede borrar iconos addImage de capas symbol.
+    invalidateOverlaySymbolIconsOnMap(map);
+  } else {
+    setLocalBasemapVisible(map, false);
+  }
+
+  applyBaseVisibilityOnMap(map, normalized);
+  return true;
+}
+
+export function getActiveMapBase() {
+  return _activeBase;
+}
+
 /** Respaldo WGS84 (Guerrero) si Martin aún no devolvió features. */
 const MXSIG_BOUNDS = [
   [-102.18435117971923, 16.315952579781328],
@@ -675,6 +729,7 @@ let _map = null;
 let _maplibregl = null;
 let _activeBase = "osm";
 let _homeMode = false;
+let _geoViewLock = false;
 let _homeHighlightCve = null;
 let _interactionLocked = false;
 let _focusCve = null;
@@ -1450,7 +1505,7 @@ function ensureBaseLayers(map) {
 
 function syncRefocusControlVisibility() {
   if (!_refocusCtrl) return;
-  const hideZoom = Boolean(_homeMode);
+  const hideZoom = Boolean(_homeMode || _geoViewLock);
   _refocusCtrl.querySelectorAll("[data-zoom]").forEach((el) => {
     el.style.display = hideZoom ? "none" : "";
   });
@@ -1909,6 +1964,97 @@ function overlaySymbolIconLoader(def) {
   return async () => {};
 }
 
+/** Invalida caché de iconos symbol (p. ej. tras setSprite del mapa base local). */
+export function invalidateOverlaySymbolIconsOnMap(map) {
+  if (!map) return;
+  delete map.__atlasLocsPuntoIconsVersion;
+  delete map.__atlasCluesIconsVersion;
+  delete map.__atlasDenueIconsVersion;
+  delete map.__atlasResiduoIconsVersion;
+  delete map.__atlasSaneamientoIconsVersion;
+}
+
+/** Vuelve a registrar iconos symbol tras invalidar (mapa local / comparador). */
+export function rebootstrapOverlaySymbolIconsOnMap(map) {
+  invalidateOverlaySymbolIconsOnMap(map);
+  return ensureOverlaySymbolIconsOnMap(map);
+}
+
+/** Registra en el mapa los sprites SVG de overlays symbol (comparador, clon de estilo). */
+function ensureOverlaySymbolIconsOnMap(map) {
+  if (!map) return Promise.resolve();
+  const loaders = new Set();
+  for (const def of OVERLAY_DEFS) {
+    if (!overlayNeedsIconBootstrap(def)) continue;
+    loaders.add(overlaySymbolIconLoader(def));
+  }
+  return Promise.all(
+    [...loaders].map((load) =>
+      load(map).catch((err) => {
+        console.warn("[map] iconos symbol en mapa secundario:", err);
+      }),
+    ),
+  );
+}
+
+/** Quita capas symbol clonadas del estilo (el comparador las recrea con iconos propios). */
+function stripClonedSymbolOverlayLayers(map) {
+  if (!map || map === _map) return;
+  for (const def of OVERLAY_DEFS) {
+    if (!overlayNeedsIconBootstrap(def) || def.type !== "symbol") continue;
+    const layerId = `ly-${def.key}`;
+    for (const id of collectOverlayLayerIds(map, layerId)) {
+      try {
+        if (map.getLayer(id)) map.removeLayer(id);
+      } catch {
+        /* noop */
+      }
+    }
+  }
+}
+
+/** Recrea capas symbol en el mapa secundario (tras registrar iconos con addImage). */
+function rebuildSymbolOverlayLayersOnMap(map) {
+  if (!map || map === _map) return;
+  for (const def of OVERLAY_DEFS) {
+    if (!overlayNeedsIconBootstrap(def) || def.type !== "symbol") continue;
+    const src = `src-${def.table}`;
+    const layerId = `ly-${def.key}`;
+    if (def.key === "clues") migrateCluesSourceTable(map, def);
+    addMartinSource(map, src, def.table);
+    const spec = {
+      source: src,
+      "source-layer": martinSourceLayer(def.table),
+      filter: munFilter("001"),
+    };
+    if (def.minzoom != null) spec.minzoom = def.minzoom;
+    if (map.getLayer(layerId)) continue;
+    map.addLayer({
+      ...spec,
+      id: layerId,
+      layout: { visibility: "none", ...(def.layout || {}) },
+      type: "symbol",
+      paint: def.paint || {},
+    });
+  }
+}
+
+function finishSymbolOverlayActivation(map, def, layerId, keyGenAtStart) {
+  if (keyGenAtStart !== _overlayKeyGen[def.key]) return;
+  if (!_overlayActive[def.key]) {
+    forceOverlayGroupOff(map, def.key);
+    return;
+  }
+  setLayerVisible(map, layerId, true, resolveVisorOverlayCve(_focusCve));
+  ensureOverlayLabelLayer(map, def);
+  if (map !== _map && _map?.isStyleLoaded?.()) {
+    copyVisorOverlayRuntime(_map, map);
+    reapplyVisorThematicOpacityToMap(map);
+  }
+  refreshOverlayTipBindings(map, overlayLayerIds);
+  notifyVisorOverlaysChanged();
+}
+
 function ensureRncOverlayLayers(map, def) {
   const src = `src-${def.table}`;
   const layerId = `ly-${def.key}`;
@@ -2012,7 +2158,17 @@ function ensureOverlayLayer(map, def) {
       return layerId;
     }
   } else if (map.getLayer(layerId)) {
-    if (_overlayActive[def.key]) ensureOverlayLabelLayer(map, def);
+    if (_overlayActive[def.key]) {
+      ensureOverlayLabelLayer(map, def);
+      if (overlayNeedsIconBootstrap(def)) {
+        const keyGenAtStart = _overlayKeyGen[def.key] || 0;
+        void overlaySymbolIconLoader(def)(map)
+          .then(() => finishSymbolOverlayActivation(map, def, layerId, keyGenAtStart))
+          .catch((err) => {
+            console.warn("[map] iconos overlay", def.key, err);
+          });
+      }
+    }
     return layerId;
   }
 
@@ -2026,35 +2182,22 @@ function ensureOverlayLayer(map, def) {
     });
   } else if (def.type === "symbol") {
     const keyGenAtStart = _overlayKeyGen[def.key] || 0;
-    const activateSymbolOverlay = () => {
-      if (keyGenAtStart !== _overlayKeyGen[def.key]) return;
-      if (!_overlayActive[def.key]) {
-        forceOverlayGroupOff(map, def.key);
-        return;
-      }
-      setLayerVisible(map, layerId, true, resolveVisorOverlayCve(_focusCve));
-      ensureOverlayLabelLayer(map, def);
-      refreshOverlayTipBindings(map, overlayLayerIds);
-      notifyVisorOverlaysChanged();
-    };
     void overlaySymbolIconLoader(def)(map)
       .then(() => {
         if (keyGenAtStart !== _overlayKeyGen[def.key]) {
           if (!_overlayActive[def.key]) forceOverlayGroupOff(map, def.key);
           return;
         }
-        if (map.getLayer(layerId)) {
-          activateSymbolOverlay();
-          return;
+        if (!map.getLayer(layerId)) {
+          map.addLayer({
+            ...spec,
+            id: layerId,
+            layout: { visibility: "none", ...(def.layout || {}) },
+            type: "symbol",
+            paint: def.paint || {},
+          });
         }
-        map.addLayer({
-          ...spec,
-          id: layerId,
-          layout: { visibility: "none", ...(def.layout || {}) },
-          type: "symbol",
-          paint: def.paint || {},
-        });
-        activateSymbolOverlay();
+        finishSymbolOverlayActivation(map, def, layerId, keyGenAtStart);
       })
       .catch((err) => {
         console.warn("[map] iconos overlay", def.key, err);
@@ -2094,6 +2237,8 @@ function hideVisorThematicLayersOnMap(map) {
   if (!map) return;
   ensureThematicMartinLayers(map);
   syncOverlayLayersFromState(map, null, { forceAllOff: true });
+  const c = pad3(_focusCve || "001");
+  setLayerVisible(map, "ly-clima", false, c);
 }
 
 /** Apaga todas las sub-capas de un overlay temático. */
@@ -2294,12 +2439,20 @@ export function syncVisorOverlayLayersFromState() {
  * Replica en otra instancia MapLibre (p. ej. mapa INEGI del comparador) el estado
  * de capas temáticas del visor: crea capas faltantes y aplica visibilidad/filtros.
  * @param {import("maplibre-gl").Map} map
+ * @returns {Promise<void>}
  */
 export function syncVisorOverlayLayersOnMap(map) {
-  if (!map) return;
+  if (!map) return Promise.resolve();
   const run = () => {
     ensureThematicMartinLayers(map);
-    OVERLAY_DEFS.forEach((d) => ensureOverlayLayer(map, d));
+    if (map !== _map) {
+      stripClonedSymbolOverlayLayers(map);
+      rebuildSymbolOverlayLayersOnMap(map);
+    }
+    for (const def of OVERLAY_DEFS) {
+      if (map !== _map && overlayNeedsIconBootstrap(def) && def.type === "symbol") continue;
+      ensureOverlayLayer(map, def);
+    }
     for (const key of Object.keys(VISOR_ONLY_LABEL_SPECS)) {
       ensureVisorOnlyLabelLayer(map, key);
     }
@@ -2307,6 +2460,7 @@ export function syncVisorOverlayLayersOnMap(map) {
     OVERLAY_DEFS.forEach((d) => ensureOverlayLabelLayer(map, d));
     if (map !== _map && _map?.isStyleLoaded?.()) {
       copyVisorOverlayRuntime(_map, map);
+      reapplyVisorThematicOpacityToMap(map);
     }
     if (map !== _map) {
       if (!map.__atlasColoniasLabelsBound) {
@@ -2320,11 +2474,28 @@ export function syncVisorOverlayLayersOnMap(map) {
     }
     refreshOverlayTipBindings(map, overlayLayerIds);
   };
-  if (map.isStyleLoaded()) {
-    run();
-    return;
-  }
-  map.once("load", run);
+  return new Promise((resolve) => {
+    const start = () => {
+      if (!map.isStyleLoaded()) {
+        map.once("load", start);
+        return;
+      }
+      if (map !== _map) {
+        void ensureOverlaySymbolIconsOnMap(map).then(() => {
+          if (!map.isStyleLoaded()) {
+            resolve();
+            return;
+          }
+          run();
+          resolve();
+        });
+        return;
+      }
+      run();
+      resolve();
+    };
+    start();
+  });
 }
 
 /** @type {(() => void) | null} */
@@ -2863,6 +3034,23 @@ function applyGeoThematicLayers(map, activeTab, cve, inGeo) {
   _relieveActive = on("relieve");
 }
 
+/** Apaga de inmediato relieve, clima, hidrología y uso de suelo (Datos geográficos). */
+function hideGeoThematicLayersOnMap(map) {
+  if (!map) return;
+  _relieveActive = false;
+  const c = pad3(_focusCve || "001");
+  try {
+    ensureThematicMartinLayers(map);
+  } catch {
+    /* capas aún no listas */
+  }
+  setLayerVisible(map, MARTIN_USO_SUELO.layerId, false, c);
+  setLayerVisible(map, "ly-clima", false, c);
+  setHidroCorrientesVisible(map, false, c);
+  setHidroCuerposVisible(map, false, c);
+  setCurnivelLayersVisible(map, false, c);
+}
+
 /** Una sola pasada: solo la pestaña activa de Datos geográficos (evita carreras async). */
 export function syncGeoThematicLayers(activeTab, cve, inGeo) {
   const gen = ++_geoThematicGen;
@@ -2879,6 +3067,10 @@ export function syncGeoThematicLayers(activeTab, cve, inGeo) {
 
 /** Apaga todas las capas temáticas de Datos geográficos. */
 export function clearGeoThematicLayers() {
+  ++_geoThematicGen;
+  if (_map) {
+    hideGeoThematicLayersOnMap(_map);
+  }
   syncGeoThematicLayers("", null, false);
 }
 
@@ -3019,6 +3211,7 @@ function applyHomeMapModeLayers(map, homeMode) {
       _overlayActive[d.key] = false;
     });
     hideVisorThematicLayersOnMap(map);
+    hideGeoThematicLayersOnMap(map);
     ensureHomeGeometryStack(map);
     show(LAYER_IDS.entFill, true);
     show(LAYER_IDS.marcoEntCasing, false);
@@ -3054,6 +3247,10 @@ function applyHomeMapModeLayers(map, homeMode) {
   }
 }
 
+function syncMapInteractionLock() {
+  applyMapInteractionLock(_homeMode || _geoViewLock);
+}
+
 function applyMapInteractionLock(locked) {
   if (!_map || !_atlasLayersReady) return;
   _interactionLocked = Boolean(locked);
@@ -3087,7 +3284,7 @@ export function setHomeMapMode(active) {
     if (gen !== _homeModeGen) return;
     if (_homeMode !== targetMode) return;
     applyHomeMapModeLayers(map, targetMode);
-    applyMapInteractionLock(targetMode);
+    syncMapInteractionLock();
     if (!targetMode && _focusCve && isOutlineOnlyProfile(_lastFocusProfile)) {
       setMunicipioOutlineOnly(map, _focusCve, true);
     }
@@ -3226,6 +3423,31 @@ export function setMapInteractionLocked(locked) {
   applyMapInteractionLock(locked);
 }
 
+/** Datos Geográficos: mapa fijo (sin pan/zoom) y sin herramientas del visor. */
+export function setGeoMapViewLock(active) {
+  const target = Boolean(active);
+  const wasGeoLock = _geoViewLock;
+  _geoViewLock = target;
+  const el = document.getElementById("mapFrame");
+  el?.classList.toggle("atlas-map--geo-lock", target);
+
+  if (wasGeoLock && !target) {
+    clearGeoThematicLayers();
+  }
+
+  const apply = () => {
+    if (_geoViewLock !== target) return;
+    syncMapInteractionLock();
+    syncRefocusControlVisibility();
+  };
+
+  if (!_map || !_atlasLayersReady) {
+    whenAtlasMapReady(apply);
+    return;
+  }
+  apply();
+}
+
 export function restoreMapZoomControls() {
   if (!_map) return;
   whenAtlasMapReady((map) => {
@@ -3242,16 +3464,12 @@ export function restoreMapZoomControls() {
 
 export function setMapBaseLayer(kind) {
   if (!_map) return;
-  _activeBase = kind === "sat" || kind === "inegi" || kind === "local" ? kind : "osm";
+  _activeBase = normalizeBaseKind(kind);
   whenAtlasMapReady((map) => {
     ensureBaseLayers(map);
 
     const applyVisibility = () => {
-      BASE_LAYER_IDS.forEach((id) => {
-        const on = id === `base-${_activeBase}`;
-        safeSetLayout(map, id, "visibility", on ? "visible" : "none");
-      });
-      setLocalBasemapVisible(map, _activeBase === "local");
+      applyBaseVisibilityOnMap(map, _activeBase);
       syncBaseLayerButtons();
       refreshHomeMapAfterBasemapChange();
     };
@@ -3267,7 +3485,6 @@ export function setMapBaseLayer(kind) {
       return;
     }
 
-    setLocalBasemapVisible(map, false);
     applyVisibility();
   });
 }

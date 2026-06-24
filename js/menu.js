@@ -28,7 +28,7 @@ const SECTION_ICON_SRC = {
   viv: "./assets/icons/menu/viv.svg",
   eco: "./assets/icons/menu/eco.svg",
   gov: "./assets/icons/menu/gov.svg",
-  contacto: "./assets/icons/menu/contacto.svg",
+  sitios_interes: "./assets/icons/menu/sitios-interes.svg",
 };
 
 function sectionIcon(sectionId) {
@@ -45,11 +45,19 @@ function sectionIcon(sectionId) {
 }
 
 let _collapseAllMenuSections = null;
+let _clearActiveMenuItem = null;
 
 /** Cierra todas las temáticas del acordeón (p. ej. al pulsar Inicio). */
 export function collapseAllMenuSections() {
   if (typeof _collapseAllMenuSections === "function") {
     _collapseAllMenuSections();
+  }
+}
+
+/** Quita el resaltado del indicador activo (p. ej. al volver a Explorador municipal). */
+export function clearActiveMenuItem() {
+  if (typeof _clearActiveMenuItem === "function") {
+    _clearActiveMenuItem();
   }
 }
 
@@ -164,6 +172,12 @@ export function createMenu(root, sections, { onSelect }) {
   _collapseAllMenuSections = () => {
     for (let i = 0; i < sectionRefs.length; i++) {
       collapseRef(sectionRefs[i]);
+    }
+  };
+  _clearActiveMenuItem = () => {
+    if (activeItemEl) {
+      activeItemEl.classList.remove("is-active");
+      activeItemEl = null;
     }
   };
 

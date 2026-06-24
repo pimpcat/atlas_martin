@@ -3,12 +3,14 @@
  *
  * Endpoints:
  *   GET  /api/analisis/capas
+ *   POST /api/analisis/capas-intersectantes
  *   GET  /api/capas/{tabla}/columnas
  *   POST /api/analisis/dinamico
  */
 import { apiUrl } from "./atlasConfig.js";
 
 const API_CAPAS_URL = apiUrl("/api/analisis/capas");
+const API_CAPAS_INTERSECT_URL = apiUrl("/api/analisis/capas-intersectantes");
 const API_COLUMNAS_URL = (tabla) => apiUrl(`/api/capas/${encodeURIComponent(tabla)}/columnas`);
 const API_ANALISIS_URL = apiUrl("/api/analisis/dinamico");
 
@@ -36,6 +38,21 @@ export async function fetchCapasAnalisis() {
   const res = await fetch(API_CAPAS_URL, { headers: { Accept: "application/json" } });
   const data = await parseJsonResponse(res);
   if (!data.ok) throw new Error(data.message || "No se pudieron cargar las capas.");
+  return data.capas || [];
+}
+
+/**
+ * Capas INV/ITER con registros dentro del polígono.
+ * @param {{ geojson: object, cve_mun?: string|null }} payload
+ */
+export async function fetchCapasIntersectantes(payload) {
+  const res = await fetch(API_CAPAS_INTERSECT_URL, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await parseJsonResponse(res);
+  if (!data.ok) throw new Error(data.message || "No se pudo comprobar la intersección.");
   return data.capas || [];
 }
 

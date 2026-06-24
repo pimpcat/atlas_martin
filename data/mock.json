@@ -91,21 +91,6 @@
         "Tecpan de Galeana": 90.1,
         "Petatlán": 91.0
       }
-    },
-    "contacto_directorio": {
-      "unit": "",
-      "values": {
-        "Acapulco de Juárez": 1,
-        "Chilpancingo de los Bravo": 1,
-        "Iguala de la Independencia": 1,
-        "Taxco de Alarcón": 1,
-        "Zihuatanejo de Azueta": 1,
-        "Tlapa de Comonfort": 1,
-        "Coyuca de Benítez": 1,
-        "Ometepec": 1,
-        "Tecpan de Galeana": 1,
-        "Petatlán": 1
-      }
     }
   }
 }

@@ -124,6 +124,7 @@ function toggleBufferPanel() {
 function injectBufferToggleButton(map) {
   const group = findVisorDrawButtonGroup(map);
   if (!group) return false;
+  ensureDrawTrashClearsBuffer(map);
   if (group.querySelector(".mapbox-gl-draw_buffer")) {
     _toggleBtn = group.querySelector(".mapbox-gl-draw_buffer");
     return true;
@@ -293,11 +294,15 @@ export function publishVisorBufferFeature(feature, statusMessage) {
 
 export function clearVisorBuffer(options = {}) {
   const { silent = false } = options;
+  const hadBuffer = Boolean(_bufferFeature);
   const sourceId = _sourceFeatureId;
   _bufferFeature = null;
   _sourceFeatureId = null;
   const map = getLeafletMap() || _mapRef;
-  if (map) setBufferLayerData(map, null);
+  if (map) {
+    ensureBufferLayers(map);
+    setBufferLayerData(map, null);
+  }
   syncBufferPanelUi();
 
   if (sourceId != null) {
@@ -320,7 +325,29 @@ export function clearVisorBuffer(options = {}) {
     setStatus("");
     notifyAnalysisTarget();
     refreshPolygonAnalysisTarget();
+    if (hadBuffer && typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("atlas:visor-buffer-cleared"));
+    }
   }
+}
+
+/** El buffer vive fuera de MapboxDraw; la basura nativa no lo borra. */
+export function ensureDrawTrashClearsBuffer(map) {
+  const trash = findVisorDrawButtonGroup(map)?.querySelector(".mapbox-gl-draw_trash");
+  if (!trash || trash.dataset.atlasBufferTrashPatch) return Boolean(trash.dataset.atlasBufferTrashPatch);
+
+  trash.dataset.atlasBufferTrashPatch = "1";
+  trash.addEventListener(
+    "click",
+    () => {
+      queueMicrotask(() => {
+        if (!getActiveBufferFeature()) return;
+        clearVisorBuffer();
+      });
+    },
+    false,
+  );
+  return true;
 }
 
 function parseDistanceMeters() {
@@ -567,11 +594,7 @@ function attachToMap(map) {
   mountBufferPanel(map);
   scheduleBufferButtonInjection(map);
   bindDrawEvents(map);
-  map.once("idle", () => {
-    ensureBufferLayers(map);
-    scheduleBufferButtonInjection(map);
-  });
-  ensureBufferLayers(map);
+  map.once("idle", () => scheduleBufferButtonInjection(map));
 }
 
 function tryAttach(attempt = 0) {

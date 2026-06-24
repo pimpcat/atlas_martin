@@ -237,15 +237,15 @@ export function getMenuModel() {
       ],
     },
     {
-      id: "contacto",
-      title: "Contacto",
+      id: "sitios_interes",
+      title: "Sitios de interés",
       items: [
         {
-          id: "contacto_directorio",
-          title: "Directorio",
-          subtitle: "Ejemplo",
+          id: "sitios_acervo",
+          title: "Acervo estadístico y geográfico",
+          subtitle: "INEGI · portales y programas",
           unit: "",
-          viewParam: "bGF0OjE3LjQ5MTA0LGxvbjotOTkuOTMzNzAsejo1LGw6YzEwMA==",
+          sitiosInteres: true,
         },
       ],
     },

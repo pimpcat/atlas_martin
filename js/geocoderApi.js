@@ -10,7 +10,7 @@
 
  *
 
- * @see app_api/geocoder.py  Consulta UNION ALL sobre c_loc_punto, c_col_ase (por municipio)
+ * @see app_api/geocoder.py  c_loc_punto, c_l, c_col_ase (y c_mun a nivel estatal)
 
  * @see visorGeocoder.js     MaplibreGeocoder + forwardGeocode
 
@@ -21,6 +21,7 @@ import { apiUrl } from "./atlasConfig.js";
 
 
 const API_BUSCAR_URL = apiUrl("/api/buscar");
+const API_BUSCAR_GEOM_URL = apiUrl("/api/buscar/geometria");
 
 
 
@@ -35,11 +36,9 @@ const API_BUSCAR_URL = apiUrl("/api/buscar");
  * @property {string} tabla_origen
 
  * @property {string} id_origen
-
+ * @property {string} [geom_tipo]
  * @property {number} lng
-
  * @property {number} lat
-
  */
 
 
@@ -155,6 +154,13 @@ export function geocoderRowsToFeatureCollection(rows) {
           cvegeo: r.id_origen || "",
           tabla_origen: r.tabla_origen || "",
           id_origen: r.id_origen || "",
+          geom_tipo:
+            r.geom_tipo ||
+            (r.tabla_origen === "c_col_ase" ||
+            r.tabla_origen === "c_l" ||
+            r.tabla_origen === "c_mun"
+              ? "polygon"
+              : "point"),
           lng: r.lng,
           lat: r.lat,
         },
@@ -165,6 +171,33 @@ export function geocoderRowsToFeatureCollection(rows) {
 
   return { type: "FeatureCollection", features };
 
+}
+
+
+
+/** Geometría WGS84 de colonia o municipio (para dibujar contorno en el mapa). */
+export async function fetchBuscarGeometria(tabla, cvegeo) {
+  const tablaLc = String(tabla || "").trim().toLowerCase();
+  const clave = String(cvegeo || "").trim();
+  if (!tablaLc || !clave) {
+    throw new Error("Parámetros de geometría incompletos");
+  }
+  const url = `${API_BUSCAR_GEOM_URL}?tabla=${encodeURIComponent(tablaLc)}&cvegeo=${encodeURIComponent(clave)}`;
+  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      (typeof data.detail === "object" && data.detail?.message) ||
+      (typeof data.detail === "string" && data.detail) ||
+      data.message ||
+      res.statusText ||
+      "No se pudo cargar la geometría";
+    throw new Error(msg);
+  }
+  if (!data.ok || !data.feature) {
+    throw new Error(data.message || "Geometría no disponible");
+  }
+  return data;
 }
 
 

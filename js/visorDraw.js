@@ -10,8 +10,272 @@ let _mapRef = null;
 let _onDrawChange = null;
 let _lastPolygonFeature = null;
 let _drawGeodesicReady = false;
+let _circleClickMode = false;
+let _circleClickHandler = null;
+let _circleModeChangeHandler = null;
+let _radiusDialogEl = null;
+let _radiusDialogOutsideHandler = null;
+let _pendingCircleCenter = null;
 
 const DRAW_CONTROL_POSITION = "top-right";
+
+/** Trazo de medición: alto contraste sobre OSM, satélite y relieve. */
+const MEASURE_LINE_CORE = "#FF1F8F";
+const MEASURE_LINE_ACTIVE = "#FFD400";
+const MEASURE_LINE_HALO = "#FFFFFF";
+const MEASURE_LINE_CASING = "#0B1F33";
+const MEASURE_POLYGON_STROKE = "#FF1F8F";
+const MEASURE_POLYGON_ACTIVE = "#FFD400";
+const MEASURE_POLYGON_FILL_OPACITY = 0.24;
+const MEASURE_POLYGON_FILL_OPACITY_ACTIVE = 0.32;
+
+const MEASURE_LINE_WIDTH = ["interpolate", ["linear"], ["zoom"], 8, 4, 12, 5.5, 16, 7, 20, 9];
+const MEASURE_LINE_CASING_WIDTH = ["interpolate", ["linear"], ["zoom"], 8, 6, 12, 8, 16, 10, 20, 12];
+const MEASURE_LINE_HALO_WIDTH = ["interpolate", ["linear"], ["zoom"], 8, 8, 12, 10, 16, 13, 20, 16];
+
+const DRAW_LINE_LAYER_RE = /^gl-draw-line/;
+const DRAW_POLYGON_LAYER_RE = /^gl-draw-polygon/;
+const POLYGON_FILTER = ["==", "$type", "Polygon"];
+const ACTIVE_EXPR = ["==", ["get", "active"], "true"];
+
+function cloneDrawThemeLayer(layer) {
+  return {
+    ...layer,
+    layout: layer.layout ? { ...layer.layout } : undefined,
+    paint: layer.paint ? { ...layer.paint } : undefined,
+    filter: Array.isArray(layer.filter) ? JSON.parse(JSON.stringify(layer.filter)) : layer.filter,
+  };
+}
+
+/** Tema por defecto de MapboxDraw (fallback si el bundle no expone lib.theme). */
+function fallbackDrawTheme() {
+  const blue = "#3bb2d0";
+  const orange = "#fbb03b";
+  const white = "#fff";
+  return [
+    {
+      id: "gl-draw-polygon-fill",
+      type: "fill",
+      filter: ["all", ["==", "$type", "Polygon"]],
+      paint: {
+        "fill-color": ["case", ["==", ["get", "active"], "true"], orange, blue],
+        "fill-opacity": 0.1,
+      },
+    },
+    {
+      id: "gl-draw-lines",
+      type: "line",
+      filter: ["any", ["==", "$type", "LineString"], ["==", "$type", "Polygon"]],
+      layout: { "line-cap": "round", "line-join": "round" },
+      paint: {
+        "line-color": ["case", ["==", ["get", "active"], "true"], orange, blue],
+        "line-dasharray": ["case", ["==", ["get", "active"], "true"], ["literal", [0.2, 2]], ["literal", [2, 0]]],
+        "line-width": 2,
+      },
+    },
+    {
+      id: "gl-draw-point-outer",
+      type: "circle",
+      filter: ["all", ["==", "$type", "Point"], ["==", "meta", "feature"]],
+      paint: {
+        "circle-radius": ["case", ["==", ["get", "active"], "true"], 7, 5],
+        "circle-color": white,
+      },
+    },
+    {
+      id: "gl-draw-point-inner",
+      type: "circle",
+      filter: ["all", ["==", "$type", "Point"], ["==", "meta", "feature"]],
+      paint: {
+        "circle-radius": ["case", ["==", ["get", "active"], "true"], 5, 3],
+        "circle-color": ["case", ["==", ["get", "active"], "true"], orange, blue],
+      },
+    },
+    {
+      id: "gl-draw-vertex-outer",
+      type: "circle",
+      filter: ["all", ["==", "$type", "Point"], ["==", "meta", "vertex"], ["!=", "mode", "simple_select"]],
+      paint: {
+        "circle-radius": ["case", ["==", ["get", "active"], "true"], 8, 6],
+        "circle-color": white,
+      },
+    },
+    {
+      id: "gl-draw-vertex-inner",
+      type: "circle",
+      filter: ["all", ["==", "$type", "Point"], ["==", "meta", "vertex"], ["!=", "mode", "simple_select"]],
+      paint: {
+        "circle-radius": ["case", ["==", ["get", "active"], "true"], 6, 4],
+        "circle-color": MEASURE_LINE_ACTIVE,
+      },
+    },
+    {
+      id: "gl-draw-midpoint",
+      type: "circle",
+      filter: ["all", ["==", "meta", "midpoint"]],
+      paint: {
+        "circle-radius": 4,
+        "circle-color": MEASURE_LINE_ACTIVE,
+      },
+    },
+  ];
+}
+
+function getDefaultDrawTheme(MapboxDraw) {
+  const theme = MapboxDraw?.lib?.theme || MapboxDraw?.constants?.theme;
+  if (Array.isArray(theme) && theme.length) {
+    return theme.map(cloneDrawThemeLayer);
+  }
+  return fallbackDrawTheme();
+}
+
+function buildMeasurePolygonLayers() {
+  const lineCap = { "line-cap": "round", "line-join": "round" };
+  const strokeColor = ["case", ACTIVE_EXPR, MEASURE_POLYGON_ACTIVE, MEASURE_POLYGON_STROKE];
+  const fillColor = ["case", ACTIVE_EXPR, MEASURE_POLYGON_ACTIVE, MEASURE_POLYGON_STROKE];
+  const fillOpacity = ["case", ACTIVE_EXPR, MEASURE_POLYGON_FILL_OPACITY_ACTIVE, MEASURE_POLYGON_FILL_OPACITY];
+
+  return [
+    {
+      id: "gl-draw-polygon-fill",
+      type: "fill",
+      filter: POLYGON_FILTER,
+      paint: {
+        "fill-color": fillColor,
+        "fill-opacity": fillOpacity,
+        "fill-outline-color": "transparent",
+      },
+    },
+    {
+      id: "gl-draw-polygon-line-halo",
+      type: "line",
+      filter: POLYGON_FILTER,
+      layout: lineCap,
+      paint: {
+        "line-color": MEASURE_LINE_HALO,
+        "line-width": MEASURE_LINE_HALO_WIDTH,
+        "line-opacity": 0.92,
+      },
+    },
+    {
+      id: "gl-draw-polygon-line-casing",
+      type: "line",
+      filter: POLYGON_FILTER,
+      layout: lineCap,
+      paint: {
+        "line-color": MEASURE_LINE_CASING,
+        "line-width": MEASURE_LINE_CASING_WIDTH,
+        "line-opacity": 0.88,
+      },
+    },
+    {
+      id: "gl-draw-polygon-line-core",
+      type: "line",
+      filter: POLYGON_FILTER,
+      layout: lineCap,
+      paint: {
+        "line-color": strokeColor,
+        "line-width": MEASURE_LINE_WIDTH,
+        "line-opacity": 1,
+      },
+    },
+  ];
+}
+
+function buildMeasureLineLayers() {
+  const lineCap = { "line-cap": "round", "line-join": "round" };
+  const lineFilter = ["all", ["==", "$type", "LineString"]];
+  const activeColor = ["case", ["==", ["get", "active"], "true"], MEASURE_LINE_ACTIVE, MEASURE_LINE_CORE];
+
+  return [
+    {
+      id: "gl-draw-line-halo",
+      type: "line",
+      filter: lineFilter,
+      layout: lineCap,
+      paint: {
+        "line-color": MEASURE_LINE_HALO,
+        "line-width": MEASURE_LINE_HALO_WIDTH,
+        "line-opacity": 0.95,
+      },
+    },
+    {
+      id: "gl-draw-line-casing",
+      type: "line",
+      filter: lineFilter,
+      layout: lineCap,
+      paint: {
+        "line-color": MEASURE_LINE_CASING,
+        "line-width": MEASURE_LINE_CASING_WIDTH,
+        "line-opacity": 0.88,
+      },
+    },
+    {
+      id: "gl-draw-line-core",
+      type: "line",
+      filter: lineFilter,
+      layout: lineCap,
+      paint: {
+        "line-color": activeColor,
+        "line-width": MEASURE_LINE_WIDTH,
+        "line-opacity": 1,
+        "line-dasharray": ["case", ["==", ["get", "active"], "true"], ["literal", [1.4, 1.1]], ["literal", [1, 0]]],
+      },
+    },
+  ];
+}
+
+/** Estilos Draw del visor: polígonos/círculos y líneas visibles sobre cualquier mapa base. */
+function buildVisorDrawStyles(MapboxDraw) {
+  const base = getDefaultDrawTheme(MapboxDraw);
+  const rest = base.filter((layer) => {
+    if (layer.id === "gl-draw-polygon-fill") return false;
+    if (layer.type === "line" && (layer.id === "gl-draw-lines" || DRAW_LINE_LAYER_RE.test(layer.id))) {
+      return false;
+    }
+    if (DRAW_POLYGON_LAYER_RE.test(layer.id)) return false;
+    return true;
+  });
+
+  return [...rest, ...buildMeasurePolygonLayers(), ...buildMeasureLineLayers()];
+}
+
+function patchLegacyDrawStyleLayers(map) {
+  if (!map?.getStyle?.()?.layers) return;
+  for (const layer of map.getStyle().layers) {
+    if (layer.id === "gl-draw-polygon-fill" && layer.type === "fill") {
+      try {
+        map.setPaintProperty(layer.id, "fill-color", MEASURE_POLYGON_STROKE);
+        map.setPaintProperty(layer.id, "fill-opacity", MEASURE_POLYGON_FILL_OPACITY);
+      } catch {
+        /* capa en transición */
+      }
+      continue;
+    }
+    if (layer.type !== "line" || !DRAW_LINE_LAYER_RE.test(layer.id)) continue;
+    if (layer.id.includes("halo") || layer.id.includes("casing") || layer.id.includes("core")) continue;
+    try {
+      map.setLayoutProperty(layer.id, "line-cap", "round");
+      map.setLayoutProperty(layer.id, "line-join", "round");
+      map.setPaintProperty(layer.id, "line-color", MEASURE_LINE_CORE);
+      map.setPaintProperty(layer.id, "line-width", MEASURE_LINE_WIDTH);
+      map.setPaintProperty(layer.id, "line-opacity", 1);
+      map.setPaintProperty(layer.id, "line-dasharray", [1, 0]);
+    } catch {
+      /* capa en transición */
+    }
+  }
+}
+
+function scheduleDrawLineStylePatch(map) {
+  if (!map) return;
+  const run = () => patchLegacyDrawStyleLayers(map);
+  if (map.isStyleLoaded?.()) {
+    requestAnimationFrame(run);
+  } else {
+    map.once("load", run);
+  }
+}
 
 function getMapboxDraw() {
   if (typeof MapboxDraw !== "undefined") return MapboxDraw;
@@ -410,10 +674,222 @@ function findDrawButtonGroup(map) {
   return findVisorDrawButtonGroup(map);
 }
 
+function getDrawUiShell(map) {
+  const container = map?.getContainer?.();
+  if (!container) return null;
+  return (
+    container.closest(".visor-map-frame-wrap") ||
+    container.closest(".map-frame-wrap") ||
+    container.parentElement ||
+    container
+  );
+}
+
+function hideCircleRadiusDialog() {
+  if (_radiusDialogOutsideHandler) {
+    document.removeEventListener("mousedown", _radiusDialogOutsideHandler, true);
+    _radiusDialogOutsideHandler = null;
+  }
+  _radiusDialogEl?.remove();
+  _radiusDialogEl = null;
+  _pendingCircleCenter = null;
+}
+
+function parseCircleRadiusMeters(raw) {
+  const value = Number(String(raw ?? "").replace(",", ".").trim());
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+function createGeodesicCircleFeature(center, radiusMeters) {
+  const Geodesic = getMapboxDrawGeodesic();
+  const radiusKm = radiusMeters / 1000;
+  if (Geodesic?.createCircle) {
+    return Geodesic.createCircle(center, radiusKm);
+  }
+  return {
+    type: "Feature",
+    properties: { circleRadius: radiusKm },
+    geometry: {
+      type: "Polygon",
+      coordinates: [[center, center, center, center]],
+    },
+  };
+}
+
+function addCircleFromRadiusDialog(draw, map, center, radiusMeters) {
+  if (!draw || !map || !center || !radiusMeters) return false;
+  try {
+    const feature = createGeodesicCircleFeature(center, radiusMeters);
+    const ids = draw.add(feature);
+    const featureIds = Array.isArray(ids) ? ids.map(String) : [String(ids)];
+    deactivateCircleClickMode(draw, map);
+    draw.changeMode("simple_select", { featureIds });
+    onDrawChange();
+    return true;
+  } catch (err) {
+    console.warn("[visorDraw] círculo por radio:", err);
+    return false;
+  }
+}
+
+function showCircleRadiusDialog(draw, map, center) {
+  hideCircleRadiusDialog();
+  _pendingCircleCenter = center;
+
+  const shell = getDrawUiShell(map);
+  if (!shell) return;
+
+  const picker = document.createElement("div");
+  picker.className = "visor-draw-radius-picker";
+  picker.setAttribute("role", "dialog");
+  picker.setAttribute("aria-label", "Radio del círculo en metros");
+
+  const title = document.createElement("div");
+  title.className = "visor-draw-radius-picker__title";
+  title.textContent = "Radio del círculo";
+
+  const hint = document.createElement("p");
+  hint.className = "visor-draw-radius-picker__hint";
+  hint.textContent = "Indica el radio en metros desde el punto elegido.";
+
+  const field = document.createElement("label");
+  field.className = "visor-draw-radius-picker__field";
+  const fieldLabel = document.createElement("span");
+  fieldLabel.textContent = "Radio (m)";
+  const input = document.createElement("input");
+  input.type = "number";
+  input.className = "visor-draw-radius-picker__input";
+  input.min = "1";
+  input.step = "1";
+  input.value = "500";
+  input.inputMode = "decimal";
+  field.append(fieldLabel, input);
+
+  const actions = document.createElement("div");
+  actions.className = "visor-draw-radius-picker__actions";
+
+  const cancelBtn = document.createElement("button");
+  cancelBtn.type = "button";
+  cancelBtn.className = "visor-draw-radius-picker__btn visor-draw-radius-picker__btn--ghost";
+  cancelBtn.textContent = "Cancelar";
+
+  const drawBtn = document.createElement("button");
+  drawBtn.type = "button";
+  drawBtn.className = "visor-draw-radius-picker__btn visor-draw-radius-picker__btn--primary";
+  drawBtn.textContent = "Dibujar";
+
+  const submit = () => {
+    const meters = parseCircleRadiusMeters(input.value);
+    if (!meters) {
+      input.focus();
+      input.select();
+      return;
+    }
+    hideCircleRadiusDialog();
+    addCircleFromRadiusDialog(draw, map, center, meters);
+  };
+
+  cancelBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    hideCircleRadiusDialog();
+    if (_circleClickMode) {
+      map.getCanvas().style.cursor = "crosshair";
+    }
+  });
+  drawBtn.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    submit();
+  });
+  input.addEventListener("keydown", (ev) => {
+    if (ev.key === "Enter") {
+      ev.preventDefault();
+      submit();
+    } else if (ev.key === "Escape") {
+      ev.preventDefault();
+      hideCircleRadiusDialog();
+      if (_circleClickMode) map.getCanvas().style.cursor = "crosshair";
+    }
+  });
+
+  actions.append(cancelBtn, drawBtn);
+  picker.append(title, hint, field, actions);
+  shell.appendChild(picker);
+  _radiusDialogEl = picker;
+
+  _radiusDialogOutsideHandler = (ev) => {
+    if (picker.contains(ev.target)) return;
+    hideCircleRadiusDialog();
+    if (_circleClickMode) map.getCanvas().style.cursor = "crosshair";
+  };
+  document.addEventListener("mousedown", _radiusDialogOutsideHandler, true);
+  requestAnimationFrame(() => {
+    input.focus();
+    input.select();
+  });
+}
+
+function deactivateCircleClickMode(draw, map) {
+  _circleClickMode = false;
+  hideCircleRadiusDialog();
+  if (map && _circleClickHandler) {
+    map.off("click", _circleClickHandler);
+  }
+  _circleClickHandler = null;
+  const canvas = map?.getCanvas?.();
+  if (canvas) canvas.style.cursor = "";
+  const group = findDrawButtonGroup(map);
+  group?.querySelector(".mapbox-gl-draw_circle")?.classList.remove("active");
+  try {
+    draw?.changeMode?.("simple_select");
+  } catch {
+    /* noop */
+  }
+}
+
+function activateCircleClickMode(draw, map) {
+  if (!draw || !map) return;
+  const group = findDrawButtonGroup(map);
+  deactivateCircleClickMode(draw, map);
+  try {
+    draw.changeMode("simple_select");
+  } catch {
+    /* noop */
+  }
+  _circleClickMode = true;
+  group?.querySelectorAll(".mapbox-gl-draw_ctrl-draw-btn").forEach((el) => {
+    el.classList.remove("active");
+  });
+  group?.querySelector(".mapbox-gl-draw_circle")?.classList.add("active");
+  map.getCanvas().style.cursor = "crosshair";
+  _circleClickHandler = (e) => {
+    if (!_circleClickMode || _radiusDialogEl) return;
+    if (e.originalEvent?.target?.closest?.(".maplibregl-ctrl, .mapbox-gl-draw")) return;
+    showCircleRadiusDialog(draw, map, [e.lngLat.lng, e.lngLat.lat]);
+  };
+  map.on("click", _circleClickHandler);
+}
+
+function bindCircleModeGuards(map, draw) {
+  if (!map || !draw || _circleModeChangeHandler) return;
+  _circleModeChangeHandler = (e) => {
+    if (!_circleClickMode) return;
+    if (e.mode && e.mode !== "simple_select") {
+      deactivateCircleClickMode(draw, map);
+    }
+  };
+  map.on("draw.modechange", _circleModeChangeHandler);
+}
+
+function unbindCircleModeGuards(map) {
+  if (!map || !_circleModeChangeHandler) return;
+  map.off("draw.modechange", _circleModeChangeHandler);
+  _circleModeChangeHandler = null;
+}
+
 function injectCircleDrawButton(draw, map) {
   const Geodesic = getMapboxDrawGeodesic();
-  if (!draw || !Geodesic?.enable) return false;
-  if (!draw.options?.modes?.draw_circle) return false;
+  if (!draw || !Geodesic?.createCircle) return false;
 
   const group = findDrawButtonGroup(map || _mapRef);
   if (!group) return false;
@@ -422,22 +898,17 @@ function injectCircleDrawButton(draw, map) {
   const btn = document.createElement("button");
   btn.type = "button";
   btn.className = "mapbox-gl-draw_ctrl-draw-btn mapbox-gl-draw_circle";
-  btn.title = "Dibujar círculo geodésico";
-  btn.setAttribute("aria-label", "Dibujar círculo");
+  btn.title = "Clic en el mapa e indica el radio en metros";
+  btn.setAttribute("aria-label", "Dibujar círculo por radio en metros");
   btn.addEventListener("click", () => {
     try {
-      const active = draw.getMode?.() === "draw_circle";
-      group.querySelectorAll(".mapbox-gl-draw_ctrl-draw-btn").forEach((el) => {
-        el.classList.remove("active");
-      });
-      if (active) {
-        draw.changeMode("simple_select");
-      } else {
-        btn.classList.add("active");
-        draw.changeMode("draw_circle");
+      if (_circleClickMode) {
+        deactivateCircleClickMode(draw, map || _mapRef);
+        return;
       }
+      activateCircleClickMode(draw, map || _mapRef);
     } catch (err) {
-      console.warn("[visorDraw] draw_circle:", err);
+      console.warn("[visorDraw] círculo por radio:", err);
     }
   });
 
@@ -451,10 +922,14 @@ function scheduleCircleButtonInjection(draw, map, attempt = 0) {
   const circleOk = injectCircleDrawButton(draw, map);
   const trashOk = patchTrashDeleteButton(draw, map);
   const geodesic = getMapboxDrawGeodesic();
-  if (trashOk && (circleOk || !geodesic?.enable)) return;
+  if (trashOk && (circleOk || !geodesic?.createCircle)) return;
   if (attempt < 16) {
     setTimeout(() => scheduleCircleButtonInjection(draw, map, attempt + 1), 120);
   }
+}
+
+function drawHasCircleMode(draw) {
+  return Boolean(getMapboxDrawGeodesic()?.createCircle);
 }
 
 /**
@@ -486,13 +961,9 @@ function patchTrashDeleteButton(draw, map) {
       }
       draw.delete(String(id));
     },
-    true
+    true,
   );
   return true;
-}
-
-function drawHasCircleMode(draw) {
-  return Boolean(draw?.options?.modes?.draw_circle);
 }
 
 function ensureDrawControl(map) {
@@ -533,16 +1004,19 @@ function ensureDrawControl(map) {
     },
     modes: buildDrawModes(MapboxDraw),
     defaultMode: "simple_select",
+    styles: buildVisorDrawStyles(MapboxDraw),
   });
 
   map.addControl(_draw, DRAW_CONTROL_POSITION);
   _mapRef = map;
+  scheduleDrawLineStylePatch(map);
   _drawGeodesicReady = Boolean(Geodesic && drawHasCircleMode(_draw));
   if (typeof window !== "undefined") {
     window.atlasVisorDraw = _draw;
   }
   ensureAreaPanel(map);
   bindDrawEvents(map, _draw);
+  bindCircleModeGuards(map, _draw);
   scheduleCircleButtonInjection(_draw, map);
   syncDrawMeasurePanel();
   syncPolygonAnalysisTarget();
@@ -551,6 +1025,8 @@ function ensureDrawControl(map) {
 
 function teardownDrawOnMap(map) {
   if (!map) return;
+  deactivateCircleClickMode(_draw, map);
+  unbindCircleModeGuards(map);
   unbindDrawEvents(map);
   if (_draw) {
     try {
