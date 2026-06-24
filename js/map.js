@@ -1220,23 +1220,35 @@ export function getLeafletMap() {
 }
 
 /**
- * Segundo mapa MapLibre para maplibre-gl-compare (misma vista, estilo clonado).
+ * Segundo mapa MapLibre para maplibre-gl-compare.
+ * Por defecto usa estilo mínimo (más rápido y estable); las capas se sincronizan después.
  */
-export function createCompareMapInstance(containerEl, styleSnapshot, viewState) {
+export function createCompareMapInstance(containerEl, styleSnapshot, viewState, options = {}) {
   const ml = getMaplibregl();
   if (!ml) throw new Error("maplibre-gl no está cargado.");
-  return new ml.Map(
-    buildAtlasMapOptions(containerEl, {
-      style: styleSnapshot,
-      center: viewState.center,
-      zoom: viewState.zoom,
-      bearing: viewState.bearing,
-      pitch: viewState.pitch,
-      maxZoom: 22,
-      interactive: true,
-      attributionControl: false,
-    }),
-  );
+  const minimal = options.minimal === true;
+  let style;
+  if (!minimal && styleSnapshot && typeof styleSnapshot === "object") {
+    style = { ...styleSnapshot };
+    const glyphs = style.glyphs;
+    if (
+      typeof glyphs === "string" &&
+      (glyphs.includes("/basemap/fonts") || glyphs === "{fontstack}/{range}.pbf")
+    ) {
+      style.glyphs = MAPLIBRE_GLYPHS_URL;
+    }
+  }
+  const mapOptions = {
+    center: viewState.center,
+    zoom: viewState.zoom,
+    bearing: viewState.bearing,
+    pitch: viewState.pitch,
+    maxZoom: 22,
+    interactive: true,
+    attributionControl: false,
+  };
+  if (style) mapOptions.style = style;
+  return new ml.Map(buildAtlasMapOptions(containerEl, mapOptions));
 }
 
 /** Tooltips hover en cualquier instancia MapLibre (p. ej. mapa del comparador). */

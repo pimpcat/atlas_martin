@@ -1,5 +1,5 @@
 /**
- * Gráfica de barras principal (Chart.js vía CDN) para indicadores mock.
+ * Gráfica de barras principal (Chart.js local) para indicadores mock.
  * Colores tomados de variables CSS del tema (--chart-js-bar-fill, etc.).
  */
 
@@ -29,7 +29,7 @@ export function ensureChart(canvasEl) {
   const barFill = cssVar("--chart-js-bar-fill", accentRgba(0.35));
   const barStroke = cssVar("--chart-js-bar-stroke", accentRgba(0.85));
 
-  // Chart viene del CDN (window.Chart)
+  // Chart viene de ./assets/chart.umd.js (window.Chart)
   const chart = new window.Chart(ctx, {
     type: "bar",
     data: {

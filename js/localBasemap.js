@@ -16,6 +16,13 @@ const BRIGHT_STYLE_PATH = "/atlas_gro/basemap/style-local.json";
 const SPRITE_CDN = "https://cdn.jsdelivr.net/gh/openmaptiles/osm-bright-gl-style@master/sprite";
 const GLYPHS_CDN = "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf";
 
+/** Fuentes que usa style-local.json (OSM Bright). Todas deben existir en basemap/fonts/. */
+const OSM_BRIGHT_FONT_STACKS = [
+  "Noto Sans Regular",
+  "Noto Sans Bold",
+  "Noto Sans Italic",
+];
+
 let _basemapAssetsProbed = false;
 let _basemapUseLocalFonts = false;
 let _basemapUseLocalSprite = false;
@@ -122,15 +129,23 @@ async function resourceExists(url) {
   }
 }
 
+/** Comprueba que existan todos los PBF que el estilo Bright solicita (no solo Regular). */
+async function localGlyphSetsComplete(base) {
+  const checks = await Promise.all(
+    OSM_BRIGHT_FONT_STACKS.map((stack) =>
+      resourceExists(`${base}/fonts/${encodeURIComponent(stack)}/0-255.pbf`),
+    ),
+  );
+  return checks.every(Boolean);
+}
+
 /** @param {import("maplibre-gl").Map} map */
 async function configureBasemapSpriteAndGlyphs(map) {
   const base = basemapAssetsBase();
 
   if (!_basemapAssetsProbed) {
     _basemapUseLocalSprite = await resourceExists(`${base}/sprite.json`);
-    _basemapUseLocalFonts = await resourceExists(
-      `${base}/fonts/Noto%20Sans%20Regular/0-255.pbf`,
-    );
+    _basemapUseLocalFonts = await localGlyphSetsComplete(base);
     _basemapAssetsProbed = true;
   }
 
@@ -143,7 +158,9 @@ async function configureBasemapSpriteAndGlyphs(map) {
     console.info("[local-basemap] Sprites locales no encontrados; usando CDN.");
   }
   if (!_basemapUseLocalFonts) {
-    console.info("[local-basemap] Fuentes locales no encontradas; usando OpenFreeMap.");
+    console.info(
+      "[local-basemap] Fuentes locales incompletas (se requieren Regular, Bold e Italic); usando OpenFreeMap.",
+    );
   }
 
   _basemapSpriteUrl = spriteUrl;
@@ -161,6 +178,19 @@ async function configureBasemapSpriteAndGlyphs(map) {
 
   if (typeof map.setGlyphs === "function") {
     map.setGlyphs(glyphsUrl);
+  }
+
+  if (_basemapUseLocalFonts) {
+    const onGlyphError = (event) => {
+      const url = String(event?.error?.url || event?.url || "");
+      if (!url.includes("/basemap/fonts/")) return;
+      map.off("error", onGlyphError);
+      console.warn("[local-basemap] Error cargando glifos locales; CDN:", url);
+      _basemapUseLocalFonts = false;
+      _basemapGlyphsUrl = GLYPHS_CDN;
+      map.setGlyphs(GLYPHS_CDN);
+    };
+    map.on("error", onGlyphError);
   }
 }
 

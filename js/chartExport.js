@@ -108,7 +108,7 @@ export function createExportController(opts) {
     }
     if (typeof window.html2canvas !== "function") {
       alert(
-        "No se cargó html2canvas (revisa la conexión a Internet o el bloqueo del CDN)."
+        "No se cargó html2canvas (revisa que ./assets/html2canvas.min.js esté disponible)."
       );
       return;
     }

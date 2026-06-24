@@ -12,6 +12,7 @@ import {
   createCompareMapInstance,
   getActiveMapBase,
   getLeafletMap,
+  invalidateMapSize,
   rebootstrapOverlaySymbolIconsOnMap,
   registerCompareOverlaySyncHook,
   reapplyVisorThematicOpacityToMap,
@@ -268,7 +269,10 @@ function showComparePicker() {
     _leftBase = _leftSelect?.value || "osm";
     _rightBase = _rightSelect?.value || defaultRightBase(_leftBase);
     hideComparePicker();
-    void enableCompare().catch((err) => console.warn("visor compare:", err));
+    void enableCompare().catch((err) => {
+      console.warn("visor compare:", err);
+      failCompareSetup("No se pudo iniciar la comparación", err);
+    });
   });
 
   actions.append(cancelBtn, startBtn);
@@ -507,16 +511,117 @@ function destroyCompareMap() {
   clearComparePaneMaps(_comparePaneB);
   clearMapClips();
   unwrapCompareDom();
+  _compareHost = null;
+  _comparePaneB = null;
 }
 
-function waitMapReady(map) {
-  return new Promise((resolve) => {
-    if (map.isStyleLoaded()) {
-      resolve();
+function waitMapReady(map, timeoutMs = 60000) {
+  return new Promise((resolve, reject) => {
+    if (!map) {
+      reject(new Error("Mapa no disponible"));
       return;
     }
-    map.once("load", () => resolve());
+    let settled = false;
+    const finish = (ok, err) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      map.off("load", onLoad);
+      map.off("idle", onIdle);
+      if (ok) resolve();
+      else reject(err);
+    };
+    const timer = setTimeout(
+      () => finish(false, new Error("Tiempo de espera agotado al cargar el mapa del comparador")),
+      timeoutMs,
+    );
+    const onIdle = () => finish(true);
+    const onLoad = () => {
+      if (map.isStyleLoaded()) map.once("idle", onIdle);
+      else finish(true);
+    };
+    if (map.isStyleLoaded()) {
+      map.once("idle", onIdle);
+    } else {
+      map.once("load", onLoad);
+    }
   });
+}
+
+function waitForLayout() {
+  return new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
+function hasCompareArtifacts() {
+  return Boolean(
+    _compareHost ||
+      _compareMap ||
+      _compareCtrl ||
+      document.querySelector(".visor-compare-host"),
+  );
+}
+
+function layoutCompareMaps(primary, compareMap, host) {
+  if (!primary || !compareMap || !host) return false;
+  invalidateMapSize();
+  const shell = getMapUiShell();
+  const shellH = shell?.clientHeight || 0;
+  if (shellH > 0) {
+    host.style.height = `${shellH}px`;
+    host.style.minHeight = "0";
+  }
+  try {
+    primary.resize();
+    compareMap.resize();
+  } catch {
+    /* noop */
+  }
+  const bounds = compareMap.getContainer()?.getBoundingClientRect?.();
+  return Boolean(bounds && bounds.width > 8 && bounds.height > 8);
+}
+
+function assertCompareControlMounted(host) {
+  if (!host?.querySelector(".maplibregl-compare")) {
+    throw new Error("El control de comparación no se montó en el visor");
+  }
+}
+
+function refreshCompareSlider() {
+  if (!_compareCtrl || !_compareHost) return;
+  const primary = getLeafletMap();
+  try {
+    primary?.resize();
+    _compareMap?.resize();
+  } catch {
+    /* noop */
+  }
+  if (typeof _compareCtrl._onResize === "function") {
+    _compareCtrl._onResize();
+  }
+  setSliderCenter();
+  updateCompareHitTarget(getCompareDividerX());
+}
+
+function failCompareSetup(message, err) {
+  console.warn("[visor compare]", message, err || "");
+  const restoreBase = _savedBase;
+  destroyCompareMap();
+  _active = false;
+  _enablePromise = null;
+  if (restoreBase) {
+    try {
+      setMapBaseLayer(restoreBase);
+    } catch (restoreErr) {
+      console.warn("[visor compare] restaurar mapa base:", restoreErr);
+    }
+  }
+  _savedBase = null;
+  if (_toggleBtn) _toggleBtn.disabled = false;
+  updateToggleUi();
+  setBasemapCtrlHidden(false);
+  invalidateMapSize();
 }
 
 async function enableCompare() {
@@ -536,7 +641,10 @@ async function enableCompare() {
 async function doEnableCompare(opGen) {
   const Compare = getCompareCtor();
   const primary = getLeafletMap();
-  if (!Compare || !primary) return;
+  if (!Compare || !primary) {
+    failCompareSetup("MapLibre Compare no está disponible");
+    return;
+  }
 
   destroyCompareMap();
 
@@ -548,66 +656,90 @@ async function doEnableCompare(opGen) {
     _savedBase = getActiveMapBase() || "osm";
   }
 
-  await applyMapInstanceBaseLayer(primary, _leftBase);
-  await waitMapReady(primary);
-  if (opGen !== _compareOpGen) return;
+  try {
+    const primaryEl = primary.getContainer();
+    _compareHost = ensureCompareHost(primaryEl);
+    if (!_compareHost) {
+      failCompareSetup("No se pudo preparar el contenedor del comparador");
+      return;
+    }
 
-  const primaryEl = primary.getContainer();
-  _compareHost = ensureCompareHost(primaryEl);
-  if (!_compareHost) return;
+    _comparePaneB = ensureComparePaneB(_compareHost);
+    removeOrphanCompareControls(_compareHost);
+    clearComparePaneMaps(_comparePaneB);
+    ensureLabels(_compareHost);
+    mountToggleButton(getMapUiShell());
 
-  _comparePaneB = ensureComparePaneB(_compareHost);
-  removeOrphanCompareControls(_compareHost);
-  clearComparePaneMaps(_comparePaneB);
-  ensureLabels(_compareHost);
-  mountToggleButton(getMapUiShell());
+    const vs = viewState(primary);
+    _compareMap = createCompareMapInstance(_comparePaneB, null, vs, { minimal: true });
 
-  const styleSnapshot = primary.getStyle();
-  _compareMap = createCompareMapInstance(_comparePaneB, styleSnapshot, viewState(primary));
+    await waitMapReady(_compareMap);
+    if (opGen !== _compareOpGen) {
+      destroyCompareMap();
+      return;
+    }
 
-  await waitMapReady(_compareMap);
-  if (opGen !== _compareOpGen) {
-    destroyCompareMap();
-    return;
+    await Promise.all([
+      applyMapInstanceBaseLayer(primary, _leftBase),
+      applyMapInstanceBaseLayer(_compareMap, _rightBase),
+    ]);
+    await waitForLayout();
+    if (opGen !== _compareOpGen) {
+      destroyCompareMap();
+      return;
+    }
+
+    if (!layoutCompareMaps(primary, _compareMap, _compareHost)) {
+      await waitForLayout();
+      if (!layoutCompareMaps(primary, _compareMap, _compareHost)) {
+        throw new Error("El área del mapa no tiene tamaño suficiente para comparar");
+      }
+    }
+
+    _compareCtrl = new Compare(primary, _compareMap, _compareHost, { mousemove: false });
+    assertCompareControlMounted(_compareHost);
+    if (opGen !== _compareOpGen) {
+      destroyCompareMap();
+      return;
+    }
+
+    bindCompareDragNoSelect();
+    bindComparePointerRouting();
+    refreshCompareSlider();
+    _active = true;
+    updateToggleUi();
+    if (_toggleBtn) _toggleBtn.disabled = false;
+    setBasemapCtrlHidden(true);
+
+    void syncCompareMapsNow()
+      .then(() => refreshCompareSlider())
+      .catch((syncErr) => console.warn("[visor compare] sync overlays:", syncErr));
+
+    requestAnimationFrame(() => {
+      if (opGen !== _compareOpGen || !_active) return;
+      refreshCompareSlider();
+      void syncCompareMapsNow()
+        .then(() => refreshCompareSlider())
+        .catch((syncErr) => console.warn("[visor compare] sync overlays:", syncErr));
+    });
+  } catch (err) {
+    if (opGen === _compareOpGen) {
+      failCompareSetup("No se pudo iniciar la comparación", err);
+    } else {
+      destroyCompareMap();
+    }
   }
-
-  await applyMapInstanceBaseLayer(_compareMap, _rightBase);
-
-  /* Solo arrastrar el control; sin seguir el cursor sobre el mapa. */
-  _compareCtrl = new Compare(primary, _compareMap, _compareHost, { mousemove: false });
-  if (opGen !== _compareOpGen) {
-    destroyCompareMap();
-    return;
-  }
-
-  bindCompareDragNoSelect();
-  bindComparePointerRouting();
-  _active = true;
-  updateToggleUi();
-  if (_toggleBtn) _toggleBtn.disabled = false;
-  setBasemapCtrlHidden(true);
-
-  await syncCompareMapsNow();
-
-  requestAnimationFrame(() => {
-    if (opGen !== _compareOpGen || !_active) return;
-    primary.resize();
-    _compareMap?.resize();
-    setSliderCenter();
-    updateCompareHitTarget(getCompareDividerX());
-    void syncCompareMapsNow();
-  });
 }
 
 function isCompareUiOpen() {
-  return Boolean(_active || _compareHost || document.querySelector(".visor-compare-host"));
+  return _active;
 }
 
 function disableCompare() {
   _compareOpGen += 1;
   _enablePromise = null;
   hideComparePicker();
-  if (!isCompareUiOpen()) return;
+  if (!hasCompareArtifacts() && !_active) return;
 
   _active = false;
   if (_toggleBtn) _toggleBtn.disabled = false;
@@ -622,13 +754,13 @@ function disableCompare() {
 }
 
 function toggleCompare() {
-  if (isCompareUiOpen()) {
+  if (_active) {
     disableCompare();
     return;
   }
-  if (_enablePromise) {
-    disableCompare();
-    return;
+  if (_enablePromise) return;
+  if (hasCompareArtifacts()) {
+    destroyCompareMap();
   }
   showComparePicker();
 }
@@ -674,10 +806,7 @@ export function attachVisorMapCompare() {
   if (!_resizeHandler) {
     _resizeHandler = () => {
       if (!_active || !_compareMap) return;
-      const primary = getLeafletMap();
-      primary?.resize();
-      _compareMap.resize();
-      preserveSliderOnResize();
+      refreshCompareSlider();
     };
     window.addEventListener("atlas:map-resize", _resizeHandler);
   }

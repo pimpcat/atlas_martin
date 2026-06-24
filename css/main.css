@@ -327,6 +327,28 @@ html[data-theme="oscuro"] .menu-section-icon{
 /* --- Visor geográfico: panel de capas y botones KML/SHP (visorLayers.js) --- */
 .visor-layers-column {
   min-width: 0;
+  min-height: 0;
+}
+
+.visor-layers-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.visor-layers-card > .card-header,
+.visor-layers-card__header {
+  flex: 0 0 auto;
+}
+
+.visor-layer-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
 }
 
 .visor-layers-card .card-header .small {
@@ -387,6 +409,15 @@ html[data-theme="oscuro"] .visor-export-btn {
   .visor-map-frame-wrap {
     height: min(55vh, 520px);
     min-height: 300px;
+  }
+
+  /* Panel de capas debajo del mapa: altura acotada + scroll vertical */
+  .visor-layers-card {
+    max-height: none;
+  }
+
+  .visor-layer-list {
+    max-height: min(46vh, 480px);
   }
 }
 
@@ -4649,9 +4680,76 @@ html[data-theme="claro"] .visor-spatial-field-list {
   -webkit-overflow-scrolling: touch;
 }
 
-.visor-spatial-results {
-  max-height: min(38vh, 340px);
+.visor-spatial-detail-wrap {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  max-height: min(42vh, 360px);
+  overflow-x: auto;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid var(--border, rgba(0, 0, 0, 0.12));
+  border-radius: 8px;
+  scrollbar-color: rgba(100, 116, 139, 0.45) transparent;
+}
+
+.visor-spatial-detail-wrap:hover,
+.visor-spatial-detail-wrap:focus-within {
+  scrollbar-color: rgba(100, 116, 139, 0.75) rgba(0, 0, 0, 0.06);
+}
+
+.visor-spatial-detail-table {
+  width: max-content;
+  min-width: 100%;
+  margin-bottom: 0;
+}
+
+.visor-spatial-detail-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  white-space: nowrap;
+  background: var(--bs-table-bg, #fff);
+  box-shadow: inset 0 -1px 0 var(--border, rgba(0, 0, 0, 0.12));
+}
+
+html[data-theme="claro"] .visor-spatial-detail-table thead th {
+  background: #f1f5f9;
+}
+
+html[data-theme="oscuro"] .visor-spatial-detail-table thead th {
+  background: #1a2533;
+  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.visor-spatial-detail-table td {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.visor-spatial-cell--left,
+.visor-spatial-detail-table .visor-spatial-cell--left {
+  text-align: left;
+  white-space: normal;
+  min-width: 11rem;
+  max-width: 22rem;
+}
+
+.visor-spatial-detail-table th.visor-spatial-cell--left {
+  white-space: nowrap;
+  min-width: 11rem;
+}
+
+.visor-spatial-detail-block + .visor-spatial-detail-block {
+  margin-top: 1rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--atlas-border-subtle, rgba(0, 0, 0, 0.08));
+}
+
+.visor-spatial-results {
+  max-height: min(52vh, 480px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Datos Geográficos: mapa solo visual (sin pan/zoom ni herramientas de dibujo). */
@@ -5231,6 +5329,12 @@ body.modal-open .visor-map-legend {
   pointer-events: none;
 }
 
+.visor-map-frame-wrap > .visor-compare-host {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: 100%;
+}
+
 /* Visor — comparador mapas base OSM | INEGI (maplibre-gl-compare) */
 .visor-compare-host {
   position: relative;
@@ -5259,9 +5363,15 @@ body.modal-open .visor-map-legend {
 }
 
 .visor-compare-host .maplibregl-compare {
-  z-index: 5;
+  z-index: 20;
+  pointer-events: auto;
   user-select: none;
   -webkit-user-select: none;
+}
+
+.visor-compare-host .maplibregl-compare .compare-swiper-vertical {
+  z-index: 21;
+  pointer-events: auto;
 }
 
 .visor-compare-host .maplibregl-compare .compare-swiper-vertical,

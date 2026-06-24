@@ -29,6 +29,9 @@ function escapeHtml(text) {
 
 function formatCell(value, field) {
   if (value == null || value === "") return "—";
+  if (field === "num") {
+    return escapeHtml(String(value));
+  }
   if (typeof value === "number" && Number.isFinite(value)) {
     if (field === "altitud") {
       return value.toLocaleString("es-MX", { maximumFractionDigits: 0 });
@@ -133,11 +136,12 @@ function clearResults() {
 function renderSummary(data) {
   const total = data.total_registros ?? (data.rows?.length || 0);
   const nom = data.nom_mun || municipioLabel();
+  const summaryLabel = data.summary_label || "Registros en el municipio";
   return `
     <div class="visor-tabular-summary">
       <div class="visor-tabular-stat">
         <span class="visor-tabular-stat__value">${total.toLocaleString("es-MX")}</span>
-        <span class="visor-tabular-stat__label">Localidades en el municipio</span>
+        <span class="visor-tabular-stat__label">${escapeHtml(summaryLabel)}</span>
       </div>
       <div class="visor-tabular-stat visor-tabular-stat--muted">
         <span class="visor-tabular-stat__value visor-tabular-stat__value--sm">${escapeHtml(nom)}</span>
@@ -158,8 +162,15 @@ function renderTable(data) {
   const columns = data.columns || [];
   const rows = data.rows || [];
 
-  const cellClass = (field) =>
-    field === "nom_loc" ? "visor-tabular-cell--left" : "visor-tabular-cell--center";
+  const cellClass = (field) => {
+    if (field === "nom_loc" || field === "domicilio" || field === "nom_insti" || field === "nom_comer" || field === "nom_estab") {
+      return "visor-tabular-cell--left";
+    }
+    if (field === "num" || field === "cve_mun" || field === "cve_loc") {
+      return "visor-tabular-cell--center";
+    }
+    return "visor-tabular-cell--center";
+  };
 
   let thead = "<thead><tr>";
   for (const col of columns) {
@@ -183,6 +194,7 @@ function renderTable(data) {
       <span class="badge rounded-pill text-bg-primary">${rows.length.toLocaleString("es-MX")} filas</span>
     </div>
     ${renderSummary(data)}
+    ${data.filas_truncadas ? '<p class="small text-warning mb-2">Se alcanzó el límite de filas mostradas (25&nbsp;000).</p>' : ""}
     <div class="table-responsive atlas-scroll visor-tabular-table-wrap">
       <table class="table table-sm table-hover visor-tabular-table mb-0">${thead}${tbody}</table>
     </div>`;

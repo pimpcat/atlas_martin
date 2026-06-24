@@ -16,6 +16,9 @@ import {
 
 /** @typedef {{ key: string, visorId: string, panelLabel: string, tipTitle: string, codigoAct: number[], labelColor: string }} DenueLayerSpec */
 
+/** Zoom mínimo de iconos en el mapa (debe coincidir con martin.yaml → c_denue.minzoom). */
+export const DENUE_MIN_ZOOM = 8;
+
 export const DENUE_LAYER_SPECS = /** @type {DenueLayerSpec[]} */ ([
   {
     key: "denueRastros",
@@ -119,6 +122,7 @@ export function buildDenueOverlayDefs(tableName) {
     paint: DENUE_SYMBOL_PAINT,
     codigoAct: spec.codigoAct,
     tipTitle: spec.tipTitle,
+    minzoom: DENUE_MIN_ZOOM,
   }));
 }
 

@@ -1019,6 +1019,65 @@ function formatValorExcel(campo) {
   return campo.valor;
 }
 
+function formatDetailCell(value, field) {
+  if (value == null || value === "") return "—";
+  if (field === "num") {
+    return String(value);
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value.toLocaleString("es-MX", { maximumFractionDigits: 0 });
+  }
+  return escapeHtml(value);
+}
+
+function detailCellClass(field) {
+  if (field === "num" || field === "cve_mun" || field === "cve_loc") {
+    return "text-center";
+  }
+  if (field === "domicilio" || field === "nom_insti" || field === "nom_comer" || field === "nom_estab") {
+    return "visor-spatial-cell--left";
+  }
+  return "text-center";
+}
+
+function renderDetailTable(columns, rows, title, options = {}) {
+  if (!Array.isArray(columns) || !columns.length || !Array.isArray(rows) || !rows.length) {
+    return "";
+  }
+  const maxH = options.maxHeight ? ` style="max-height:${options.maxHeight}px"` : "";
+  let tbl =
+    `<div class="visor-spatial-detail-block mt-3">` +
+    `<h4 class="h6 fw-semibold mb-2">${escapeHtml(title)}</h4>` +
+    `<div class="table-responsive atlas-scroll visor-spatial-detail-wrap"${maxH}>` +
+    `<table class="table table-sm table-striped visor-spatial-table visor-spatial-detail-table mb-0">` +
+    "<thead><tr>";
+  for (const col of columns) {
+    tbl += `<th scope="col" class="${detailCellClass(col.field)}">${escapeHtml(col.label || col.field)}</th>`;
+  }
+  tbl += "</tr></thead><tbody>";
+  for (const row of rows) {
+    tbl += "<tr>";
+    for (const col of columns) {
+      tbl += `<td class="${detailCellClass(col.field)}">${formatDetailCell(row[col.field], col.field)}</td>`;
+    }
+    tbl += "</tr>";
+  }
+  tbl += "</tbody></table></div></div>";
+  if (options.truncated) {
+    tbl += `<p class="small text-warning mt-2 mb-0">Se muestran los primeros ${rows.length.toLocaleString("es-MX")} registros (límite del servidor).</p>`;
+  }
+  return tbl;
+}
+
+function appendDetailExcelRows(sheetRows, title, columns, rows) {
+  if (!columns?.length || !rows?.length) return;
+  sheetRows.push([title], columns.map((c) => c.label || c.field));
+  for (const row of rows) {
+    sheetRows.push(columns.map((c) => row[c.field] ?? ""));
+  }
+  sheetRows.push([]);
+}
+
 function formatConsultaCompletada(data) {
   const n = data.registros_intersectados ?? 0;
   const capaId = data.capa_id || _capaUi.capaId;
@@ -1028,7 +1087,10 @@ function formatConsultaCompletada(data) {
   }
 
   if (data.modo === "conteo" || isConteoCapa(capaId)) {
-    return `Consulta completada · ${n.toLocaleString("es-MX")} elemento(s) en ${data.capa_etiqueta || "la capa seleccionada"}.`;
+    const detalle = data.rows?.length
+      ? ` · Tabla detalle con ${data.rows.length.toLocaleString("es-MX")} registro(s).`
+      : "";
+    return `Consulta completada · ${n.toLocaleString("es-MX")} elemento(s) en ${data.capa_etiqueta || "la capa seleccionada"}${detalle}`;
   }
 
   if (capaId === "iter") {
@@ -1082,7 +1144,21 @@ function renderResults(data) {
         `<td class="text-end fw-semibold">${Number(fila.total || 0).toLocaleString("es-MX")}</td></tr>`;
     }
     tbl += "</tbody></table></div>";
-    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}`;
+    let detailHtml = "";
+    for (const fila of data.filas) {
+      if (fila.rows?.length) {
+        detailHtml += renderDetailTable(
+          fila.columns,
+          fila.rows,
+          `Detalle — ${fila.etiqueta || "Establecimiento"}`,
+          { truncated: fila.filas_truncadas, maxHeight: 320 },
+        );
+      }
+    }
+    if (data.filas_truncadas) {
+      detailHtml += `<p class="small text-warning mt-2 mb-0">Algunos listados alcanzaron el límite de filas del servidor.</p>`;
+    }
+    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailHtml}`;
     return;
   }
 
@@ -1094,7 +1170,15 @@ function renderResults(data) {
       `<tr><td>${escapeHtml(data.capa_etiqueta || "—")}</td>` +
       `<td class="text-end fw-semibold">${n.toLocaleString("es-MX")}</td></tr>` +
       "</tbody></table></div>";
-    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}`;
+    const detailHtml = data.rows?.length
+      ? renderDetailTable(
+          data.columns,
+          data.rows,
+          `Detalle — ${data.capa_etiqueta || "Elementos"}`,
+          { truncated: data.filas_truncadas, maxHeight: 360 },
+        )
+      : "";
+    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailHtml}`;
     return;
   }
 
@@ -1159,6 +1243,9 @@ async function onRunAnalysis() {
         id: r.capa_id,
         etiqueta: r.capa_etiqueta,
         total: r.registros_intersectados ?? 0,
+        columns: r.columns || [],
+        rows: r.rows || [],
+        filas_truncadas: Boolean(r.filas_truncadas),
       }));
       const data = {
         ok: true,
@@ -1167,6 +1254,7 @@ async function onRunAnalysis() {
         poligono: results[0]?.poligono || {},
         filas,
         registros_intersectados: filas.reduce((acc, f) => acc + Number(f.total || 0), 0),
+        filas_truncadas: filas.some((f) => f.filas_truncadas),
       };
       renderResults(data);
       const vacias = filas.filter((f) => !f.total);
@@ -1215,10 +1303,14 @@ function onExportExcel() {
       [],
       ["Establecimiento", "Total de elementos"],
       ...data.filas.map((f) => [f.etiqueta || f.id || "", f.total ?? 0]),
+      [],
     ];
+    for (const fila of data.filas) {
+      appendDetailExcelRows(sheetRows, `Detalle — ${fila.etiqueta || ""}`, fila.columns, fila.rows);
+    }
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(sheetRows);
-    ws["!cols"] = [{ wch: 56 }, { wch: 18 }];
+    ws["!cols"] = [{ wch: 56 }, { wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 24 }, { wch: 24 }];
     XLSX.utils.book_append_sheet(wb, ws, "Resultados");
     const stamp = new Date().toISOString().slice(0, 10);
     XLSX.writeFile(wb, `analisis_espacial_denue_${stamp}.xlsx`);
@@ -1235,7 +1327,14 @@ function onExportExcel() {
       [],
       ["Capa", "Total de elementos"],
       [data.capa_etiqueta || data.tabla || "", n],
+      [],
     ];
+    appendDetailExcelRows(
+      sheetRows,
+      `Detalle — ${data.capa_etiqueta || ""}`,
+      data.columns,
+      data.rows,
+    );
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(sheetRows);
     ws["!cols"] = [{ wch: 56 }, { wch: 18 }];
