@@ -173,6 +173,7 @@ import {
   renderVisorLayerPanel,
   clearVisorThematicLayers,
   getActiveVisorLayersWithMinZoom,
+  preloadVisorLayerCatalog,
 } from "./visorLayers.js";
 import { attachVisorMapUi, teardownVisorMapUi, refreshVisorMapUi } from "./visorMapUi.js";
 import {
@@ -224,6 +225,10 @@ import {
   teardownVisorStateWide,
   refreshVisorStateWide,
 } from "./visorStateWide.js";
+import {
+  attachVisorCatalogAdmin,
+  refreshVisorCatalogAdmin,
+} from "./visorCatalogAdmin.js";
 import {
   attachVisorClearLayers,
   teardownVisorClearLayers,
@@ -507,6 +512,7 @@ function spatialAnalysisOptions() {
 
 function onVisorLayersPanelRefresh() {
   refreshVisorLayerPanel();
+  refreshVisorCatalogAdmin();
 }
 
 /** Plugins de mapa compartidos entre visor geográfico e inventario de viviendas. */
@@ -552,6 +558,7 @@ function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
   refreshVisorSpatialAnalysis();
   refreshVisorTabular(visorLayerPanelOptions());
   refreshVisorStateWide();
+  refreshVisorCatalogAdmin();
   refreshVisorClearLayers();
   refreshVisorMapCompare();
   refreshVisorGeocoder();
@@ -580,8 +587,9 @@ function teardownMapViewerPlugins() {
 function refreshVisorLayerPanel() {
   const layerHost = document.getElementById("visorLayerList");
   if (layerHost && isVisorIndicator(state.activeIndicator)) {
-    renderVisorLayerPanel(layerHost, visorLayerPanelOptions());
-    refreshVisorMapUi();
+    void renderVisorLayerPanel(layerHost, visorLayerPanelOptions()).then(() => {
+      refreshVisorMapUi();
+    });
   }
 }
 
@@ -604,19 +612,12 @@ function syncGeoMapOverlayLayers() {
   syncGeoMapLegend(tab, inGeo);
 }
 
-/** Enfoque municipal con reintentos (layout del dashboard + capas base). */
+/** Enfoque municipal tras estabilizar layout del dashboard (un solo fly). */
 function scheduleAppMunicipioFocus(profile) {
   const mapEl = document.getElementById("mapFrame");
   const cve = state.selectedMunicipio?.cve_mun;
   if (!mapEl || !cve) return;
-  const run = () => scheduleMunicipioMapFocus(mapEl, cve, profile);
-  run();
-  requestAnimationFrame(() => {
-    invalidateMapSize();
-    run();
-    setTimeout(run, 280);
-    setTimeout(run, 700);
-  });
+  scheduleMunicipioMapFocus(mapEl, cve, profile);
 }
 
 /**
@@ -927,8 +928,9 @@ async function onIndicatorSelected(indicator) {
     updateVisorMunicipioLabel();
     const layerHost = document.getElementById("visorLayerList");
     if (layerHost) {
-      renderVisorLayerPanel(layerHost, visorLayerPanelOptions());
+      void renderVisorLayerPanel(layerHost, visorLayerPanelOptions());
     }
+    void preloadVisorLayerCatalog();
     requestAnimationFrame(() => {
       attachMapViewerPlugins({ includeMapUi: true });
       invalidateMapSize();
@@ -2019,9 +2021,20 @@ function refreshMainBarChartColors() {
   state.chart.update();
 }
 
+/** Busca un indicador del menú por id (p. ej. geo_visor). */
+function findIndicatorById(model, id) {
+  for (const section of model) {
+    for (const item of section.items || []) {
+      if (item.id === id) return item;
+    }
+  }
+  return null;
+}
+
 /** Inicialización: tema, menú, municipios, exportaciones y vista Inicio. */
 async function bootstrap() {
   initThemeSelector();
+  attachVisorCatalogAdmin();
   window.addEventListener("atlasgro-themechange", () => {
     refreshMainBarChartColors();
     updateViviendaServiciosChartTheme();
@@ -2100,6 +2113,15 @@ async function bootstrap() {
   // Estado inicial: carta de presentación (Inicio)
   await loadHomeContext();
   await goToHomeView();
+
+  const visorParam = new URLSearchParams(window.location.search).get("visor");
+  if (visorParam) {
+    const visorIndicator = findIndicatorById(model, "geo_visor");
+    if (visorIndicator) {
+      await onIndicatorSelected(visorIndicator);
+      history.replaceState(null, "", window.location.pathname);
+    }
+  }
 
   // Útil para depurar, sin ruido para usuarios no técnicos
   void getMapBaseUrl();

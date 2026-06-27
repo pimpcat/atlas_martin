@@ -1,0 +1,674 @@
+{
+  "version": 1,
+  "description": "Catálogo data-driven del Visor geográfico. Edite la copia canónica en Stack_Martin/config/visor/catalog.json y sincronice aquí si no usa Docker.",
+  "search": {
+    "limit_per_source": 5
+  },
+  "search_extras": [
+    {
+      "id": "mun",
+      "enabled": true,
+      "table": "c_mun",
+      "tipo": "Municipio",
+      "name_column": "nomgeo",
+      "id_column": "cve_mun",
+      "geom_mode": "polygon",
+      "scope": "estatal",
+      "mun_filter": false
+    }
+  ],
+  "groups": [
+    {
+      "id": "marco",
+      "label": "Marco geoestadístico",
+      "layers": [
+        "locspunto",
+        "locsatlas",
+        "colonias",
+        "ageb_urbanas",
+        "ageb_rurales",
+        "manzanas",
+        "vialidades"
+      ]
+    },
+    {
+      "id": "infraestructura",
+      "label": "Infraestructura",
+      "layers": ["rnc"]
+    },
+    {
+      "id": "servicios",
+      "label": "Servicios e instalaciones",
+      "layers": ["saneamiento_agua", "clues", "residuo_solido"]
+    },
+    {
+      "id": "medio_fisico",
+      "label": "Medio físico",
+      "layers": ["uso_suelo", "hidro_corrientes", "hidro_cuerpos", "curvas_nivel"]
+    },
+    {
+      "id": "denue",
+      "label": "DENUE",
+      "layers": [
+        "denue_rastros",
+        "denue_gasolinerias",
+        "denue_gaseras",
+        "denue_escuelas",
+        "denue_hospitales",
+        "denue_museos",
+        "denue_cementerios",
+        "denue_iglesias"
+      ]
+    }
+  ],
+  "layers": {
+    "locspunto": {
+      "label": "Localidades",
+      "overlay_key": "locsPunto",
+      "checkbox_id": "visorLocsPunto",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "style": { "icon_key": "locs_punto_pin" },
+      "legend": {
+        "iconItems": [{ "icon_key": "locs_punto_pin", "label": "Localidad" }]
+      },
+      "data": {
+        "table": "c_loc_punto",
+        "mun_filter": "cve_mun",
+        "export_columns": [
+          "gid", "cve_mun", "cvegeo", "nom_loc", "nom_mun", "ambito",
+          "latitud", "longitud", "altitud", "pob_total", "pob_femeni", "pob_mascul"
+        ]
+      },
+      "identify": { "template": "locs_punto" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true },
+      "search": {
+        "enabled": true,
+        "tipo": "Localidad",
+        "name_column": "nom_loc",
+        "id_column": "cvegeo",
+        "geom_mode": "point",
+        "scope": "both"
+      }
+    },
+    "locsatlas": {
+      "label": "Localidades con amanzanamiento",
+      "overlay_key": "locsAtlas",
+      "checkbox_id": "visorLocsAtlas",
+      "geometry": "polygon",
+      "renderer": "overlay",
+      "style_preset": "polygon_outline_detail",
+      "style": {
+        "color": "#3399ff",
+        "halo_color": "#3399ff",
+        "fill_hit_color": "#3399ff"
+      },
+      "legend": {
+        "items": [
+          { "kind": "line", "color": "#3399ff", "label": "Límite de localidad con amanzanamiento" }
+        ]
+      },
+      "data": { "table": "c_l", "mun_filter": "cve_mun" },
+      "identify": { "template": "locs_atlas" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true },
+      "search": {
+        "enabled": true,
+        "tipo": "Localidad con amanzanamiento",
+        "name_column": "nomgeo",
+        "id_column": "cvegeo",
+        "geom_mode": "polygon",
+        "scope": "both"
+      }
+    },
+    "colonias": {
+      "label": "Colonias",
+      "overlay_key": "colonias",
+      "checkbox_id": "visorColonias",
+      "geometry": "polygon",
+      "renderer": "overlay",
+      "style_preset": "polygon_outline_detail",
+      "style": {
+        "color": "#990000",
+        "halo_color": "#990000",
+        "fill_hit_color": "#990000"
+      },
+      "legend": {
+        "items": [
+          { "kind": "line", "color": "#990000", "label": "Límite de colonia o asentamiento" }
+        ]
+      },
+      "data": { "table": "c_col_ase", "mun_filter": "cve_mun" },
+      "identify": { "title": "Colonia", "fields": [{ "column": "nom_asen" }] },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true },
+      "search": {
+        "enabled": true,
+        "tipo": "Colonia/Asentamiento",
+        "name_column": "nom_asen",
+        "id_column": "cvegeo",
+        "geom_mode": "polygon",
+        "scope": "both"
+      }
+    },
+    "ageb_urbanas": {
+      "label": "AGEBS Urbanas",
+      "overlay_key": "agebUrbanas",
+      "checkbox_id": "visorAgebUrbanas",
+      "geometry": "polygon",
+      "renderer": "overlay",
+      "style_preset": "polygon_outline_detail",
+      "style": {
+        "color": "#990000",
+        "halo_color": "#990000",
+        "fill_hit_color": "#990000"
+      },
+      "legend": {
+        "items": [{ "kind": "line", "color": "#990000", "label": "AGEB urbana" }]
+      },
+      "data": { "table": "c_a", "mun_filter": "cve_mun" },
+      "identify": { "title": "AGEB Urbana", "fields": [{ "column": "cvegeo" }] },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "ageb_rurales": {
+      "label": "AGEBS Rurales",
+      "overlay_key": "agebRurales",
+      "checkbox_id": "visorAgebRurales",
+      "geometry": "polygon",
+      "renderer": "overlay",
+      "style_preset": "polygon_outline_detail",
+      "style": {
+        "color": "#666600",
+        "halo_color": "#666600",
+        "fill_hit_color": "#666600"
+      },
+      "legend": {
+        "items": [{ "kind": "line", "color": "#666600", "label": "AGEB rural" }]
+      },
+      "data": { "table": "c_ar", "mun_filter": "cve_mun" },
+      "identify": { "title": "AGEB Rural", "fields": [{ "column": "cvegeo" }] },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "manzanas": {
+      "label": "Manzanas",
+      "overlay_key": "manzanas",
+      "checkbox_id": "visorManzanas",
+      "geometry": "polygon",
+      "renderer": "overlay",
+      "style_preset": "polygon_fill",
+      "style": {
+        "color": "rgb(245, 225, 145)",
+        "outline_color": "rgb(150, 150, 150)",
+        "opacity": 0.6,
+        "minzoom": 14
+      },
+      "legend": {
+        "items": [
+          {
+            "kind": "fill",
+            "color": "rgb(245, 225, 145)",
+            "outline": "rgb(150, 150, 150)",
+            "label": "Manzana"
+          }
+        ]
+      },
+      "data": { "table": "c_m", "mun_filter": "cve_mun" },
+      "identify": { "template": "manzanas" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "vialidades": {
+      "label": "Vialidades (Calles)",
+      "overlay_key": "vialidades",
+      "checkbox_id": "visorVialidades",
+      "geometry": "line",
+      "renderer": "overlay",
+      "style_preset": "line_outline",
+      "style": {
+        "color": "rgb(140, 95, 55)",
+        "halo_color": "rgb(140, 95, 55)",
+        "width": 2,
+        "halo_width": 4
+      },
+      "legend": {
+        "items": [{ "kind": "line", "color": "rgb(140, 95, 55)", "label": "Vialidad municipal" }]
+      },
+      "data": {
+        "table": "c_e",
+        "mun_filter": "cve_mun",
+        "export_columns": [
+          "gid", "cve_mun", "cvegeo", "nomvial", "nomvial1", "tipo", "orden",
+          "ambito", "carretera", "longitud", "velocidad", "condicion"
+        ]
+      },
+      "identify": { "title": "Vialidad", "join": { "left": ["tipovial"], "right": ["nomvial"] } },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "rnc": {
+      "label": "Red Nacional de Caminos",
+      "overlay_key": "rnc",
+      "checkbox_id": "visorRnc",
+      "geometry": "line",
+      "renderer": "overlay_composite",
+      "style_preset": "rnc_tiered",
+      "style": {
+        "field": "tipo_vial",
+        "default_color": "rgb(140, 95, 55)",
+        "classes": [
+          { "value": "Carretera", "color": "rgb(200, 0, 0)", "label": "Carretera" },
+          { "value": "Periférico", "color": "rgb(235, 145, 60)", "label": "Periférico" },
+          { "value": "Vereda", "color": "rgb(0, 0, 0)", "label": "Vereda" },
+          { "value": "Camino", "color": "rgb(140, 95, 55)", "label": "Camino" }
+        ],
+        "zoom": { "troncal_min": 10, "detail_min": 12 },
+        "tiers": [
+          {
+            "id": "estatal",
+            "filter_values": ["Boulevard", "Camino", "Carretera", "Vereda"]
+          },
+          {
+            "id": "troncal",
+            "filter_values": [
+              "Carretera",
+              "Autopista",
+              "Corredor",
+              "Camino",
+              "Periférico",
+              "Circuito",
+              "Circunvalación",
+              "Boulevard",
+              "Viaducto",
+              "Calzada",
+              "Enlace",
+              "Vereda"
+            ]
+          },
+          { "id": "detail" }
+        ]
+      },
+      "legend": {
+        "items": [
+          { "kind": "line", "color": "rgb(200, 0, 0)", "label": "Carretera" },
+          { "kind": "line", "color": "rgb(235, 145, 60)", "label": "Periférico" },
+          { "kind": "line", "color": "rgb(0, 0, 0)", "label": "Vereda" },
+          { "kind": "line", "color": "rgb(140, 95, 55)", "label": "Camino / otro" }
+        ]
+      },
+      "data": {
+        "table": "c_rnc",
+        "from_sql_preset": "rnc_simplified",
+        "mun_filter": "cve_mun"
+      },
+      "identify": { "template": "rnc" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "saneamiento_agua": {
+      "label": "Servicios de Agua y Saneamiento",
+      "overlay_key": "saneamientoAgua",
+      "checkbox_id": "visorSaneamientoAgua",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol_by_attribute",
+      "style": {
+        "field": "tipo",
+        "size_profile": "standard_zoom",
+        "max_scale": 2.63,
+        "default_icon_key": "agua_default",
+        "icon_rules": [
+          {
+            "value": "Obra de toma para la captación de agua",
+            "partial": "obra de toma",
+            "icon_key": "agua_obra_toma",
+            "label": "Obra de toma para la captación de agua"
+          },
+          {
+            "value": "Planta de potabilización",
+            "partial": "potabiliz",
+            "icon_key": "agua_potabilizacion",
+            "label": "Planta de potabilización"
+          },
+          {
+            "value": "Planta de tratamiento",
+            "partial": "planta de trat",
+            "icon_key": "agua_tratamiento",
+            "label": "Planta de tratamiento"
+          },
+          {
+            "value": "Prestador de Servicio de agua potable",
+            "partial": "prestador",
+            "icon_key": "agua_prestador",
+            "label": "Prestador de servicio de agua potable"
+          },
+          {
+            "value": "Punto de descarga",
+            "partial": "descarga",
+            "icon_key": "agua_descarga",
+            "label": "Punto de descarga"
+          }
+        ]
+      },
+      "legend": {
+        "iconItems": [
+          { "icon_key": "agua_obra_toma", "label": "Obra de toma para la captación de agua" },
+          { "icon_key": "agua_potabilizacion", "label": "Planta de potabilización" },
+          { "icon_key": "agua_tratamiento", "label": "Planta de tratamiento" },
+          { "icon_key": "agua_prestador", "label": "Prestador de servicio de agua potable" },
+          { "icon_key": "agua_descarga", "label": "Punto de descarga" },
+          { "icon_key": "agua_default", "label": "Otro servicio de agua o saneamiento" }
+        ]
+      },
+      "data": { "table": "c_agua_sanea", "mun_filter": "cve_mun" },
+      "identify": { "title": "Agua/saneamiento", "join": { "left": ["tipo"], "right": ["nom_tipo"] } },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "clues": {
+      "label": "Establecimientos de salud",
+      "overlay_key": "clues",
+      "checkbox_id": "visorClues",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "style": { "icon_key": "clues_health" },
+      "legend": {
+        "iconItems": [{ "icon_key": "clues_health", "label": "Establecimiento de salud" }]
+      },
+      "data": {
+        "table": "c_clues",
+        "mun_filter": "cve_mun",
+        "export_columns": ["gid", "cve_mun", "clues", "nom_insti", "nom_comer", "nom_insadm"]
+      },
+      "identify": { "template": "clues" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true },
+      "search": {
+        "enabled": true,
+        "tipo": "Establecimiento de salud",
+        "name_column": "nom_comer",
+        "search_columns": ["nom_comer", "clues", "nom_insti"],
+        "id_column": "gid",
+        "geom_mode": "point",
+        "scope": "municipio",
+        "mun_filter": true,
+        "mun_filter_cvegeo": false
+      }
+    },
+    "residuo_solido": {
+      "label": "Residuos solidos urbanos",
+      "overlay_key": "residuoSolido",
+      "checkbox_id": "visorResiduoSolido",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol_by_attribute",
+      "style": {
+        "field": "tipo",
+        "size_profile": "residuo_zoom",
+        "max_scale": 3.5,
+        "supersample": 4,
+        "layout": {
+          "icon-offset": [0, 6]
+        },
+        "default_icon_key": "residuo_default",
+        "default_label": "Otro punto de residuos sólidos",
+        "icon_rules": [
+          {
+            "value": "Sitio de disposición final de residuos",
+            "partial": "disposici",
+            "icon_key": "residuo_disposicion",
+            "label": "Sitio de disposición final de residuos"
+          },
+          {
+            "value": "Prestador de Servicio de recolección de residuos",
+            "partial": "recolecci",
+            "icon_key": "residuo_recoleccion",
+            "label": "Prestador de servicio de recolección"
+          }
+        ]
+      },
+      "legend": {
+        "iconItems": [
+          { "icon_key": "residuo_disposicion", "label": "Sitio de disposición final de residuos" },
+          { "icon_key": "residuo_recoleccion", "label": "Prestador de servicio de recolección" },
+          { "icon_key": "residuo_default", "label": "Otro punto de residuos sólidos" }
+        ]
+      },
+      "data": {
+        "table": "c_residuo_solido",
+        "mun_filter": "cve_mun",
+        "export_columns": ["gid", "cve_mun", "cvegeo", "tipo", "nom_tipo"]
+      },
+      "identify": {
+        "title": "Residuos solidos urbanos",
+        "join": { "left": ["tipo"], "right": ["nom_tipo"] }
+      },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "uso_suelo": {
+      "label": "Uso de suelo",
+      "overlay_key": "uso_suelo",
+      "checkbox_id": "visorUsoSuelo",
+      "geometry": "polygon",
+      "renderer": "visor_shared_martin",
+      "style_preset": "uso_suelo",
+      "data": {
+        "table": "usosuelo",
+        "mun_filter_cvegeo": false,
+        "export_columns": ["gid", "cve_mun", "descripcio", "descrip_1", "descrip_2", "area", "perimetro"]
+      },
+      "identify": { "title": "Uso de Suelo", "fields": [{ "column": "descripcio" }] },
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "hidro_corrientes": {
+      "label": "Hidrografía (corrientes de agua)",
+      "overlay_key": "hidro",
+      "checkbox_id": "visorHidroCorrientes",
+      "geometry": "line",
+      "renderer": "visor_shared_martin",
+      "style_preset": "hidro_corrientes",
+      "data": {
+        "table": "hcorrientes",
+        "mun_filter": "cve_mun",
+        "export_columns": ["gid", "cve_mun", "nombre", "condicion", "tipo", "longitud"]
+      },
+      "identify": { "title": "Corriente de agua", "fields": [{ "label": "NOMBRE", "column": "nombre" }] },
+      "identify_visor_only": true,
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "hidro_cuerpos": {
+      "label": "Hidrografía (cuerpos de agua)",
+      "overlay_key": "hcuerpos",
+      "checkbox_id": "visorHidroCuerpos",
+      "geometry": "polygon",
+      "renderer": "visor_shared_martin",
+      "style_preset": "hidro_cuerpos",
+      "data": {
+        "table": "hcuerpos",
+        "mun_filter": "cve_mun",
+        "export_columns": ["gid", "cve_mun", "nombre", "condicion", "tipo", "area"]
+      },
+      "identify": { "title": "Cuerpo de agua", "fields": [{ "label": "NOMBRE", "column": "nombre" }] },
+      "identify_visor_only": true,
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "curvas_nivel": {
+      "label": "Curvas de nivel",
+      "overlay_key": "curnivel",
+      "checkbox_id": "visorCurvasNivel",
+      "geometry": "line",
+      "renderer": "visor_shared_composite",
+      "style_preset": "curvas_nivel",
+      "data": {
+        "table": "curnivel",
+        "mun_filter": "cve_mun",
+        "export_columns": ["gid", "cve_mun", "elev", "tipo"]
+      },
+      "identify": { "template": "curvas_nivel" },
+      "identify_visor_only": true,
+      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+    },
+    "denue_rastros": {
+      "label": "Rastros",
+      "overlay_key": "denueRastros",
+      "checkbox_id": "visorDenueRastros",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": { "codigo_act": [311611] },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_rastros", "label_color": "#5d4037", "tip_title": "Rastros", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_rastros", "label": "Rastro (sacrificio de ganado)" }] },
+      "identify": { "template": "denue", "title": "Rastros" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+    },
+    "denue_gasolinerias": {
+      "label": "Gasolinerías",
+      "overlay_key": "denueGasolinerias",
+      "checkbox_id": "visorDenueGasolinerias",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": { "codigo_act": [468411] },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_gasolinerias", "label_color": "#1b5e20", "tip_title": "Gasolinerías", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_gasolinerias", "label": "Gasolinera" }] },
+      "identify": { "template": "denue", "title": "Gasolinerías" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+    },
+    "denue_gaseras": {
+      "label": "Gaseras",
+      "overlay_key": "denueGaseras",
+      "checkbox_id": "visorDenueGaseras",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": { "codigo_act": [468412] },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_gaseras", "label_color": "#01579b", "tip_title": "Gaseras", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_gaseras", "label": "Gasera" }] },
+      "identify": { "template": "denue", "title": "Gaseras" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+    },
+    "denue_escuelas": {
+      "label": "Escuelas",
+      "overlay_key": "denueEscuelas",
+      "checkbox_id": "visorDenueEscuelas",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": {
+          "codigo_act": [
+            611112, 611122, 611132, 611142, 611152, 611162, 611172, 611182,
+            611212, 611312, 611422, 611432, 611512, 611612, 611622, 611632
+          ]
+        },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_escuelas", "label_color": "#e65100", "tip_title": "Escuelas", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_escuelas", "label": "Escuela" }] },
+      "identify": { "template": "denue", "title": "Escuelas" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true },
+      "search": {
+        "enabled": true,
+        "tipo": "Escuela",
+        "name_column": "nom_estab",
+        "search_columns": ["nom_estab", "nombre_act", "localidad"],
+        "id_column": "gid",
+        "geom_mode": "point",
+        "scope": "municipio",
+        "mun_filter": true,
+        "mun_filter_cvegeo": false
+      }
+    },
+    "denue_hospitales": {
+      "label": "Hospitales (DENUE)",
+      "overlay_key": "denueHospitales",
+      "checkbox_id": "visorDenueHospitales",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": { "codigo_act": [622112] },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_hospitales", "label_color": "#b71c1c", "tip_title": "Hospitales (DENUE)", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_hospitales", "label": "Hospital (DENUE)" }] },
+      "identify": { "template": "denue", "title": "Hospitales (DENUE)" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+    },
+    "denue_museos": {
+      "label": "Museos",
+      "overlay_key": "denueMuseos",
+      "checkbox_id": "visorDenueMuseos",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": { "codigo_act": [712112] },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_museos", "label_color": "#4a148c", "tip_title": "Museos", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_museos", "label": "Museo" }] },
+      "identify": { "template": "denue", "title": "Museos" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+    },
+    "denue_cementerios": {
+      "label": "Cementerios",
+      "overlay_key": "denueCementerios",
+      "checkbox_id": "visorDenueCementerios",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": { "codigo_act": [812322] },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_cementerios", "label_color": "#424242", "tip_title": "Cementerios", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_cementerios", "label": "Cementerio" }] },
+      "identify": { "template": "denue", "title": "Cementerios" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+    },
+    "denue_iglesias": {
+      "label": "Iglesias/Templos",
+      "overlay_key": "denueIglesias",
+      "checkbox_id": "visorDenueIglesias",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_denue",
+        "filter": { "codigo_act": [813210] },
+        "gid_table": "c_denue",
+        "mun_filter_cvegeo": false,
+        "export": { "mode": "all" }
+      },
+      "style": { "icon_key": "denue_iglesias", "label_color": "#4e342e", "tip_title": "Iglesias/Templos", "minzoom": 8 },
+      "legend": { "iconItems": [{ "icon_key": "denue_iglesias", "label": "Iglesia o templo" }] },
+      "identify": { "template": "denue", "title": "Iglesias/Templos" },
+      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "polygon_outline",
+  "label": "Polígono con contorno",
+  "geometry": "polygon",
+  "type": "line",
+  "lineStack": true,
+  "paintHalo": {
+    "line-color": "#ffffff",
+    "line-width": 2.5,
+    "line-opacity": 0.9
+  },
+  "paint": {
+    "line-color": "#990000",
+    "line-width": 1.2,
+    "line-opacity": 0.95
+  },
+  "style_schema": {
+    "color": { "paint": "line-color", "target": "paint", "default": "#990000" },
+    "halo_color": { "paint": "line-color", "target": "paintHalo", "default": "#ffffff" },
+    "width": { "paint": "line-width", "target": "paint", "default": 1.2 },
+    "halo_width": { "paint": "line-width", "target": "paintHalo", "default": 2.5 },
+    "opacity": { "paint": "line-opacity", "target": "paint", "default": 0.95 }
+  }
+}

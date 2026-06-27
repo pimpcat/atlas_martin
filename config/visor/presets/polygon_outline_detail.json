@@ -1,0 +1,29 @@
+{
+  "id": "polygon_outline_detail",
+  "label": "Polígono con contorno detallado (AGEB/colonias)",
+  "geometry": "polygon",
+  "type": "line",
+  "lineStack": true,
+  "fillHit": true,
+  "paintHalo": {
+    "line-color": "#990000",
+    "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.6, 13, 2.6, 16, 3.8, 18, 5.5],
+    "line-opacity": 0.95
+  },
+  "paint": {
+    "line-color": "#990000",
+    "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.75, 13, 1.35, 16, 2.2, 18, 3.5],
+    "line-blur": 0.2,
+    "line-opacity": 0.95
+  },
+  "fillHitPaint": {
+    "fill-color": "#990000",
+    "fill-opacity": 0.01,
+    "fill-antialias": true
+  },
+  "style_schema": {
+    "color": { "paint": "line-color", "target": "paint", "default": "#990000" },
+    "halo_color": { "paint": "line-color", "target": "paintHalo", "default": "#990000" },
+    "fill_hit_color": { "paint": "fill-color", "target": "fillHit", "default": "#990000" }
+  }
+}

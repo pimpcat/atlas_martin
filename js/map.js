@@ -48,9 +48,8 @@ import {
   RNC_DETAIL_MIN_ZOOM,
   RNC_TRONCAL_MIN_ZOOM,
   curnivelMaestroFilter,
+  fieldValueMatchFilter,
   martinSourceLayer,
-  rncEstatalTipoFilter,
-  rncTroncalTipoFilter,
 } from "./martinLayerStyle.js";
 import { bindAllOverlayTipHovers, refreshOverlayTipBindings } from "./mapOverlayTips.js";
 import {
@@ -80,37 +79,18 @@ import {
   locsAtlasLabelLayerIdForOverlay,
   scheduleLocsAtlasLabelsSync,
 } from "./mapLocsAtlasLabels.js";
+import { locsPuntoLayerUsesLegacyCircle } from "./mapLocsPuntoIcons.js";
+import { cluesLayerUsesLegacyCircle } from "./mapCluesIcons.js";
 import {
-  ensureResiduoSolidoMapIcons,
-  RESIDUO_SOLIDO_SYMBOL_LAYOUT,
-  RESIDUO_SOLIDO_SYMBOL_PAINT,
-  residuoSolidoLayerUsesLegacyCircle,
-} from "./mapResiduoSolidoIcons.js";
+  ensureAllVisorCatalogIconsOnMap,
+  ensureVisorIconKeyOnMap,
+  invalidateVisorIconRegistryOnMap,
+} from "./visorIconRegistry.js";
 import {
-  ensureLocsPuntoMapIcons,
-  LOCS_PUNTO_SYMBOL_LAYOUT,
-  LOCS_PUNTO_SYMBOL_PAINT,
-  locsPuntoLayerUsesLegacyCircle,
-} from "./mapLocsPuntoIcons.js";
-import {
-  ensureCluesMapIcons,
-  CLUES_SYMBOL_LAYOUT,
-  CLUES_SYMBOL_PAINT,
-  cluesLayerUsesLegacyCircle,
-} from "./mapCluesIcons.js";
-import {
-  ensureSaneamientoAguaMapIcons,
-  SANEAMIENTO_AGUA_SYMBOL_LAYOUT,
-  SANEAMIENTO_AGUA_SYMBOL_PAINT,
-  saneamientoAguaLayerUsesLegacyCircle,
-} from "./mapSaneamientoAguaIcons.js";
-import {
-  buildDenueOverlayDefs,
   buildDenueOverlayLabelByKey,
   codigoActFilter,
   isDenueOverlayKey,
 } from "./denueLayers.js";
-import { ensureDenueMapIcons, denueLayerUsesLegacyCircle } from "./mapDenueIcons.js";
 
 const SRC_ENT = "src-c_ent";
 const SRC_ENT_DISP = "src-c_ent-disp";
@@ -201,6 +181,47 @@ const OVERLAY_LABEL_BY_KEY = {
   },
   ...buildDenueOverlayLabelByKey(),
 };
+
+/** Etiquetas declaradas en catalog.json (visorLabelRegistry). */
+let _visorCatalogLabelByKey = {};
+
+function getOverlayLabelDef(overlayKey) {
+  return OVERLAY_LABEL_BY_KEY[overlayKey] || _visorCatalogLabelByKey[overlayKey] || null;
+}
+
+export function hasBuiltinOverlayLabel(overlayKey) {
+  return Boolean(OVERLAY_LABEL_BY_KEY[overlayKey]);
+}
+
+export function hasOverlayLabelDef(overlayKey) {
+  return Boolean(getOverlayLabelDef(overlayKey));
+}
+
+export function registerVisorCatalogLabelDefs(byKey) {
+  _visorCatalogLabelByKey = byKey && typeof byKey === "object" ? { ...byKey } : {};
+}
+
+export function remountVisorCatalogLabelLayers() {
+  const map = _map;
+  if (!map?.isStyleLoaded?.()) return;
+  for (const def of _visorDynamicOverlayDefs) {
+    if (!getOverlayLabelDef(def.key)) continue;
+    const labelId = overlayLabelLayerId(`ly-${def.key}`);
+    try {
+      if (map.getLayer(labelId)) map.removeLayer(labelId);
+    } catch {
+      /* noop */
+    }
+    ensureOverlayLabelLayer(map, def);
+    if (_overlayActive[def.key]) {
+      applyOverlayLabelSpec(map, def.key);
+      const mainId = `ly-${def.key}`;
+      if (map.getLayer(labelId)) {
+        setLayerVisible(map, labelId, true, resolveVisorOverlayCve(_focusCve));
+      }
+    }
+  }
+}
 
 function coloniasLabelsCtx() {
   return {
@@ -390,7 +411,7 @@ function syncVisorSharedThematicLayers(map, cve, forceAllOff = false) {
 }
 
 function applyOverlayLabelSpec(map, overlayKey) {
-  const labelDef = OVERLAY_LABEL_BY_KEY[overlayKey];
+  const labelDef = getOverlayLabelDef(overlayKey);
   if (!labelDef || !map) return;
   const labelId = overlayLabelLayerId(`ly-${overlayKey}`);
   if (!map.getLayer(labelId)) return;
@@ -422,7 +443,11 @@ function applyOverlayLabelSpec(map, overlayKey) {
 
 function applyOverlayLabelTheme(map) {
   if (!map) return;
-  for (const key of Object.keys(OVERLAY_LABEL_BY_KEY)) {
+  const labelKeys = new Set([
+    ...Object.keys(OVERLAY_LABEL_BY_KEY),
+    ...Object.keys(_visorCatalogLabelByKey),
+  ]);
+  for (const key of labelKeys) {
     applyOverlayLabelSpec(map, key);
   }
   for (const key of Object.keys(VISOR_ONLY_LABEL_SPECS)) {
@@ -446,9 +471,10 @@ function overlayKeyFromLayerId(layerId) {
   if (!layerId.startsWith("ly-")) return null;
   let key = layerId.slice(3);
   if (key.endsWith("-labels")) key = key.slice(0, -7);
-  if (key === "rnc" || key.startsWith("rnc-estatal") || key.startsWith("rnc-troncal")) return "rnc";
+  const tieredKey = resolveTieredOverlayKey(key);
+  if (tieredKey) return tieredKey;
   if (isDenueOverlayKey(key)) return key;
-  return OVERLAY_LABEL_BY_KEY[key] ? key : null;
+  return hasOverlayLabelDef(key) ? key : null;
 }
 
 function overlayDefFromLayerId(layerId) {
@@ -457,14 +483,11 @@ function overlayDefFromLayerId(layerId) {
   if (key.endsWith("-labels")) key = key.slice(0, -7);
   if (key.endsWith("-halo")) key = key.replace(/-halo$/, "");
   if (key.endsWith("-fill")) key = key.replace(/-fill$/, "");
-  if (key === "rnc" || key.startsWith("rnc-")) {
-    return OVERLAY_DEFS.find((d) => d.key === "rnc") ?? null;
-  }
-  return OVERLAY_DEFS.find((d) => d.key === key) ?? null;
+  return findOverlayDefByKey(key);
 }
 
 function ensureOverlayLabelLayer(map, def) {
-  const labelDef = OVERLAY_LABEL_BY_KEY[def.key];
+  const labelDef = getOverlayLabelDef(def.key);
   if (!labelDef) return;
   ensureMapGlyphs(map);
   const layerId = `ly-${def.key}`;
@@ -553,7 +576,7 @@ function refitVisorStateWideView(map) {
 }
 
 function resetVisorThematicLayerFlags() {
-  OVERLAY_DEFS.forEach((d) => {
+  allOverlayDefs().forEach((d) => {
     _overlayActive[d.key] = false;
   });
   for (const key of Object.keys(_visorSharedActive)) {
@@ -761,122 +784,109 @@ const LAYER_IDS = {
   marcoEnt: "atlas-marco-ent-line",
 };
 
-const OVERLAY_DEFS = [
-  {
-    key: "locsAtlas",
-    table: MARTIN_TABLES.locsAtlas,
-    type: "line",
-    lineStack: true,
-    fillHit: true,
-    fillHitPaint: LAYER_PAINT.locsAtlasFillHit,
-    paintHalo: LAYER_PAINT.locsAtlasHalo,
-    paint: LAYER_PAINT.locsAtlas,
-  },
-  { key: "locsPunto", table: MARTIN_TABLES.locsPunto, type: "symbol", layout: LOCS_PUNTO_SYMBOL_LAYOUT, paint: LOCS_PUNTO_SYMBOL_PAINT },
-  {
-    key: "colonias",
-    table: MARTIN_TABLES.colonias,
-    type: "line",
-    lineStack: true,
-    fillHit: true,
-    fillHitPaint: LAYER_PAINT.coloniasFillHit,
-    paintHalo: LAYER_PAINT.coloniasHalo,
-    paint: LAYER_PAINT.colonias,
-  },
-  {
-    key: "agebUrbanas",
-    table: MARTIN_TABLES.agebUrbanas,
-    type: "line",
-    lineStack: true,
-    fillHit: true,
-    fillHitPaint: LAYER_PAINT.agebUFillHit,
-    paintHalo: LAYER_PAINT.agebUHalo,
-    paint: LAYER_PAINT.agebU,
-  },
-  {
-    key: "agebRurales",
-    table: MARTIN_TABLES.agebRurales,
-    type: "line",
-    lineStack: true,
-    fillHit: true,
-    fillHitPaint: LAYER_PAINT.agebRFillHit,
-    paintHalo: LAYER_PAINT.agebRHalo,
-    paint: LAYER_PAINT.agebR,
-  },
-  {
-    key: "manzanas",
-    table: MARTIN_TABLES.manzanas,
-    type: "fill",
-    paint: LAYER_PAINT.manzanasFill,
-    minzoom: 14,
-  },
-  {
-    key: "vialidades",
-    table: MARTIN_TABLES.vialidades,
-    type: "line",
-    lineStack: true,
-    paintHalo: LAYER_PAINT.vialidadesHalo,
-    paint: LAYER_PAINT.vialidades,
-  },
-  {
-    key: "rnc",
-    table: MARTIN_TABLES.rnc,
-    type: "line",
-    lineStack: true,
-    rncTiered: true,
-    paintHalo: LAYER_PAINT.rncHalo,
-    paint: LAYER_PAINT.rnc,
-  },
-  {
-    key: "saneamientoAgua",
-    table: MARTIN_TABLES.saneamientoAgua,
-    type: "symbol",
-    layout: SANEAMIENTO_AGUA_SYMBOL_LAYOUT,
-    paint: SANEAMIENTO_AGUA_SYMBOL_PAINT,
-  },
-  {
-    key: "clues",
-    table: MARTIN_TABLES.clues,
-    type: "symbol",
-    layout: CLUES_SYMBOL_LAYOUT,
-    paint: CLUES_SYMBOL_PAINT,
-  },
-  {
-    key: "residuoSolido",
-    table: MARTIN_TABLES.residuoSolido,
-    type: "symbol",
-    layout: RESIDUO_SOLIDO_SYMBOL_LAYOUT,
-    paint: RESIDUO_SOLIDO_SYMBOL_PAINT,
-  },
-  ...buildDenueOverlayDefs(MARTIN_TABLES.denue),
-];
+const OVERLAY_DEFS = [];
 
-/** Overlays symbol que esperan iconos antes de addLayer (el resto se crea al cargar el mapa). */
-const OVERLAY_SYMBOL_ICON_KEYS = new Set(["residuoSolido", "locsPunto", "clues", "saneamientoAgua"]);
+/** Overlays generados desde presets genéricos (fase C — visorStyleRegistry). */
+let _visorDynamicOverlayDefs = [];
+/** @type {Set<string>} */
+let _visorPrevDynamicKeys = new Set();
+
+function allOverlayDefs() {
+  return OVERLAY_DEFS.concat(_visorDynamicOverlayDefs);
+}
+
+function resolveTieredOverlayKey(key) {
+  const m = key.match(/^(.+)-(estatal|troncal|warm)$/);
+  if (!m) return null;
+  const def = allOverlayDefs().find((d) => d.key === m[1] && d.rncTiered);
+  return def ? m[1] : null;
+}
+
+function findOverlayDefByKey(key) {
+  const tiered = resolveTieredOverlayKey(key);
+  if (tiered) return allOverlayDefs().find((d) => d.key === tiered) ?? null;
+  return allOverlayDefs().find((d) => d.key === key) ?? null;
+}
+
+function removeOverlayMapLayersForKey(map, overlayKey) {
+  if (!map) return;
+  const lid = `ly-${overlayKey}`;
+  for (const id of collectOverlayLayerIds(map, lid)) {
+    try {
+      if (map.getLayer(id)) map.removeLayer(id);
+    } catch {
+      /* noop */
+    }
+  }
+}
+
+export function hasVisorOverlayDef(key) {
+  return allOverlayDefs().some((d) => d.key === key);
+}
+
+export function isBuiltinOverlayKey(key) {
+  return OVERLAY_DEFS.some((d) => d.key === key);
+}
+
+export function registerVisorDynamicOverlayDefs(defs) {
+  const next = Array.isArray(defs) ? defs.slice() : [];
+  const nextKeys = new Set(next.map((d) => d.key));
+  if (_map?.isStyleLoaded?.()) {
+    for (const oldKey of _visorPrevDynamicKeys) {
+      if (!nextKeys.has(oldKey)) {
+        forceOverlayGroupOff(_map, oldKey);
+        removeOverlayMapLayersForKey(_map, oldKey);
+        delete _overlayActive[oldKey];
+      }
+    }
+  }
+  _visorDynamicOverlayDefs = next;
+  _visorPrevDynamicKeys = nextKeys;
+}
+
+export function remountVisorDynamicOverlayLayers() {
+  const map = _map;
+  if (!map?.isStyleLoaded?.()) return;
+  for (const def of _visorDynamicOverlayDefs) {
+    removeOverlayMapLayersForKey(map, def.key);
+    if (!overlayNeedsIconBootstrap(def)) {
+      ensureOverlayLayer(map, def);
+    }
+  }
+  syncOverlayLayersFromState(map, resolveVisorOverlayCve(_focusCve));
+}
 
 function overlayNeedsIconBootstrap(def) {
-  if (isDenueOverlayKey(def.key)) return true;
-  return def.type === "symbol" || OVERLAY_SYMBOL_ICON_KEYS.has(def.key);
+  return def.type === "symbol";
 }
 
 function ensureOverlayLayersExceptSymbols(map) {
-  for (const def of OVERLAY_DEFS) {
+  for (const def of allOverlayDefs()) {
     if (!overlayNeedsIconBootstrap(def)) ensureOverlayLayer(map, def);
   }
 }
 
-function getRncOverlayDef() {
-  return OVERLAY_DEFS.find((d) => d.key === "rnc");
+function getTieredOverlayDefs() {
+  return allOverlayDefs().filter((d) => d.rncTiered);
 }
 
-/** Capas RNC por nivel de zoom (estatal / troncal / detalle). */
-function rncTierLayerIds(map) {
+/** Capas composite por zoom (estatal / troncal / detalle). */
+function tieredOverlayLayerIds(map, baseKey) {
   const out = [];
   for (const suffix of ["-estatal-halo", "-estatal", "-troncal-halo", "-troncal", "-warm", "-halo", ""]) {
-    const id = suffix ? `ly-rnc${suffix}` : "ly-rnc";
+    const id = suffix ? `ly-${baseKey}${suffix}` : `ly-${baseKey}`;
     if (map.getLayer(id)) out.push(id);
   }
   return out;
+}
+
+function tierSuffixFromLayerId(layerId, baseKey) {
+  const prefix = `ly-${baseKey}`;
+  if (layerId === `${prefix}-warm`) return "warm";
+  if (layerId.startsWith(`${prefix}-estatal`)) return "-estatal";
+  if (layerId.startsWith(`${prefix}-troncal`)) return "-troncal";
+  if (layerId === prefix || layerId === `${prefix}-halo`) return "";
+  return null;
 }
 
 const _overlayActive = {};
@@ -970,12 +980,14 @@ function resolveVisorOverlayCve(explicitCve) {
 
 function applyOverlayLayerMunFilter(map, layerId, visible, cve) {
   if (!map?.getLayer(layerId) || !visible || isOverlayGeoLabelLayer(layerId)) return;
-  const isRncEstatal = layerId.includes("ly-rnc-estatal");
-  const isRncTroncal = layerId.includes("ly-rnc-troncal");
-  const isRncDetail = layerId === "ly-rnc" || layerId === "ly-rnc-halo";
-  const isRncWarm = layerId.endsWith("-warm");
-  try {
-    if (isRncWarm) {
+  const def = overlayDefFromLayerId(layerId);
+  if (def?.skipMunFilter) {
+    map.setFilter(layerId, null);
+    return;
+  }
+  if (def?.rncTiered) {
+    const tierSuffix = tierSuffixFromLayerId(layerId, def.key);
+    if (tierSuffix === "warm") {
       if (_visorStateWideMode) {
         map.setFilter(layerId, null);
       } else if (cve) {
@@ -983,11 +995,17 @@ function applyOverlayLayerMunFilter(map, layerId, visible, cve) {
       }
       return;
     }
-    if (isRncEstatal || isRncTroncal || isRncDetail) {
+    if (tierSuffix != null) {
       const parts = [];
       if (!_visorStateWideMode && cve) parts.push(munFilter(cve));
-      if (isRncEstatal) parts.push(rncEstatalTipoFilter());
-      else if (isRncTroncal) parts.push(rncTroncalTipoFilter());
+      if (tierSuffix === "-estatal" || tierSuffix === "-troncal") {
+        const tier = def.rncTiers?.find((t) => t.suffix === tierSuffix);
+        if (tier?.filterValues?.length) {
+          parts.push(
+            fieldValueMatchFilter(def.rncFilterField || "tipo_vial", tier.filterValues),
+          );
+        }
+      }
       if (!parts.length) {
         map.setFilter(layerId, null);
       } else if (parts.length === 1) {
@@ -997,11 +1015,13 @@ function applyOverlayLayerMunFilter(map, layerId, visible, cve) {
       }
       return;
     }
-    const def = overlayDefFromLayerId(layerId);
-    if (def?.codigoAct?.length) {
+  }
+  const defCodigo = def;
+  try {
+    if (defCodigo?.codigoAct?.length) {
       const parts = [];
       if (!_visorStateWideMode && cve) parts.push(munFilter(cve));
-      parts.push(codigoActFilter(def.codigoAct));
+      parts.push(codigoActFilter(defCodigo.codigoAct));
       map.setFilter(layerId, parts.length === 1 ? parts[0] : ["all", ...parts]);
       return;
     }
@@ -1886,9 +1906,11 @@ function collectOverlayLayerIds(map, layerId) {
 }
 
 function overlayLayerIds(map, layerId) {
-  if (layerId === "ly-rnc") {
-    const rncIds = rncTierLayerIds(map);
-    if (rncIds.length) return rncIds;
+  const baseKey = layerId.startsWith("ly-") ? layerId.slice(3) : null;
+  const tieredDef = baseKey ? findOverlayDefByKey(baseKey) : null;
+  if (tieredDef?.rncTiered) {
+    const ids = tieredOverlayLayerIds(map, tieredDef.key);
+    if (ids.length) return ids;
   }
   const ids = [];
   if (map.getLayer(`${layerId}-fill`)) ids.push(`${layerId}-fill`);
@@ -1919,11 +1941,8 @@ function ensureOverlayFillHitLayer(map, def, layerId, spec) {
 }
 
 function overlayUsesLegacyCircle(def, map) {
-  if (isDenueOverlayKey(def.key)) return denueLayerUsesLegacyCircle(map, def.key);
-  if (def.key === "residuoSolido") return residuoSolidoLayerUsesLegacyCircle(map);
   if (def.key === "locsPunto") return locsPuntoLayerUsesLegacyCircle(map);
   if (def.key === "clues") return cluesLayerUsesLegacyCircle(map);
-  if (def.key === "saneamientoAgua") return saneamientoAguaLayerUsesLegacyCircle(map);
   return false;
 }
 
@@ -1968,22 +1987,24 @@ function migrateCluesSourceTable(map, def) {
 }
 
 function overlaySymbolIconLoader(def) {
-  if (isDenueOverlayKey(def.key)) return ensureDenueMapIcons;
-  if (def.key === "residuoSolido") return ensureResiduoSolidoMapIcons;
-  if (def.key === "locsPunto") return ensureLocsPuntoMapIcons;
-  if (def.key === "clues") return ensureCluesMapIcons;
-  if (def.key === "saneamientoAgua") return ensureSaneamientoAguaMapIcons;
+  if (def.visorIconKeys?.length) {
+    const keys = def.visorIconKeys;
+    return async (map) => {
+      await Promise.all(keys.map((iconKey) => ensureVisorIconKeyOnMap(map, iconKey)));
+    };
+  }
+  if (def.visorIconKey) {
+    const iconKey = def.visorIconKey;
+    return (map) => ensureVisorIconKeyOnMap(map, iconKey);
+  }
   return async () => {};
 }
 
 /** Invalida caché de iconos symbol (p. ej. tras setSprite del mapa base local). */
 export function invalidateOverlaySymbolIconsOnMap(map) {
   if (!map) return;
-  delete map.__atlasLocsPuntoIconsVersion;
-  delete map.__atlasCluesIconsVersion;
+  invalidateVisorIconRegistryOnMap(map);
   delete map.__atlasDenueIconsVersion;
-  delete map.__atlasResiduoIconsVersion;
-  delete map.__atlasSaneamientoIconsVersion;
 }
 
 /** Vuelve a registrar iconos symbol tras invalidar (mapa local / comparador). */
@@ -1996,7 +2017,7 @@ export function rebootstrapOverlaySymbolIconsOnMap(map) {
 function ensureOverlaySymbolIconsOnMap(map) {
   if (!map) return Promise.resolve();
   const loaders = new Set();
-  for (const def of OVERLAY_DEFS) {
+  for (const def of allOverlayDefs()) {
     if (!overlayNeedsIconBootstrap(def)) continue;
     loaders.add(overlaySymbolIconLoader(def));
   }
@@ -2012,7 +2033,7 @@ function ensureOverlaySymbolIconsOnMap(map) {
 /** Quita capas symbol clonadas del estilo (el comparador las recrea con iconos propios). */
 function stripClonedSymbolOverlayLayers(map) {
   if (!map || map === _map) return;
-  for (const def of OVERLAY_DEFS) {
+  for (const def of allOverlayDefs()) {
     if (!overlayNeedsIconBootstrap(def) || def.type !== "symbol") continue;
     const layerId = `ly-${def.key}`;
     for (const id of collectOverlayLayerIds(map, layerId)) {
@@ -2028,7 +2049,7 @@ function stripClonedSymbolOverlayLayers(map) {
 /** Recrea capas symbol en el mapa secundario (tras registrar iconos con addImage). */
 function rebuildSymbolOverlayLayersOnMap(map) {
   if (!map || map === _map) return;
-  for (const def of OVERLAY_DEFS) {
+  for (const def of allOverlayDefs()) {
     if (!overlayNeedsIconBootstrap(def) || def.type !== "symbol") continue;
     const src = `src-${def.table}`;
     const layerId = `ly-${def.key}`;
@@ -2067,12 +2088,14 @@ function finishSymbolOverlayActivation(map, def, layerId, keyGenAtStart) {
   notifyVisorOverlaysChanged();
 }
 
-function ensureRncOverlayLayers(map, def) {
+function ensureTieredOverlayLayers(map, def) {
   const src = `src-${def.table}`;
   const layerId = `ly-${def.key}`;
   const estatalId = `${layerId}-estatal`;
   const troncalId = `${layerId}-troncal`;
   const warmId = `${layerId}-warm`;
+  const troncalMin = def.rncZoom?.troncalMin ?? RNC_TRONCAL_MIN_ZOOM;
+  const detailMin = def.rncZoom?.detailMin ?? RNC_DETAIL_MIN_ZOOM;
   addMartinSource(map, src, def.table);
   const baseSpec = {
     source: src,
@@ -2082,16 +2105,16 @@ function ensureRncOverlayLayers(map, def) {
   const estatalSpec = {
     ...baseSpec,
     minzoom: 0,
-    maxzoom: RNC_TRONCAL_MIN_ZOOM,
+    maxzoom: troncalMin,
   };
   const troncalSpec = {
     ...baseSpec,
-    minzoom: RNC_TRONCAL_MIN_ZOOM,
-    maxzoom: RNC_DETAIL_MIN_ZOOM,
+    minzoom: troncalMin,
+    maxzoom: detailMin,
   };
   const detailSpec = {
     ...baseSpec,
-    minzoom: RNC_DETAIL_MIN_ZOOM,
+    minzoom: detailMin,
   };
 
   const addLinePair = (id, spec) => {
@@ -2136,7 +2159,7 @@ function ensureOverlayLayer(map, def) {
   const src = `src-${def.table}`;
   const layerId = `ly-${def.key}`;
   if (def.rncTiered) {
-    return ensureRncOverlayLayers(map, def);
+    return ensureTieredOverlayLayers(map, def);
   }
   if (def.key === "clues") migrateCluesSourceTable(map, def);
   if (overlayUsesLegacyCircle(def, map)) {
@@ -2317,7 +2340,7 @@ export function copyVisorOverlayRuntime(fromMap, toMap) {
   const emptyFilter = ["literal", false];
   const mun = resolveVisorOverlayCve(_focusCve);
 
-  for (const d of OVERLAY_DEFS) {
+  for (const d of allOverlayDefs()) {
     if (!_overlayActive[d.key]) {
       forceOverlayGroupOff(toMap, d.key);
       continue;
@@ -2401,7 +2424,7 @@ function syncOverlayLayersFromState(map, cve, options = {}) {
   const mun = resolveVisorOverlayCve(cve);
   const emptyFilter = ["literal", false];
 
-  for (const d of OVERLAY_DEFS) {
+  for (const d of allOverlayDefs()) {
     const lid = `ly-${d.key}`;
     if (!collectOverlayLayerIds(map, lid).length) continue;
     const on = !forceAllOff && !!_overlayActive[d.key];
@@ -2418,7 +2441,7 @@ function syncOverlayLayersFromState(map, cve, options = {}) {
 
   if (forceAllOff) {
     const geoLabelIds = new Set(overlayGeoLabelLayerIds());
-    for (const d of OVERLAY_DEFS) {
+    for (const d of allOverlayDefs()) {
       const lid = `ly-${d.key}`;
       for (const id of collectOverlayLayerIds(map, lid)) {
         if (!map.getLayer(id)) continue;
@@ -2461,7 +2484,7 @@ export function syncVisorOverlayLayersOnMap(map) {
       stripClonedSymbolOverlayLayers(map);
       rebuildSymbolOverlayLayersOnMap(map);
     }
-    for (const def of OVERLAY_DEFS) {
+    for (const def of allOverlayDefs()) {
       if (map !== _map && overlayNeedsIconBootstrap(def) && def.type === "symbol") continue;
       ensureOverlayLayer(map, def);
     }
@@ -2469,7 +2492,7 @@ export function syncVisorOverlayLayersOnMap(map) {
       ensureVisorOnlyLabelLayer(map, key);
     }
     syncOverlayLayersFromState(map, resolveVisorOverlayCve(_focusCve));
-    OVERLAY_DEFS.forEach((d) => ensureOverlayLabelLayer(map, d));
+    allOverlayDefs().forEach((d) => ensureOverlayLabelLayer(map, d));
     if (map !== _map && _map?.isStyleLoaded?.()) {
       copyVisorOverlayRuntime(_map, map);
       reapplyVisorThematicOpacityToMap(map);
@@ -2570,7 +2593,7 @@ function collectActiveVisorThematicLayerIds(map) {
   if (!map) return [];
   const ids = new Set();
 
-  for (const d of OVERLAY_DEFS) {
+  for (const d of allOverlayDefs()) {
     if (!_overlayActive[d.key]) continue;
     for (const id of collectOverlayLayerIds(map, `ly-${d.key}`)) {
       if (isMapLayerVisible(map, id)) ids.add(id);
@@ -2674,7 +2697,7 @@ export function clearVisorThematicLayersOnMap() {
   _overlayOpGen += 1;
   _usoSueloOpGen += 1;
   _usoSueloActive = false;
-  OVERLAY_DEFS.forEach((d) => {
+  allOverlayDefs().forEach((d) => {
     _overlayActive[d.key] = false;
     _overlayKeyGen[d.key] = (_overlayKeyGen[d.key] || 0) + 1;
   });
@@ -2735,7 +2758,7 @@ function setLayerVisible(map, layerId, visible, cve) {
     if (overlayKey === "colonias" || overlayKey === "locsAtlas") {
       deactivateOverlayGeoLabels(map, overlayKey);
     }
-    if (overlayKey && OVERLAY_LABEL_BY_KEY[overlayKey]) {
+    if (overlayKey && hasOverlayLabelDef(overlayKey)) {
       const labelId = overlayLabelLayerId(layerId);
       if (map.getLayer(labelId)) {
         try {
@@ -2770,21 +2793,15 @@ function ensureMap(containerEl) {
     applyHomeVectorRenderQuality(_map);
     ensureThematicMartinLayers(_map);
     ensureOverlayLayersExceptSymbols(_map);
-    OVERLAY_DEFS.forEach((d) => ensureOverlayLabelLayer(_map, d));
+    allOverlayDefs().forEach((d) => ensureOverlayLabelLayer(_map, d));
     bindColoniasLabelsSync(_map, coloniasLabelsCtx, munFilter, ensureColoniasLabelsLayer);
     bindLocsAtlasLabelsSync(_map, locsAtlasLabelsCtx, munFilter, ensureLocsAtlasLabelsLayer);
     applyOverlayLabelTheme(_map);
     bringMarcoEntToFront(_map);
     _atlasLayersReady = true;
     flushStyleReadyQueue();
-    void Promise.all([
-      ensureResiduoSolidoMapIcons(_map),
-      ensureLocsPuntoMapIcons(_map),
-      ensureCluesMapIcons(_map),
-      ensureDenueMapIcons(_map),
-      ensureSaneamientoAguaMapIcons(_map),
-    ]).finally(() => {
-      OVERLAY_DEFS.forEach((d) => ensureOverlayLayer(_map, d));
+    void ensureAllVisorCatalogIconsOnMap(_map).finally(() => {
+      allOverlayDefs().forEach((d) => ensureOverlayLayer(_map, d));
       syncOverlayLayersFromState(_map, resolveVisorOverlayCve(_focusCve));
     });
     if (_pendingHomeMode !== null) {
@@ -2801,7 +2818,15 @@ function ensureMap(containerEl) {
     });
     ensureBaseLayerControl(_map);
     bindMapClick();
-    bindAllOverlayTipHovers(_map, overlayLayerIds);
+    void (async () => {
+      try {
+        const { preloadVisorLayerCatalog } = await import("./visorLayers.js");
+        await preloadVisorLayerCatalog();
+      } catch (e) {
+        console.warn("[map] catálogo visor antes de tooltips:", e);
+      }
+      bindAllOverlayTipHovers(_map, overlayLayerIds);
+    })();
     if (!_map.__overlayLabelThemeBound) {
       window.addEventListener("atlasgro-themechange", () => {
         if (_map) applyOverlayLabelTheme(_map);
@@ -3186,6 +3211,12 @@ export async function setMunicipioMapFocus(containerEl, cve_mun, profile = "defa
     return;
   }
 
+  try {
+    map.stop();
+  } catch {
+    /* cancela animación fly/fit previa */
+  }
+
   await fitToMunicipio(map, _focusCve, {
     padding: fitProfile.padding,
     maxZoom: fitProfile.maxZoom,
@@ -3193,8 +3224,9 @@ export async function setMunicipioMapFocus(containerEl, cve_mun, profile = "defa
     animate: true,
   });
   if (profile === "visor" || profile === "inv") {
-    const rncDef = getRncOverlayDef();
-    if (rncDef) ensureRncOverlayLayers(map, rncDef);
+    for (const def of getTieredOverlayDefs()) {
+      ensureTieredOverlayLayers(map, def);
+    }
   }
   syncOverlayLayersFromState(map, _focusCve);
 }
@@ -3203,23 +3235,29 @@ function syncOverlayCve(cve) {
   syncOverlayLayersFromState(_map, resolveVisorOverlayCve(cve));
 }
 
+let _scheduledMunFocusTimer = null;
+/** @type {{ containerEl: HTMLElement, cve_mun: string, profile: string }|null} */
+let _scheduledMunFocusJob = null;
+
 export function scheduleMunicipioMapFocus(containerEl, cve_mun, profile) {
   if (!containerEl || !cve_mun) return;
-  const run = () => setMunicipioMapFocus(containerEl, cve_mun, profile);
-  void run();
-  requestAnimationFrame(() => {
+  _scheduledMunFocusJob = { containerEl, cve_mun, profile };
+  if (_scheduledMunFocusTimer) clearTimeout(_scheduledMunFocusTimer);
+  _scheduledMunFocusTimer = setTimeout(() => {
+    _scheduledMunFocusTimer = null;
+    const job = _scheduledMunFocusJob;
+    _scheduledMunFocusJob = null;
+    if (!job) return;
     invalidateMapSize();
-    void run();
-    setTimeout(() => void run(), 120);
-    setTimeout(() => void run(), 320);
-  });
+    void setMunicipioMapFocus(job.containerEl, job.cve_mun, job.profile);
+  }, 140);
 }
 
 function applyHomeMapModeLayers(map, homeMode) {
   const show = (id, on) => safeSetLayout(map, id, "visibility", on ? "visible" : "none");
   if (homeMode) {
     setMunicipioOutlineOnly(map, null, false);
-    OVERLAY_DEFS.forEach((d) => {
+    allOverlayDefs().forEach((d) => {
       _overlayActive[d.key] = false;
     });
     hideVisorThematicLayersOnMap(map);
@@ -3539,7 +3577,7 @@ export function bindMapResizeHandler() {
 }
 
 function setOverlayActive(key, active, cve_mun) {
-  const def = OVERLAY_DEFS.find((d) => d.key === key);
+  const def = findOverlayDefByKey(key);
   if (!def) return;
   _overlayKeyGen[key] = (_overlayKeyGen[key] || 0) + 1;
   const keyGen = _overlayKeyGen[key];
@@ -3571,7 +3609,7 @@ function setOverlayActive(key, active, cve_mun) {
       forceOverlayGroupOff(map, key);
     }
     syncOverlayLayersFromState(map, cve);
-    if (active && key === "rnc") {
+    if (active && def?.rncTiered) {
       try {
         map.triggerRepaint();
       } catch {
@@ -3591,7 +3629,7 @@ function setOverlayActive(key, active, cve_mun) {
 
 /** Zoom mínimo de geometría de una capa del visor (p. ej. manzanas → 14). No incluye etiquetas. */
 export function getOverlayMinZoom(key) {
-  const def = OVERLAY_DEFS.find((d) => d.key === key);
+  const def = findOverlayDefByKey(key);
   if (def?.minzoom != null) return def.minzoom;
   if (VISOR_SHARED_LAYER_MIN_ZOOM[key] != null) return VISOR_SHARED_LAYER_MIN_ZOOM[key];
   return null;

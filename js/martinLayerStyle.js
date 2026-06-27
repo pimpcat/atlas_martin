@@ -543,9 +543,16 @@ export const RNC_TRONCAL_TIPO_VIAL = [
   "Vereda",
 ];
 
+/** Filtro MapLibre: campo MVT ∈ lista de valores (minúsculas o MAYÚSCULAS). */
+export function fieldValueMatchFilter(fieldName, values) {
+  const upper = String(fieldName).toUpperCase();
+  const field = ["coalesce", ["get", fieldName], ["get", upper], ""];
+  const list = Array.isArray(values) ? values : [];
+  return ["match", field, ...list.flatMap((t) => [t, true]), false];
+}
+
 function rncTipoVialMatchFilter(tipos) {
-  const tipo = ["coalesce", ["get", "tipo_vial"], ["get", "TIPO_VIAL"], ""];
-  return ["match", tipo, ...tipos.flatMap((t) => [t, true]), false];
+  return fieldValueMatchFilter("tipo_vial", tipos);
 }
 
 /** Filtro MapLibre: red mínima para vista estatal (zoom < 10). */

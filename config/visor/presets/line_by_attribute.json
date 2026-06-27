@@ -1,0 +1,19 @@
+{
+  "id": "line_by_attribute",
+  "label": "Línea por atributo",
+  "geometry": "line",
+  "type": "line",
+  "lineStack": false,
+  "attribute": {
+    "paint": "line-color",
+    "default_color": "#94a3b8"
+  },
+  "paint": {
+    "line-width": 2,
+    "line-opacity": 0.9
+  },
+  "style_schema": {
+    "width": { "paint": "line-width", "default": 2 },
+    "opacity": { "paint": "line-opacity", "default": 0.9 }
+  }
+}

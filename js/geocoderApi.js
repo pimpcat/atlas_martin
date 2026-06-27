@@ -154,13 +154,7 @@ export function geocoderRowsToFeatureCollection(rows) {
           cvegeo: r.id_origen || "",
           tabla_origen: r.tabla_origen || "",
           id_origen: r.id_origen || "",
-          geom_tipo:
-            r.geom_tipo ||
-            (r.tabla_origen === "c_col_ase" ||
-            r.tabla_origen === "c_l" ||
-            r.tabla_origen === "c_mun"
-              ? "polygon"
-              : "point"),
+          geom_tipo: r.geom_tipo || "point",
           lng: r.lng,
           lat: r.lat,
         },

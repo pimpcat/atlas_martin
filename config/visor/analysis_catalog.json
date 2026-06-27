@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "layers": {
+    "c_inv": {
+      "id": "c_inv",
+      "tabla": "c_inv",
+      "etiqueta": "Inventario Nacional de Vivienda (INV) 2020",
+      "descripcion": "Manzanas INV 2020 (atlas.c_inv)",
+      "geom_column": "the_geom",
+      "srid_almacenamiento": 900913,
+      "grupo": "censales",
+      "modo": "agregacion",
+      "ui": {
+        "unidad_registro": "manzana(s)",
+        "empty_msg": "No se encontraron manzanas INV dentro del polígono. Verifica que el área dibujada cubra manzanas en el mapa."
+      },
+      "sections": [
+        {
+          "titulo": "Población",
+          "campos": [
+            { "columna": "pobtot", "etiqueta": "Población total", "agregacion": "sum" },
+            { "columna": "pobfem", "etiqueta": "Población femenina", "agregacion": "sum" },
+            { "columna": "pobmas", "etiqueta": "Población masculina", "agregacion": "sum" },
+            { "columna": "pob0_14", "etiqueta": "Población de 0 a 14 años", "agregacion": "sum" },
+            { "columna": "p15a29a", "etiqueta": "Población de 15 a 29 años", "agregacion": "sum" },
+            { "columna": "p30a59a", "etiqueta": "Población de 30 a 59 años", "agregacion": "sum" },
+            { "columna": "p_60ymas", "etiqueta": "Población de 60 años y más", "agregacion": "sum" },
+            { "columna": "p_cd_t", "etiqueta": "Población con discapacidad", "agregacion": "sum" }
+          ]
+        },
+        {
+          "titulo": "Vivienda",
+          "campos": [
+            { "columna": "vivtot", "etiqueta": "Total de viviendas", "agregacion": "sum" },
+            { "columna": "vivpar", "etiqueta": "Total de viviendas particulares", "agregacion": "sum" },
+            { "columna": "tvipahab", "etiqueta": "Total de viviendas particulares habitadas", "agregacion": "sum" },
+            { "columna": "vivnohab", "etiqueta": "Viviendas particulares no habitadas", "agregacion": "sum" },
+            {
+              "columna": "v3masocu",
+              "etiqueta": "Viviendas particulares habitadas con 3 o más ocupantes por cuarto",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_pidt",
+              "etiqueta": "Viviendas particulares habitadas con piso de material diferente de tierra",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_c_el",
+              "etiqueta": "Viviendas particulares habitadas que disponen de energía eléctrica",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_exsa",
+              "etiqueta": "Viviendas particulares habitadas que disponen de excusado o sanitario",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_dren",
+              "etiqueta": "Viviendas particulares habitadas que disponen de drenaje",
+              "agregacion": "sum"
+            }
+          ]
+        }
+      ]
+    },
+    "iter": {
+      "id": "iter",
+      "tabla": "iter",
+      "etiqueta": "ITER 2020 — Localidades",
+      "descripcion": "Indicadores ITER por localidad (geometría en atlas.c_loc_punto)",
+      "geom_column": "the_geom",
+      "geom_tabla": "c_loc_punto",
+      "join_column": "cvegeo",
+      "srid_almacenamiento": 900913,
+      "grupo": "censales",
+      "modo": "agregacion",
+      "ui": {
+        "unidad_registro": "localidad(es)",
+        "empty_msg": "No se encontraron localidades dentro del polígono. Verifica que el área cubra puntos de localidad (c_loc_punto) en el mapa."
+      },
+      "sections": [
+        {
+          "titulo": "Población",
+          "campos": [
+            { "columna": "pobtot", "etiqueta": "Población total", "agregacion": "sum" },
+            { "columna": "pobfem", "etiqueta": "Población femenina", "agregacion": "sum" },
+            { "columna": "pobmas", "etiqueta": "Población masculina", "agregacion": "sum" }
+          ]
+        },
+        {
+          "titulo": "Etnicidad",
+          "campos": [
+            {
+              "columna": "p3ym_hli",
+              "etiqueta": "Población de 3 años y más que habla alguna lengua indígena",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "p3hlinhe",
+              "etiqueta": "Población de 3 años y más que habla alguna lengua indígena y no habla español",
+              "agregacion": "sum"
+            }
+          ]
+        },
+        {
+          "titulo": "Discapacidad",
+          "campos": [
+            { "columna": "pcon_disc", "etiqueta": "Población con discapacidad", "agregacion": "sum" },
+            {
+              "columna": "psind_lim",
+              "etiqueta": "Población sin discapacidad, limitación, problema o condición mental",
+              "agregacion": "sum"
+            }
+          ]
+        },
+        {
+          "titulo": "Características Económicas",
+          "campos": [
+            {
+              "columna": "pea",
+              "etiqueta": "Población de 12 años y más económicamente activa",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "pea_f",
+              "etiqueta": "Población femenina de 12 años y más económicamente activa",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "pea_m",
+              "etiqueta": "Población masculina de 12 años y más económicamente activa",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "psinder",
+              "etiqueta": "Población sin afiliación a servicios de salud",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "pder_ss",
+              "etiqueta": "Población afiliada a servicios de salud",
+              "agregacion": "sum"
+            }
+          ]
+        },
+        {
+          "titulo": "Vivienda",
+          "campos": [
+            { "columna": "vivtot", "etiqueta": "Total de viviendas", "agregacion": "sum" },
+            { "columna": "tvivhab", "etiqueta": "Total de viviendas habitadas", "agregacion": "sum" },
+            { "columna": "tvivpar", "etiqueta": "Total de viviendas particulares", "agregacion": "sum" },
+            { "columna": "vivpar_hab", "etiqueta": "Viviendas particulares habitadas", "agregacion": "sum" },
+            { "columna": "vivpar_des", "etiqueta": "Viviendas particulares deshabitadas", "agregacion": "sum" },
+            {
+              "columna": "vph_pisodt",
+              "etiqueta": "Viviendas particulares habitadas con piso de material diferente de tierra",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_pisoti",
+              "etiqueta": "Viviendas particulares habitadas con piso de tierra",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_c_elec",
+              "etiqueta": "Viviendas particulares habitadas que disponen de energía eléctrica",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_aguadv",
+              "etiqueta": "Viviendas particulares habitadas que disponen de agua entubada en el ámbito de la vivienda",
+              "agregacion": "sum"
+            },
+            {
+              "columna": "vph_drenaj",
+              "etiqueta": "Viviendas particulares habitadas que disponen de drenaje",
+              "agregacion": "sum"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

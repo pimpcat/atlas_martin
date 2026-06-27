@@ -1,0 +1,46 @@
+{
+  "id": "rnc_tiered",
+  "label": "Línea composite por zoom (RNC)",
+  "geometry": "line",
+  "type": "line",
+  "lineStack": true,
+  "composite": "tiered_zoom",
+  "warmLayer": true,
+  "zoom": {
+    "troncal_min": 10,
+    "detail_min": 12
+  },
+  "default_tiers": [
+    {
+      "id": "estatal",
+      "suffix": "-estatal",
+      "filter_values": ["Boulevard", "Camino", "Carretera", "Vereda"]
+    },
+    {
+      "id": "troncal",
+      "suffix": "-troncal",
+      "filter_values": [
+        "Carretera",
+        "Autopista",
+        "Corredor",
+        "Camino",
+        "Periférico",
+        "Circuito",
+        "Circunvalación",
+        "Boulevard",
+        "Viaducto",
+        "Calzada",
+        "Enlace",
+        "Vereda"
+      ]
+    },
+    {
+      "id": "detail",
+      "suffix": ""
+    }
+  ],
+  "style_schema": {
+    "field": { "target": "filterField", "default": "tipo_vial" },
+    "default_color": { "target": "defaultColor", "default": "rgb(140, 95, 55)" }
+  }
+}

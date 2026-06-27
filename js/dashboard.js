@@ -146,6 +146,7 @@ export function setVisorLayout(active) {
     main.classList.remove("escolaridad-mode");
     main.classList.remove("analfabetismo-mode");
     main.classList.add("visor-mode");
+    document.dispatchEvent(new CustomEvent("atlasgro-visor-layout-active"));
   } else {
     visor.classList.add("d-none");
     visor.setAttribute("aria-hidden", "true");

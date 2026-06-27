@@ -1,0 +1,16 @@
+{
+  "id": "polygon_fill",
+  "label": "Polígono relleno",
+  "geometry": "polygon",
+  "type": "fill",
+  "paint": {
+    "fill-color": "#dce8ef",
+    "fill-opacity": 0.45,
+    "fill-outline-color": "#6b8494"
+  },
+  "style_schema": {
+    "color": { "paint": "fill-color", "default": "#dce8ef" },
+    "opacity": { "paint": "fill-opacity", "default": 0.45 },
+    "outline_color": { "paint": "fill-outline-color", "default": "#6b8494" }
+  }
+}

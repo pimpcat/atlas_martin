@@ -10,7 +10,13 @@ import { apiUrl } from "./atlasConfig.js";
  * @param {() => { cve_mun?: string, nomgeo?: string } | null} getMunicipio
  * @param {() => string | null} [getCveMun] — respaldo si getMunicipio no trae cve_mun
  */
-export async function downloadVisorLayerExport(layerId, format, getMunicipio, getCveMun) {
+export async function downloadVisorLayerExport(
+  layerId,
+  format,
+  getMunicipio,
+  getCveMun,
+  { skipMunFilter = false } = {},
+) {
   const m = typeof getMunicipio === "function" ? getMunicipio() : null;
   let cve = m && m.cve_mun != null ? String(m.cve_mun).trim() : "";
   if (!cve && typeof getCveMun === "function") {
@@ -19,7 +25,7 @@ export async function downloadVisorLayerExport(layerId, format, getMunicipio, ge
       cve = String(raw).trim();
     }
   }
-  if (!cve) {
+  if (!skipMunFilter && !cve) {
     window.alert("Selecciona un municipio en el explorador para exportar la capa.");
     return;
   }
@@ -27,7 +33,7 @@ export async function downloadVisorLayerExport(layerId, format, getMunicipio, ge
   const url = new URL(apiUrl("/api/visor/export"), window.location.href);
   url.searchParams.set("layer", layerId);
   url.searchParams.set("format", format);
-  url.searchParams.set("cve_mun", cve);
+  if (cve) url.searchParams.set("cve_mun", cve);
   const nom = m && m.nomgeo ? String(m.nomgeo).trim() : "";
   if (nom) {
     url.searchParams.set("nom_mun", nom);

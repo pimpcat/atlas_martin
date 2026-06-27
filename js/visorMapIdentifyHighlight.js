@@ -5,6 +5,15 @@
  */
 import { fetchVisorFeatureGeometry } from "./visorBufferApi.js";
 import { pickVisorFeatureGid, resolveVisorApiLayerId } from "./visorFeaturePickBuffer.js";
+import { getVisorLayerEntry, loadVisorCatalog } from "./visorCatalog.js";
+import {
+  buildIconSizeFromLayerStyle,
+  ensureVisorIconKeyOnMap,
+  getIconMaplibreId,
+  isCatalogSymbolLayerEntry,
+  loadVisorIconsConfig,
+  resolveIconKeyFromCatalogStyle,
+} from "./visorIconRegistry.js";
 
 const SOURCE_ID = "atlas-identify-highlight-src";
 const LAYER_FILL = "atlas-identify-highlight-fill";
@@ -112,7 +121,7 @@ export function prefetchIdentifyGeometry(map, mapFeature, layerId, point, onRead
     return;
   }
   fetchFullGeometry(apiLayer, gid)
-    .then((full) => onReady?.(full?.geometry ? full : resolved))
+    .then((full) => onReady?.(full?.geometry ? mergeHighlightFeature(resolved, full) : resolved))
     .catch(() => onReady?.(resolved));
 }
 
@@ -181,6 +190,68 @@ function scaleIconSize(value, factor) {
   return value;
 }
 
+function mergeHighlightFeature(baseFeature, refinedFeature) {
+  if (!refinedFeature?.geometry) return baseFeature;
+  return {
+    type: "Feature",
+    properties: { ...(baseFeature?.properties || {}), ...(refinedFeature.properties || {}) },
+    geometry: refinedFeature.geometry,
+  };
+}
+
+function resolveCatalogSymbolHighlightSpec(feature, layerId) {
+  const catalogId = resolveVisorApiLayerId(normalizeIdentifyPrimary(layerId));
+  if (!catalogId) return null;
+  const entry = getVisorLayerEntry(catalogId);
+  if (!isCatalogSymbolLayerEntry(entry)) return null;
+  const iconKey = resolveIconKeyFromCatalogStyle(entry.style, feature?.properties);
+  const iconId = iconKey ? getIconMaplibreId(iconKey) : null;
+  if (!iconKey || !iconId) return null;
+  return { iconKey, iconId, style: entry.style || {} };
+}
+
+function applyCatalogSymbolHighlightLayout(map, spec) {
+  if (!map.getLayer(LAYER_SYMBOL) || !spec) return;
+
+  const { iconId, style } = spec;
+  const iconSize = buildIconSizeFromLayerStyle(style);
+  const layout = {
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
+    "icon-anchor": style.layout?.["icon-anchor"] || "bottom",
+    "icon-offset": style.layout?.["icon-offset"] || [0, 8],
+  };
+
+  for (const [key, val] of Object.entries(layout)) {
+    map.setLayoutProperty(LAYER_SYMBOL, key, val);
+    map.setLayoutProperty(LAYER_SYMBOL_HALO, key, val);
+  }
+
+  map.setLayoutProperty(LAYER_SYMBOL, "icon-image", iconId);
+  map.setLayoutProperty(LAYER_SYMBOL_HALO, "icon-image", iconId);
+  map.setLayoutProperty(LAYER_SYMBOL, "icon-size", scaleIconSize(iconSize, 1.1));
+  map.setLayoutProperty(LAYER_SYMBOL_HALO, "icon-size", scaleIconSize(iconSize, 1.32));
+
+  map.setPaintProperty(LAYER_SYMBOL, "icon-halo-width", 0);
+  map.setPaintProperty(LAYER_SYMBOL, "icon-opacity", 1);
+  map.setPaintProperty(LAYER_SYMBOL_HALO, "icon-halo-color", IDENTIFY_LINE_HALO);
+  map.setPaintProperty(LAYER_SYMBOL_HALO, "icon-halo-width", 5);
+  map.setPaintProperty(LAYER_SYMBOL_HALO, "icon-opacity", 0.05);
+  map.setLayoutProperty(LAYER_SYMBOL, "visibility", "visible");
+  map.setLayoutProperty(LAYER_SYMBOL_HALO, "visibility", "visible");
+  map.setLayoutProperty(LAYER_CIRCLE, "visibility", "none");
+}
+
+async function applyCatalogSymbolHighlight(map, feature, layerId) {
+  await loadVisorCatalog();
+  const spec = resolveCatalogSymbolHighlightSpec(feature, layerId);
+  if (!spec) return false;
+  await loadVisorIconsConfig();
+  await ensureVisorIconKeyOnMap(map, spec.iconKey);
+  applyCatalogSymbolHighlightLayout(map, spec);
+  return true;
+}
+
 function applySymbolHighlightFromSource(map, sourceLayerId) {
   if (!map.getLayer(LAYER_SYMBOL)) return;
 
@@ -229,6 +300,13 @@ function syncPointHighlightMode(map, feature, layerId) {
     if (map.getLayer(LAYER_CIRCLE)) map.setLayoutProperty(LAYER_CIRCLE, "visibility", "none");
     if (map.getLayer(LAYER_SYMBOL)) map.setLayoutProperty(LAYER_SYMBOL, "visibility", "none");
     if (map.getLayer(LAYER_SYMBOL_HALO)) map.setLayoutProperty(LAYER_SYMBOL_HALO, "visibility", "none");
+    return;
+  }
+
+  if (isPointGeometry(feature) && resolveCatalogSymbolHighlightSpec(feature, layerId)) {
+    void applyCatalogSymbolHighlight(map, feature, layerId).catch((err) => {
+      console.warn("[visorMapIdentify] resaltado symbol catálogo:", err);
+    });
     return;
   }
 
@@ -307,6 +385,7 @@ function resolveLabelLayerId(map, layerId) {
 
 function isSymbolHighlightActive(map, feature, layerId) {
   if (!feature || !isPointGeometry(feature)) return false;
+  if (resolveCatalogSymbolHighlightSpec(feature, layerId)) return true;
   if (!resolveSymbolSourceLayer(map, layerId)) return false;
   try {
     return map.getLayoutProperty(LAYER_SYMBOL, "visibility") === "visible";
@@ -548,8 +627,9 @@ export function showIdentifyHighlight(map, mapFeature, layerId, point, onRefined
 
   const cached = readCachedGeometry(apiLayer, gid);
   if (cached) {
-    apply(cached);
-    onRefined?.(cached);
+    const merged = mergeHighlightFeature(resolved, cached);
+    apply(merged);
+    onRefined?.(merged);
     return;
   }
 
@@ -559,8 +639,8 @@ export function showIdentifyHighlight(map, mapFeature, layerId, point, onRefined
   fetchFullGeometry(apiLayer, gid)
     .then((full) => {
       if (gen !== _fetchGen || !full?.geometry) return;
-      apply(full);
-      onRefined?.(full);
+      apply(mergeHighlightFeature(resolved, full));
+      onRefined?.(mergeHighlightFeature(resolved, full));
     })
     .catch((err) => {
       console.warn("[visorMapIdentify] geometría PostGIS:", err);

@@ -1,0 +1,18 @@
+{
+  "id": "polygon_by_attribute",
+  "label": "Polígono por atributo",
+  "geometry": "polygon",
+  "type": "fill",
+  "attribute": {
+    "paint": "fill-color",
+    "default_color": "#cbd5e1"
+  },
+  "paint": {
+    "fill-opacity": 0.55,
+    "fill-outline-color": "#64748b"
+  },
+  "style_schema": {
+    "opacity": { "paint": "fill-opacity", "default": 0.55 },
+    "outline_color": { "paint": "fill-outline-color", "default": "#64748b" }
+  }
+}

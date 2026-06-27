@@ -1,0 +1,380 @@
+{
+
+  "version": 3,
+
+  "size_profiles": {
+
+    "pin_zoom": {
+
+      "zoom_stops": [8, 1.38, 12, 1.8, 16, 2.25, 20, 2.63]
+
+    },
+
+    "standard_zoom": {
+
+      "zoom_stops": [5, 0.9, 8, 1.38, 12, 1.8, 16, 2.25, 20, 2.63]
+
+    },
+
+    "residuo_zoom": {
+
+      "zoom_stops": [6, 1.75, 10, 2.275, 14, 2.975, 18, 3.5]
+
+    }
+
+  },
+
+  "icons": {
+
+    "locs_punto_pin": {
+
+      "id": "atlas-locs-punto-pin",
+
+      "file": "locs-punto-pin.svg",
+
+      "label": "Localidad",
+
+      "size_profile": "pin_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "clues_health": {
+
+      "id": "atlas-clues-health",
+
+      "file": "clues-health.svg",
+
+      "label": "Establecimiento de salud",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "agua_obra_toma": {
+
+      "id": "atlas-agua-obra-toma",
+
+      "file": "agua-obra-toma.svg",
+
+      "label": "Obra de toma para la captación de agua",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "agua_potabilizacion": {
+
+      "id": "atlas-agua-potabilizacion",
+
+      "file": "agua-potabilizacion.svg",
+
+      "label": "Planta de potabilización",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "agua_tratamiento": {
+
+      "id": "atlas-agua-tratamiento",
+
+      "file": "agua-tratamiento.svg",
+
+      "label": "Planta de tratamiento",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "agua_prestador": {
+
+      "id": "atlas-agua-prestador",
+
+      "file": "agua-prestador.svg",
+
+      "label": "Prestador de servicio de agua potable",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "agua_descarga": {
+
+      "id": "atlas-agua-descarga",
+
+      "file": "agua-descarga.svg",
+
+      "label": "Punto de descarga",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "agua_default": {
+
+      "id": "atlas-agua-default",
+
+      "file": "agua-default.svg",
+
+      "label": "Otro servicio de agua o saneamiento",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "residuo_disposicion": {
+
+      "id": "atlas-residuo-disposicion",
+
+      "file": "residuo-disposicion.svg",
+
+      "label": "Sitio de disposición final de residuos",
+
+      "size_profile": "residuo_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 3.5,
+
+      "supersample": 4,
+
+      "version": 1
+
+    },
+
+    "residuo_recoleccion": {
+
+      "id": "atlas-residuo-recoleccion",
+
+      "file": "residuo-recoleccion.svg",
+
+      "label": "Prestador de servicio de recolección",
+
+      "size_profile": "residuo_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 3.5,
+
+      "supersample": 4,
+
+      "version": 1
+
+    },
+
+    "residuo_default": {
+
+      "id": "atlas-residuo-default",
+
+      "file": "residuo-default.svg",
+
+      "label": "Otro punto de residuos sólidos",
+
+      "size_profile": "residuo_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 3.5,
+
+      "supersample": 4,
+
+      "version": 1
+
+    },
+
+    "denue_rastros": {
+
+      "id": "atlas-denue-rastro",
+
+      "file": "denue-rastro.svg",
+
+      "label": "Rastro (sacrificio de ganado)",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "denue_gasolinerias": {
+
+      "id": "atlas-denue-gasolinera",
+
+      "file": "denue-gasolinera.svg",
+
+      "label": "Gasolinera",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "denue_gaseras": {
+
+      "id": "atlas-denue-gasera",
+
+      "file": "denue-gasera.svg",
+
+      "label": "Gasera",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "denue_escuelas": {
+
+      "id": "atlas-denue-escuela",
+
+      "file": "denue-escuela.svg",
+
+      "label": "Escuela",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "denue_hospitales": {
+
+      "id": "atlas-denue-hospital",
+
+      "file": "denue-hospital.svg",
+
+      "label": "Hospital (DENUE)",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "denue_museos": {
+
+      "id": "atlas-denue-museo",
+
+      "file": "denue-museo.svg",
+
+      "label": "Museo",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "denue_cementerios": {
+
+      "id": "atlas-denue-cementerio",
+
+      "file": "denue-cementerio.svg",
+
+      "label": "Cementerio",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    },
+
+    "denue_iglesias": {
+
+      "id": "atlas-denue-iglesia",
+
+      "file": "denue-iglesia.svg",
+
+      "label": "Iglesia o templo",
+
+      "size_profile": "standard_zoom",
+
+      "logical_px": 32,
+
+      "max_scale": 2.63,
+
+      "version": 1
+
+    }
+
+  }
+
+}
+

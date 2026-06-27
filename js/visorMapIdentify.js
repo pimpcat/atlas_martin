@@ -20,8 +20,13 @@ import {
   rebindOverlayIdentifyForMap,
 } from "./mapOverlayTips.js";
 import { getVisorDrawControl } from "./visorDraw.js";
-import { isVisorFeaturePickBusy } from "./visorFeaturePickBuffer.js";
+import { isVisorFeaturePickBusy, resolveVisorApiLayerId } from "./visorFeaturePickBuffer.js";
 import { getVisorGeocoderContainer } from "./visorGeocoder.js";
+import { getVisorLayerEntry } from "./visorCatalog.js";
+import {
+  buildIdentifyHtmlFromCatalog,
+  resolveVisorHoverConfig,
+} from "./visorIdentifyCatalog.js";
 import {
   showIdentifyHighlight,
   clearIdentifyHighlight,
@@ -78,6 +83,31 @@ function resetIdentifySelection() {
   _lastPrimary = null;
 }
 
+function rebuildIdentifyPanelHtml() {
+  if (!_lastFeature || !_lastLngLat) return null;
+  const catalogId = resolveVisorApiLayerId(_lastPrimary || _lastLayerId || "");
+  const entry = catalogId ? getVisorLayerEntry(catalogId) : null;
+  const identify = entry ? resolveVisorHoverConfig(entry) : null;
+  const props = _lastFeature.properties || {};
+  let html = identify ? buildIdentifyHtmlFromCatalog(identify, props) : null;
+  if (!html) {
+    const gid = props.gid ?? props.GID ?? "";
+    if (gid) {
+      html = `<div class="atlas-loc-tip"><div class="atlas-loc-tip__title">gid: ${gid}</div></div>`;
+    }
+  }
+  if (!html) return null;
+  return appendIdentifyCoords(html, _lastLngLat.lng, _lastLngLat.lat);
+}
+
+function refreshIdentifyPanelContent() {
+  if (!isIdentifyPanelOpen()) return;
+  const html = rebuildIdentifyPanelHtml();
+  if (!html) return;
+  const content = _panel.querySelector(".atlas-map-identify__content");
+  if (content) content.innerHTML = html;
+}
+
 function prefetchLastFeatureGeometry() {
   const map = _mapRef || getLeafletMap();
   if (!map || !_lastFeature) return;
@@ -89,9 +119,10 @@ function prefetchLastFeatureGeometry() {
     if (gen !== _prefetchGen || !_lastFeature) return;
     _lastFeature = {
       type: "Feature",
-      properties: full.properties || _lastFeature.properties || {},
-      geometry: full.geometry,
+      properties: { ...(_lastFeature.properties || {}), ...(full.properties || {}) },
+      geometry: full.geometry || _lastFeature.geometry,
     };
+    refreshIdentifyPanelContent();
   });
 }
 
@@ -148,8 +179,8 @@ function applyIdentifyHighlight() {
     if (!_lastFeature) return;
     _lastFeature = {
       type: "Feature",
-      properties: full.properties || _lastFeature.properties || {},
-      geometry: full.geometry,
+      properties: { ...(_lastFeature.properties || {}), ...(full.properties || {}) },
+      geometry: full.geometry || _lastFeature.geometry,
     };
   });
 }

@@ -29,6 +29,25 @@ const TIP_DEFS = [
 
 const TIP_DEF_BY_PRIMARY = Object.fromEntries(TIP_DEFS.map((d) => [d.primary, d]));
 
+/** Tips registrados desde el catálogo del visor (data-driven). */
+/** @type {Map<string, { tipHtml: (p: object) => string, visorOnly?: boolean }>} */
+const _catalogTipByPrimary = new Map();
+
+/**
+ * Registra identify/hover desde el catálogo del visor geográfico.
+ * @param {string} primary - id MapLibre (p. ej. ly-colonias)
+ * @param {(props: object) => string} tipHtmlFn
+ * @param {boolean} [visorOnly]
+ */
+export function registerCatalogTipDef(primary, tipHtmlFn, visorOnly = false) {
+  if (!primary || typeof tipHtmlFn !== "function") return;
+  _catalogTipByPrimary.set(primary, { tipHtml: tipHtmlFn, visorOnly });
+}
+
+export function clearCatalogTipDefs() {
+  _catalogTipByPrimary.clear();
+}
+
 /** @type {WeakMap<import("maplibre-gl").Map, Set<string>>} */
 const _boundLayersByMap = new WeakMap();
 /** @type {WeakMap<import("maplibre-gl").Map, Set<string>>} */
@@ -225,6 +244,7 @@ export function setOverlayTipsVisorModeActive(fn) {
 
 function normalizeLayerIdToPrimary(layerId) {
   if (!layerId) return null;
+  if (_catalogTipByPrimary.has(layerId)) return layerId;
   if (TIP_DEF_BY_PRIMARY[layerId]) return layerId;
 
   const visorLabels = /^ly-(.+)-visor-labels$/.exec(layerId);
@@ -254,6 +274,13 @@ function normalizeLayerIdToPrimary(layerId) {
 export function buildOverlayIdentifyHtml(layerId, properties) {
   const primary = normalizeLayerIdToPrimary(layerId);
   if (!primary) return null;
+
+  const catalogDef = _catalogTipByPrimary.get(primary);
+  if (catalogDef) {
+    if (catalogDef.visorOnly && !_visorGeograficoActiveFn()) return null;
+    return catalogDef.tipHtml(properties || {});
+  }
+
   const def = TIP_DEF_BY_PRIMARY[primary];
   if (!def) return null;
   if (def.visorOnly && !_visorGeograficoActiveFn()) return null;
@@ -415,7 +442,21 @@ function bindLayerIdentifyClick(map, layerId, primary, tipHtml, visorOnly = fals
 
 function refreshOverlayIdentifyBindings(map, overlayLayerIds) {
   if (!map || !_onIdentifyClick) return;
+
+  for (const [primary, catalogDef] of _catalogTipByPrimary) {
+    for (const layerId of overlayLayerIds(map, primary)) {
+      bindLayerIdentifyClick(
+        map,
+        layerId,
+        primary,
+        catalogDef.tipHtml,
+        Boolean(catalogDef.visorOnly),
+      );
+    }
+  }
+
   for (const def of TIP_DEFS) {
+    if (_catalogTipByPrimary.has(def.primary)) continue;
     for (const layerId of overlayLayerIds(map, def.primary)) {
       bindLayerIdentifyClick(map, layerId, def.primary, def.tipHtml, Boolean(def.visorOnly));
     }
@@ -439,7 +480,20 @@ export function refreshOverlayTipBindings(map, overlayLayerIds) {
   if (!map) return;
   _overlayLayerIdsFn = overlayLayerIds;
 
+  for (const [primary, catalogDef] of _catalogTipByPrimary) {
+    for (const layerId of overlayLayerIds(map, primary)) {
+      bindLayerTipHandlers(
+        map,
+        layerId,
+        primary,
+        catalogDef.tipHtml,
+        Boolean(catalogDef.visorOnly),
+      );
+    }
+  }
+
   for (const def of TIP_DEFS) {
+    if (_catalogTipByPrimary.has(def.primary)) continue;
     for (const layerId of overlayLayerIds(map, def.primary)) {
       bindLayerTipHandlers(map, layerId, def.primary, def.tipHtml, Boolean(def.visorOnly));
     }

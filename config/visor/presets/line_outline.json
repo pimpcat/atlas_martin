@@ -1,0 +1,24 @@
+{
+  "id": "line_outline",
+  "label": "Línea con contorno",
+  "geometry": "line",
+  "type": "line",
+  "lineStack": true,
+  "paintHalo": {
+    "line-color": "#333333",
+    "line-width": 4,
+    "line-opacity": 0.95
+  },
+  "paint": {
+    "line-color": "#333333",
+    "line-width": 2,
+    "line-opacity": 0.95
+  },
+  "style_schema": {
+    "color": { "paint": "line-color", "target": "paint", "default": "#333333" },
+    "halo_color": { "paint": "line-color", "target": "paintHalo", "default": "#333333" },
+    "width": { "paint": "line-width", "target": "paint", "default": 2 },
+    "halo_width": { "paint": "line-width", "target": "paintHalo", "default": 4 },
+    "opacity": { "paint": "line-opacity", "target": "paint", "default": 0.95 }
+  }
+}

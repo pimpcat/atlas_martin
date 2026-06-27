@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Visor Studio — Atlas Municipal</title>
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page">
+  <main class="container py-5" style="max-width: 420px">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h1 class="h5 mb-1">Visor Studio</h1>
+        <p class="small text-muted mb-3">Acceso restringido para administración del catálogo de capas.</p>
+        <form id="visorStudioLoginForm" class="d-grid gap-3">
+          <div>
+            <label class="form-label small" for="visorStudioUser">Usuario</label>
+            <input id="visorStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+          </div>
+          <div>
+            <label class="form-label small" for="visorStudioPass">Contraseña</label>
+            <input id="visorStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+          </div>
+          <div id="visorStudioError" class="small text-danger d-none" role="alert"></div>
+          <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+        </form>
+        <p class="small text-muted mt-3 mb-0">
+          Tras iniciar sesión volverá al portal. Esta URL no aparece en el menú público.
+        </p>
+      </div>
+    </div>
+  </main>
+  <script type="module">
+    import { loginAdmin, isVisorAdminLoggedIn } from "./js/visorAdminAuth.js";
+
+    if (isVisorAdminLoggedIn()) {
+      window.location.replace("./index.html?visor=1");
+    }
+
+    const form = document.getElementById("visorStudioLoginForm");
+    const errEl = document.getElementById("visorStudioError");
+    form?.addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      errEl?.classList.add("d-none");
+      const username = document.getElementById("visorStudioUser")?.value?.trim();
+      const password = document.getElementById("visorStudioPass")?.value || "";
+      try {
+        await loginAdmin(username, password);
+        window.location.replace("./index.html?visor=1");
+      } catch (err) {
+        if (errEl) {
+          errEl.textContent = err?.message || "Error de acceso";
+          errEl.classList.remove("d-none");
+        }
+      }
+    });
+  </script>
+</body>
+</html>

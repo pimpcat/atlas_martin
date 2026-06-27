@@ -8,151 +8,13 @@
  */
 import { getLeafletMap, whenAtlasMapReady } from "./map.js";
 import { getLastDrawnPolygonFeature, formatDrawArea, normalizePolygonForAnalysis, ensureVisorToolsExtrasHost, syncVisorToolsExtrasVisibility } from "./visorDraw.js";
-import { DENUE_LAYER_SPECS } from "./denueLayers.js";
+import { loadVisorCatalog, getAnalysisCatalog } from "./visorCatalog.js";
 import { getActiveBufferFeature } from "./visorBuffer.js";
 import {
   fetchCapasIntersectantes,
   fetchColumnasCapa,
   ejecutarAnalisisDinamico,
 } from "./spatialAnalysisApi.js";
-
-/** Catálogo fijo INV — población primero, luego vivienda. */
-const INV_SECCIONES = [
-  {
-    titulo: "Población",
-    campos: [
-      { columna: "pobtot", etiqueta: "Población total" },
-      { columna: "pobfem", etiqueta: "Población femenina" },
-      { columna: "pobmas", etiqueta: "Población masculina" },
-      { columna: "pob0_14", etiqueta: "Población de 0 a 14 años" },
-      { columna: "p15a29a", etiqueta: "Población de 15 a 29 años" },
-      { columna: "p30a59a", etiqueta: "Población de 30 a 59 años" },
-      { columna: "p_60ymas", etiqueta: "Población de 60 años y más" },
-      { columna: "p_cd_t", etiqueta: "Población con discapacidad" },
-    ],
-  },
-  {
-    titulo: "Vivienda",
-    campos: [
-      { columna: "vivtot", etiqueta: "Total de viviendas" },
-      { columna: "vivpar", etiqueta: "Total de viviendas particulares" },
-      { columna: "tvipahab", etiqueta: "Total de viviendas particulares habitadas" },
-      { columna: "vivnohab", etiqueta: "Viviendas particulares no habitadas" },
-      {
-        columna: "v3masocu",
-        etiqueta: "Viviendas particulares habitadas con 3 o más ocupantes por cuarto",
-      },
-      {
-        columna: "vph_pidt",
-        etiqueta: "Viviendas particulares habitadas con piso de material diferente de tierra",
-      },
-      {
-        columna: "vph_c_el",
-        etiqueta: "Viviendas particulares habitadas que disponen de energía eléctrica",
-      },
-      {
-        columna: "vph_exsa",
-        etiqueta: "Viviendas particulares habitadas que disponen de excusado o sanitario",
-      },
-      {
-        columna: "vph_dren",
-        etiqueta: "Viviendas particulares habitadas que disponen de drenaje",
-      },
-    ],
-  },
-];
-
-/** Catálogo ITER 2020 — localidades (geometría vía c_loc_punto). */
-const ITER_SECCIONES = [
-  {
-    titulo: "Población",
-    campos: [
-      { columna: "pobtot", etiqueta: "Población total" },
-      { columna: "pobfem", etiqueta: "Población femenina" },
-      { columna: "pobmas", etiqueta: "Población masculina" },
-    ],
-  },
-  {
-    titulo: "Etnicidad",
-    campos: [
-      {
-        columna: "p3ym_hli",
-        etiqueta: "Población de 3 años y más que habla alguna lengua indígena",
-      },
-      {
-        columna: "p3hlinhe",
-        etiqueta:
-          "Población de 3 años y más que habla alguna lengua indígena y no habla español",
-      },
-    ],
-  },
-  {
-    titulo: "Discapacidad",
-    campos: [
-      { columna: "pcon_disc", etiqueta: "Población con discapacidad" },
-      {
-        columna: "psind_lim",
-        etiqueta: "Población sin discapacidad, limitación, problema o condición mental",
-      },
-    ],
-  },
-  {
-    titulo: "Características Económicas",
-    campos: [
-      {
-        columna: "pea",
-        etiqueta: "Población de 12 años y más económicamente activa",
-      },
-      {
-        columna: "pea_f",
-        etiqueta: "Población femenina de 12 años y más económicamente activa",
-      },
-      {
-        columna: "pea_m",
-        etiqueta: "Población masculina de 12 años y más económicamente activa",
-      },
-      {
-        columna: "psinder",
-        etiqueta: "Población sin afiliación a servicios de salud",
-      },
-      {
-        columna: "pder_ss",
-        etiqueta: "Población afiliada a servicios de salud",
-      },
-    ],
-  },
-  {
-    titulo: "Vivienda",
-    campos: [
-      { columna: "vivtot", etiqueta: "Total de viviendas" },
-      { columna: "tvivhab", etiqueta: "Total de viviendas habitadas" },
-      { columna: "tvivpar", etiqueta: "Total de viviendas particulares" },
-      { columna: "vivpar_hab", etiqueta: "Viviendas particulares habitadas" },
-      { columna: "vivpar_des", etiqueta: "Viviendas particulares deshabitadas" },
-      {
-        columna: "vph_pisodt",
-        etiqueta: "Viviendas particulares habitadas con piso de material diferente de tierra",
-      },
-      {
-        columna: "vph_pisoti",
-        etiqueta: "Viviendas particulares habitadas con piso de tierra",
-      },
-      {
-        columna: "vph_c_elec",
-        etiqueta: "Viviendas particulares habitadas que disponen de energía eléctrica",
-      },
-      {
-        columna: "vph_aguadv",
-        etiqueta:
-          "Viviendas particulares habitadas que disponen de agua entubada en el ámbito de la vivienda",
-      },
-      {
-        columna: "vph_drenaj",
-        etiqueta: "Viviendas particulares habitadas que disponen de drenaje",
-      },
-    ],
-  },
-];
 
 const NO_INTERSECT_MSG =
   "No es posible realizar el análisis espacial: el polígono no intersecta datos censales (INV/ITER), capas DENUE ni establecimientos de salud. Ajusta el área dibujada.";
@@ -166,51 +28,79 @@ const GRUPO_ETIQUETAS = {
 /** Pseudo-capa del combo: abre la sección de tipos DENUE debajo (como ITER/INV). */
 const DENUE_PANEL_CAPA_ID = "__denue__";
 
-const CAPA_UI = {
-  c_inv: {
-    capaId: "c_inv",
-    secciones: INV_SECCIONES,
-    unidadRegistro: "manzana(s)",
-    emptyMsg:
-      "No se encontraron manzanas INV dentro del polígono. Verifica que el área dibujada cubra manzanas en el mapa.",
-  },
-  iter: {
-    capaId: "iter",
-    secciones: ITER_SECCIONES,
-    unidadRegistro: "localidad(es)",
-    emptyMsg:
-      "No se encontraron localidades dentro del polígono. Verifica que el área cubra puntos de localidad (c_loc_punto) en el mapa.",
-  },
-};
+/** @type {Record<string, object>} */
+let _capaUiById = {};
+/** @type {Record<string, object>} */
+let _countCapaUiById = {};
+let _analysisCatalogReady = false;
 
-/** Capas de solo conteo (DENUE + CLUES). */
-const COUNT_CAPA_UI = {};
-for (const spec of DENUE_LAYER_SPECS) {
-  COUNT_CAPA_UI[spec.visorId] = {
-    capaId: spec.visorId,
-    modoConteo: true,
-    unidadRegistro: "elemento(s)",
-    emptyMsg: `No se encontraron ${spec.panelLabel.toLowerCase()} dentro del polígono.`,
-  };
+async function ensureAnalysisUiCatalog() {
+  if (_analysisCatalogReady) return;
+  await loadVisorCatalog();
+  let catalog = getAnalysisCatalog();
+  if (!catalog?.layers) {
+    try {
+      const url = new URL("../config/visor/analysis_catalog.json", import.meta.url);
+      const res = await fetch(url, { cache: "no-cache" });
+      if (res.ok) catalog = await res.json();
+    } catch {
+      /* sin catálogo estático */
+    }
+  }
+  const layers = catalog?.layers || {};
+  const uiMap = {};
+  for (const [id, entry] of Object.entries(layers)) {
+    if (!entry || typeof entry !== "object") continue;
+    const ui = entry.ui || {};
+    uiMap[id] = {
+      capaId: id,
+      secciones: entry.sections || [],
+      unidadRegistro: ui.unidad_registro || "registro(s)",
+      emptyMsg:
+        ui.empty_msg ||
+        "No se encontraron registros dentro del polígono. Ajusta el área dibujada.",
+    };
+  }
+  _capaUiById = uiMap;
+  _analysisCatalogReady = true;
 }
-COUNT_CAPA_UI.clues = {
-  capaId: "clues",
-  modoConteo: true,
-  unidadRegistro: "establecimiento(s)",
-  emptyMsg: "No se encontraron establecimientos de salud dentro del polígono.",
-};
+
+function rebuildCountCapaUiFromCapas(capas) {
+  const out = {};
+  for (const meta of capas || []) {
+    const id = meta.id || meta.tabla;
+    if (!id) continue;
+    if (meta.modo !== "conteo" && meta.grupo !== "denue") continue;
+    const label = (meta.etiqueta || id).toLowerCase();
+    out[id] = {
+      capaId: id,
+      modoConteo: true,
+      unidadRegistro:
+        id === "clues" ? "establecimiento(s)" : meta.grupo === "denue" ? "elemento(s)" : "registro(s)",
+      emptyMsg:
+        id === "clues"
+          ? "No se encontraron establecimientos de salud dentro del polígono."
+          : `No se encontraron ${label} dentro del polígono.`,
+    };
+  }
+  _countCapaUiById = out;
+}
 
 function buildOrdenCampos(secciones) {
-  const campos = secciones.flatMap((s) => s.campos);
+  const campos = (secciones || []).flatMap((s) => s.campos || []);
   return new Map(campos.map((c, i) => [c.columna, i]));
 }
 
 function getCapaUi(capaId) {
-  return COUNT_CAPA_UI[capaId] || CAPA_UI[capaId] || CAPA_UI.c_inv;
+  return _countCapaUiById[capaId] || _capaUiById[capaId] || _capaUiById.c_inv;
 }
 
 function isConteoCapa(capaId) {
-  return Boolean(COUNT_CAPA_UI[capaId]);
+  return Boolean(_countCapaUiById[capaId]);
+}
+
+function defaultInvSections() {
+  return _capaUiById.c_inv?.secciones || [];
 }
 
 function capaMetaById(capaId) {
@@ -232,9 +122,9 @@ let _capasDenue = [];
 let _selectedCapaId = "";
 let _capaPickerDocClick = null;
 let _columnas = [];
-let _seccionesUI = INV_SECCIONES;
-let _ordenCampos = buildOrdenCampos(INV_SECCIONES);
-let _capaUi = CAPA_UI.c_inv;
+let _seccionesUI = [];
+let _ordenCampos = new Map();
+let _capaUi = { capaId: "c_inv", secciones: [], unidadRegistro: "manzana(s)", emptyMsg: "" };
 let _ultimoResultado = null;
 let _polygonHandler = null;
 let _intersectCacheKey = null;
@@ -324,7 +214,7 @@ async function resolveIntersectCapas(feat) {
 }
 
 function isDenueCapaId(capaId) {
-  return Boolean(COUNT_CAPA_UI[capaId]) && capaId !== "clues";
+  return Boolean(_countCapaUiById[capaId]) && capaId !== "clues";
 }
 
 function capasForDropdown(capas) {
@@ -783,6 +673,8 @@ async function loadCapasSelect() {
   try {
     const intersectCapas = await resolveIntersectCapas(feat);
     _capas = intersectCapas;
+    await ensureAnalysisUiCatalog();
+    rebuildCountCapaUiFromCapas(intersectCapas);
     const split = splitIntersectCapas(intersectCapas);
     _capasDenue = split.denue;
 
@@ -1030,16 +922,6 @@ function formatDetailCell(value, field) {
   return escapeHtml(value);
 }
 
-function detailCellClass(field) {
-  if (field === "num" || field === "cve_mun" || field === "cve_loc") {
-    return "text-center";
-  }
-  if (field === "domicilio" || field === "nom_insti" || field === "nom_comer" || field === "nom_estab") {
-    return "visor-spatial-cell--left";
-  }
-  return "text-center";
-}
-
 function renderDetailTable(columns, rows, title, options = {}) {
   if (!Array.isArray(columns) || !columns.length || !Array.isArray(rows) || !rows.length) {
     return "";
@@ -1067,6 +949,55 @@ function renderDetailTable(columns, rows, title, options = {}) {
     tbl += `<p class="small text-warning mt-2 mb-0">Se muestran los primeros ${rows.length.toLocaleString("es-MX")} registros (límite del servidor).</p>`;
   }
   return tbl;
+}
+
+function detailCellClass(field) {
+  if (field === "num" || field === "cve_mun" || field === "cve_loc") {
+    return "text-center";
+  }
+  if (field === "domicilio" || field === "nom_insti" || field === "nom_comer" || field === "nom_estab") {
+    return "visor-spatial-cell--left";
+  }
+  return "text-center";
+}
+
+/** Envuelve tablas de detalle (CLUES / DENUE) en panel colapsable (cerrado por defecto). */
+function buildDetailToggleSection(detailHtml, label) {
+  if (!detailHtml?.trim()) return "";
+  return (
+    `<div class="visor-spatial-detail-panel mt-3">` +
+    `<button type="button" class="btn btn-sm btn-outline-secondary visor-spatial-detail-toggle w-100 d-flex justify-content-between align-items-center gap-2" aria-expanded="false">` +
+    `<span class="visor-spatial-detail-toggle__label">${escapeHtml(label)}</span>` +
+    `<span class="visor-spatial-detail-toggle__chev flex-shrink-0" aria-hidden="true">▸</span>` +
+    `</button>` +
+    `<div class="visor-spatial-detail-collapse d-none mt-2">${detailHtml}</div>` +
+    `</div>`
+  );
+}
+
+function wireDetailToggleButtons(root) {
+  if (!root) return;
+  root.querySelectorAll(".visor-spatial-detail-toggle").forEach((btn) => {
+    if (btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    const defaultLabel = btn.querySelector(".visor-spatial-detail-toggle__label")?.textContent?.trim() || "";
+    btn.addEventListener("click", () => {
+      const panel = btn.closest(".visor-spatial-detail-panel");
+      const collapse = panel?.querySelector(".visor-spatial-detail-collapse");
+      const labelEl = btn.querySelector(".visor-spatial-detail-toggle__label");
+      const chev = btn.querySelector(".visor-spatial-detail-toggle__chev");
+      if (!collapse) return;
+      const opening = collapse.classList.contains("d-none");
+      collapse.classList.toggle("d-none");
+      btn.setAttribute("aria-expanded", opening ? "true" : "false");
+      if (chev) chev.textContent = opening ? "▾" : "▸";
+      if (labelEl && defaultLabel) {
+        labelEl.textContent = opening
+          ? defaultLabel.replace(/^Mostrar\b/, "Ocultar")
+          : defaultLabel.replace(/^Ocultar\b/, "Mostrar");
+      }
+    });
+  });
 }
 
 function appendDetailExcelRows(sheetRows, title, columns, rows) {
@@ -1158,7 +1089,15 @@ function renderResults(data) {
     if (data.filas_truncadas) {
       detailHtml += `<p class="small text-warning mt-2 mb-0">Algunos listados alcanzaron el límite de filas del servidor.</p>`;
     }
-    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailHtml}`;
+    const detailCount = data.filas.filter((f) => f.rows?.length).length;
+    const detailPanel = buildDetailToggleSection(
+      detailHtml,
+      detailCount > 1
+        ? `Mostrar detalle de elementos (${detailCount} tablas)`
+        : "Mostrar detalle de elementos",
+    );
+    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailPanel}`;
+    wireDetailToggleButtons(host);
     return;
   }
 
@@ -1178,7 +1117,9 @@ function renderResults(data) {
           { truncated: data.filas_truncadas, maxHeight: 360 },
         )
       : "";
-    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailHtml}`;
+    const detailPanel = buildDetailToggleSection(detailHtml, "Mostrar detalle de elementos");
+    host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailPanel}`;
+    wireDetailToggleButtons(host);
     return;
   }
 
@@ -1367,6 +1308,7 @@ function onExportExcel() {
 
 async function openSpatialModal() {
   ensureModal();
+  await ensureAnalysisUiCatalog();
   renderPolyInfo();
   _modalEl.querySelector("#visorSpatialResults")?.classList.add("d-none");
   _modalEl.querySelector("#visorSpatialExportBtn")?.classList.add("d-none");
@@ -1430,9 +1372,10 @@ export function teardownVisorSpatialAnalysis() {
     _capaPickerDocClick = null;
   }
   _columnas = [];
-  _seccionesUI = INV_SECCIONES;
-  _ordenCampos = buildOrdenCampos(INV_SECCIONES);
-  _capaUi = CAPA_UI.c_inv;
+  const invSections = defaultInvSections();
+  _seccionesUI = invSections;
+  _ordenCampos = buildOrdenCampos(invSections);
+  _capaUi = getCapaUi("c_inv");
   clearIntersectCache();
   clearTimeout(_prefetchTimer);
   _prefetchTimer = null;

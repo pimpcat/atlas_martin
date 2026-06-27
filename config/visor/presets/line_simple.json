@@ -1,0 +1,17 @@
+{
+  "id": "line_simple",
+  "label": "Línea simple",
+  "geometry": "line",
+  "type": "line",
+  "lineStack": false,
+  "paint": {
+    "line-color": "#333333",
+    "line-width": 2,
+    "line-opacity": 0.9
+  },
+  "style_schema": {
+    "color": { "paint": "line-color", "default": "#333333" },
+    "width": { "paint": "line-width", "default": 2 },
+    "opacity": { "paint": "line-opacity", "default": 0.9 }
+  }
+}

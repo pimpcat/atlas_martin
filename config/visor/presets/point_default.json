@@ -1,0 +1,20 @@
+{
+  "id": "point_default",
+  "label": "Punto circular",
+  "geometry": "point",
+  "type": "circle",
+  "paint": {
+    "circle-color": "#0d9488",
+    "circle-radius": 5,
+    "circle-stroke-width": 1,
+    "circle-stroke-color": "#ffffff",
+    "circle-opacity": 0.92
+  },
+  "style_schema": {
+    "color": { "paint": "circle-color", "default": "#0d9488" },
+    "radius": { "paint": "circle-radius", "default": 5 },
+    "stroke_color": { "paint": "circle-stroke-color", "default": "#ffffff" },
+    "stroke_width": { "paint": "circle-stroke-width", "default": 1 },
+    "opacity": { "paint": "circle-opacity", "default": 0.92 }
+  }
+}

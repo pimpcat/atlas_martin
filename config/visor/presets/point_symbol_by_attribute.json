@@ -1,0 +1,21 @@
+{
+  "id": "point_symbol_by_attribute",
+  "label": "Punto con icono por atributo",
+  "geometry": "point",
+  "type": "symbol",
+  "attribute": {
+    "layout": "icon-image"
+  },
+  "layout": {
+    "icon-allow-overlap": true,
+    "icon-ignore-placement": true,
+    "icon-anchor": "bottom",
+    "icon-offset": [0, 8]
+  },
+  "paint": {
+    "icon-opacity": 0.96
+  },
+  "style_schema": {
+    "opacity": { "paint": "icon-opacity", "target": "paint", "default": 0.96 }
+  }
+}

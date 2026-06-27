@@ -4,13 +4,8 @@
  */
 import { getLeafletMap, whenAtlasMapReady } from "./map.js";
 import { getActiveVisorLayers } from "./visorLayers.js";
-import { RESIDUO_SOLIDO_LEGEND_ITEMS } from "./mapResiduoSolidoIcons.js";
-import { LOCS_PUNTO_LEGEND_ITEM } from "./mapLocsPuntoIcons.js";
-import { CLUES_LEGEND_ITEM } from "./mapCluesIcons.js";
-import { buildDenueLegendSymbology } from "./denueLayers.js";
-import { SANEAMIENTO_AGUA_LEGEND_ITEMS } from "./mapSaneamientoAguaIcons.js";
-
-const DENUE_LEGEND_SYMBOLOGY = buildDenueLegendSymbology();
+import { getVisorLayerEntry } from "./visorCatalog.js";
+import { initVisorLegendFromCatalog, resolveVisorLegendForLayer } from "./visorLegendRegistry.js";
 
 let _legendRoot = null;
 let _legendOpen = false;
@@ -24,53 +19,8 @@ const LEGEND_ATTRIB_GAP_PX = 10;
 /** @typedef {{ kind: 'chip'|'line'|'circle'|'fill', color: string, label: string, outline?: string }} VisorLegendItem */
 /** @typedef {{ kind: 'icon', label: string, icon: string }} VisorLegendIconItem */
 
-/** Catálogo de simbología por id de capa (coincide con VISOR_LAYER_DEFS). */
+/** Catálogo de simbología por id de capa (capas compartidas sin bloque legend en catálogo). */
 const VISOR_SYMBOLOGY = {
-  locspunto: {
-    iconItems: [{ label: LOCS_PUNTO_LEGEND_ITEM.label, icon: LOCS_PUNTO_LEGEND_ITEM.icon }],
-  },
-  locsatlas: {
-    items: [{ kind: "line", color: "#3399ff", label: "Límite de localidad con amanzanamiento" }],
-  },
-  colonias: {
-    items: [{ kind: "line", color: "#990000", label: "Límite de colonia o asentamiento" }],
-  },
-  ageb_urbanas: {
-    items: [{ kind: "line", color: "#990000", label: "AGEB urbana" }],
-  },
-  ageb_rurales: {
-    items: [{ kind: "line", color: "#666600", label: "AGEB rural" }],
-  },
-  manzanas: {
-    items: [
-      {
-        kind: "fill",
-        color: "rgb(245, 225, 145)",
-        outline: "rgb(150, 150, 150)",
-        label: "Manzana",
-      },
-    ],
-  },
-  vialidades: {
-    items: [{ kind: "line", color: "rgb(140, 95, 55)", label: "Vialidad municipal" }],
-  },
-  rnc: {
-    items: [
-      { kind: "line", color: "rgb(200, 0, 0)", label: "Carretera" },
-      { kind: "line", color: "rgb(235, 145, 60)", label: "Periférico" },
-      { kind: "line", color: "rgb(0, 0, 0)", label: "Vereda" },
-      { kind: "line", color: "rgb(140, 95, 55)", label: "Camino / otro" },
-    ],
-  },
-  saneamiento_agua: {
-    iconItems: SANEAMIENTO_AGUA_LEGEND_ITEMS,
-  },
-  clues: {
-    iconItems: [{ label: CLUES_LEGEND_ITEM.label, icon: CLUES_LEGEND_ITEM.icon }],
-  },
-  residuo_solido: {
-    iconItems: true,
-  },
   hidro_corrientes: {
     items: [
       { kind: "line", color: "rgb(0, 120, 230)", label: "Corriente permanente" },
@@ -109,7 +59,6 @@ const VISOR_SYMBOLOGY = {
       { kind: "chip", color: "rgb(204, 204, 204)", label: "Otro uso de suelo" },
     ],
   },
-  ...DENUE_LEGEND_SYMBOLOGY,
 };
 
 function escapeHtml(text) {
@@ -150,16 +99,18 @@ function iconSwatchHtml(icon, { large = false } = {}) {
 }
 
 function buildLayerSectionHtml(layerDef) {
-  const sym = VISOR_SYMBOLOGY[layerDef.id];
+  const entry = getVisorLayerEntry(layerDef.id);
+  let sym = resolveVisorLegendForLayer(layerDef.id, entry) || VISOR_SYMBOLOGY[layerDef.id];
   if (!sym) return "";
 
   let listHtml = "";
   if (sym.iconItems) {
-    const items = sym.iconItems === true ? RESIDUO_SOLIDO_LEGEND_ITEMS : sym.iconItems;
+    const items = sym.iconItems;
     const largePin =
       layerDef.id === "locspunto" ||
       layerDef.id === "clues" ||
       layerDef.id === "saneamiento_agua" ||
+      layerDef.id === "residuo_solido" ||
       layerDef.id.startsWith("denue_");
     listHtml = items
       .map(

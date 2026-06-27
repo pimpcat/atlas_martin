@@ -17,6 +17,7 @@ import {
   ensureDrawTrashClearsBuffer,
 } from "./visorBuffer.js";
 import { fetchVisorBuffer, fetchVisorFeatureGeometry, fetchVisorFeatureOutline } from "./visorBufferApi.js";
+import { getOrderedVisorLayerEntries } from "./visorCatalog.js";
 
 let _panelEl = null;
 let _toggleBtn = null;
@@ -287,6 +288,16 @@ export function resolveVisorApiLayerId(mapLayerId) {
   if (map[key]) return map[key];
   if (map[base]) return map[base];
   if (["manzanas", "colonias", "vialidades", "rnc"].includes(base)) return base;
+  try {
+    for (const entry of getOrderedVisorLayerEntries()) {
+      if (entry.overlay_key === key) return entry.id;
+      if (entry.id === key || entry.id === base) return entry.id;
+    }
+  } catch {
+    /* catálogo aún no cargado */
+  }
+  const snake = key.replace(/([A-Z])/g, "_$1").toLowerCase().replace(/^_/, "");
+  if (snake !== key) return snake;
   return null;
 }
 

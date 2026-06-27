@@ -7,6 +7,7 @@
  */
 import { getLeafletMap, getVisorStateWideMode, whenAtlasMapReady } from "./map.js";
 import { fetchBuscarGeocoder, fetchBuscarGeometria, geocoderRowsToFeatureCollection } from "./geocoderApi.js";
+import { ensureVisorSearchConfig, buildSearchPlaceholderHint } from "./visorSearchCatalog.js";
 import { ensureVisorToolsExtrasHost } from "./visorDraw.js";
 import {
   clearGeocoderHighlight,
@@ -22,6 +23,9 @@ let _visorOptions = {};
 
 /** @type {import("maplibre-gl").Marker | null} */
 let _searchMarker = null;
+
+/** @type {{ limit_per_source: number, sources: import("./visorSearchCatalog.js").VisorSearchSource[] }|null} */
+let _searchConfig = null;
 
 /** @type {HTMLElement | null} */
 let _infoPanel = null;
@@ -55,10 +59,18 @@ function getActiveCveMun() {
 }
 
 function buildPlaceholder() {
-  if (getVisorStateWideMode()) return "Buscar en Guerrero…";
+  const stateWide = getVisorStateWideMode();
+  const hint = _searchConfig
+    ? buildSearchPlaceholderHint(_searchConfig.sources, { stateWide })
+    : "";
+  if (stateWide) {
+    return hint ? `Buscar ${hint} en Guerrero…` : "Buscar en Guerrero…";
+  }
   const m = _visorOptions.getMunicipio?.();
   const nom = m?.nomgeo?.trim();
-  if (nom) return `Buscar en ${nom}…`;
+  if (nom) {
+    return hint ? `Buscar ${hint} en ${nom}…` : `Buscar en ${nom}…`;
+  }
   return "Seleccione un municipio para buscar…";
 }
 
@@ -241,9 +253,7 @@ function getTurf() {
 
 function isPolygonSearchResult(selected) {
   const p = selected?.properties || {};
-  if (p.geom_tipo === "polygon") return true;
-  const tabla = String(p.tabla_origen || "").toLowerCase();
-  return tabla === "c_col_ase" || tabla === "c_l" || tabla === "c_mun";
+  return p.geom_tipo === "polygon";
 }
 
 function fitMapToFeature(map, feature) {
@@ -430,6 +440,10 @@ function tryAttach(attempt) {
 export function attachVisorGeocoder(options = {}) {
   _visorOptions = options || {};
   whenAtlasMapReady(() => {
+    void ensureVisorSearchConfig().then((cfg) => {
+      _searchConfig = cfg;
+      updateGeocoderUi();
+    });
     requestAnimationFrame(() => tryAttach(0));
   });
 }
@@ -457,6 +471,10 @@ export function clearVisorGeocoderSearch() {
 export function refreshVisorGeocoder() {
   const map = getLeafletMap();
   if (!map) return;
+  void ensureVisorSearchConfig().then((cfg) => {
+    _searchConfig = cfg;
+    if (_geocoder) updateGeocoderUi();
+  });
   if (_geocoder) {
     updateGeocoderUi();
   } else {

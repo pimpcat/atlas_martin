@@ -366,6 +366,92 @@ html[data-theme="oscuro"] .menu-section-icon{
   padding: 3px 0 3px 2px;
 }
 
+.visor-layer-group-label {
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  padding-bottom: 0.15rem;
+}
+
+.visor-layer-group {
+  margin: 0;
+}
+
+.visor-layer-group--spaced {
+  margin-top: 0.35rem;
+}
+
+.visor-layer-group-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100%;
+  margin: 0;
+  padding: 0.35rem 0.15rem;
+  border: 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: transparent;
+  color: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.visor-layer-group-toggle:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.visor-layer-group-toggle:focus-visible {
+  outline: 2px solid var(--atlas-accent, #0d9488);
+  outline-offset: 1px;
+}
+
+.visor-layer-group-toggle__chevron {
+  flex-shrink: 0;
+  width: 0.55rem;
+  height: 0.55rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(45deg);
+  margin-top: -0.15rem;
+  margin-left: 0.1rem;
+  opacity: 0.65;
+  transition: transform 0.15s ease;
+}
+
+.visor-layer-group--collapsed .visor-layer-group-toggle__chevron {
+  transform: rotate(-45deg);
+  margin-top: 0.1rem;
+}
+
+.visor-layer-group-toggle__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--bs-secondary-color, #6c757d);
+}
+
+.visor-layer-group-body {
+  padding-top: 0.1rem;
+}
+
+.visor-layer-group--collapsed .visor-layer-group-body {
+  display: none;
+}
+
+[data-bs-theme="dark"] .visor-layer-group-toggle {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-bs-theme="dark"] .visor-layer-group-toggle:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-bs-theme="dark"] .visor-layer-group-label {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
 .visor-layer-row .visor-layer-check {
   flex: 1 1 auto;
   min-width: 0;
@@ -4746,6 +4832,15 @@ html[data-theme="oscuro"] .visor-spatial-detail-table thead th {
   border-top: 1px solid var(--atlas-border-subtle, rgba(0, 0, 0, 0.08));
 }
 
+.visor-spatial-detail-panel .visor-spatial-detail-toggle {
+  font-weight: 600;
+}
+
+.visor-spatial-detail-panel .visor-spatial-detail-toggle__chev {
+  opacity: 0.75;
+  font-size: 0.85rem;
+}
+
 .visor-spatial-results {
   max-height: min(52vh, 480px);
   overflow-y: auto;
@@ -4852,6 +4947,315 @@ html[data-theme="claro"] .visor-layers-card__header .visor-statewide-toggle-btn.
   border-color: rgba(21, 101, 192, 0.45);
   color: #1565c0;
   box-shadow: 0 0 0 2px rgba(21, 101, 192, 0.12);
+}
+
+/* Admin visor — botón publicar capa (solo sesión admin) */
+.visor-layers-card__header .visor-admin-publish-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(46, 125, 50, 0.55);
+  background: rgba(46, 125, 50, 0.22);
+  color: #a5d6a7;
+  transition: background 0.15s ease, transform 0.12s ease, box-shadow 0.15s ease;
+}
+
+.visor-layers-card__header .visor-admin-publish-btn:hover {
+  background: rgba(46, 125, 50, 0.35);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(27, 94, 32, 0.25);
+  color: #c8e6c9;
+}
+
+html[data-theme="claro"] .visor-layers-card__header .visor-admin-publish-btn {
+  background: rgba(46, 125, 50, 0.12);
+  border-color: rgba(46, 125, 50, 0.45);
+  color: #2e7d32;
+}
+
+html[data-theme="claro"] .visor-layers-card__header .visor-admin-publish-btn:hover {
+  background: rgba(46, 125, 50, 0.22);
+  color: #1b5e20;
+}
+
+/* Admin visor — gestionar capas (engranaje) */
+.visor-layers-card__header .visor-admin-manage-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid rgba(120, 144, 156, 0.55);
+  background: rgba(120, 144, 156, 0.18);
+  color: #b0bec5;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+
+.visor-layers-card__header .visor-admin-manage-btn:hover {
+  background: rgba(120, 144, 156, 0.32);
+  transform: translateY(-1px);
+  color: #eceff1;
+}
+
+html[data-theme="claro"] .visor-layers-card__header .visor-admin-manage-btn {
+  border-color: rgba(69, 90, 100, 0.35);
+  background: rgba(69, 90, 100, 0.08);
+  color: #455a64;
+}
+
+html[data-theme="claro"] .visor-layers-card__header .visor-admin-manage-btn:hover {
+  background: rgba(69, 90, 100, 0.16);
+  color: #263238;
+}
+
+.visor-admin-modal__panel--wide {
+  width: min(100%, 720px);
+}
+
+.visor-admin-modal__panel--columns {
+  width: min(100%, 860px);
+  max-height: min(92vh, 820px);
+}
+
+.visor-admin-modal__panel--style {
+  width: min(100%, 560px);
+  max-height: min(92vh, 720px);
+}
+
+.visor-admin-class-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 180px;
+  overflow: auto;
+}
+
+.visor-admin-class-row {
+  display: grid;
+  grid-template-columns: 1fr 52px minmax(0, 1fr) 32px;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.visor-admin-style-preview {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+html[data-theme="claro"] .visor-admin-style-preview {
+  background: #f8fafc;
+}
+
+.visor-admin-style-preview__canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 4px;
+}
+
+.visor-admin-denue-block {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="claro"] .visor-admin-denue-block {
+  background: #f8fafc;
+}
+
+.visor-admin-martin-banner code {
+  font-size: 0.85em;
+}
+
+.visor-admin-table-tabs .nav-link {
+  font-size: 0.85rem;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+}
+
+.visor-admin-distinct-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  max-height: 88px;
+  padding: 0.15rem 0;
+}
+
+.visor-admin-distinct-chip {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  background: rgba(59, 130, 246, 0.12);
+  color: inherit;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+html[data-theme="claro"] .visor-admin-distinct-chip {
+  background: rgba(59, 130, 246, 0.1);
+}
+
+.visor-admin-distinct-panel {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="claro"] .visor-admin-distinct-panel {
+  background: #f8fafc;
+}
+
+.visor-admin-icon-upload {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="claro"] .visor-admin-icon-upload {
+  background: #f8fafc;
+}
+
+.visor-admin-modal__body--columns {
+  max-height: min(72vh, 640px);
+}
+
+.visor-admin-step-columns {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+.visor-admin-cols-grid {
+  min-width: 0;
+}
+
+.visor-admin-cols-pane {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.visor-admin-cols-list {
+  max-height: min(240px, 32vh);
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+  flex: 0 0 auto;
+}
+
+.visor-admin-identify-row {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, 42%) minmax(0, 1fr);
+  gap: 0.35rem 0.5rem;
+  align-items: center;
+  margin-bottom: 0.4rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.visor-admin-identify-row:last-child {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.visor-admin-identify-row .form-check {
+  margin-bottom: 0;
+  min-width: 0;
+}
+
+.visor-admin-identify-row .form-check-label {
+  word-break: break-word;
+}
+
+.visor-admin-identify-row .visor-admin-idf-label {
+  min-width: 0;
+  width: 100%;
+}
+
+.visor-admin-identify-row .visor-admin-idf-label:disabled {
+  opacity: 0.45;
+}
+
+html[data-theme="claro"] .visor-admin-labels-block {
+  border-color: rgba(0, 0, 0, 0.1) !important;
+  background: rgba(255, 255, 255, 0.96);
+}
+
+html[data-theme="oscuro"] .visor-admin-labels-block {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(22, 28, 36, 0.96);
+}
+
+.visor-admin-labels-block {
+  flex-shrink: 0;
+  position: relative;
+  z-index: 1;
+}
+
+html[data-theme="claro"] .visor-admin-cols-list {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.visor-admin-manage-list .list-group-item {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html[data-theme="claro"] .visor-admin-manage-list .list-group-item {
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+.visor-admin-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 12050;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.visor-admin-modal__backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.visor-admin-modal__panel {
+  position: relative;
+  width: min(100%, 480px);
+  max-height: min(90vh, 640px);
+  display: flex;
+  flex-direction: column;
+  z-index: 1;
+}
+
+.visor-admin-modal__body {
+  overflow: auto;
+  max-height: 52vh;
+}
+
+.visor-admin-review dt {
+  font-weight: 600;
+  margin-bottom: 0.1rem;
+}
+
+.visor-admin-review dd {
+  margin: 0 0 0.5rem 0;
+}
+
+.visor-studio-page {
+  min-height: 100vh;
+  background: var(--bs-body-bg, #f5f5f5);
 }
 
 /* Visor — panel de ruteo (combos origen/destino) */
@@ -6243,6 +6647,26 @@ html[data-theme="claro"] .atlas-overlay-tip {
   font-size: 12px;
   font-weight: 500;
   white-space: normal;
+}
+
+.atlas-loc-tip__row + .atlas-loc-tip__row {
+  margin-top: 3px;
+}
+
+.atlas-loc-tip__lbl {
+  font-weight: 700;
+}
+
+.atlas-loc-tip__val {
+  font-weight: 500;
+}
+
+.atlas-map-identify__content .atlas-loc-tip__row + .atlas-loc-tip__row {
+  margin-top: 4px;
+}
+
+.atlas-map-identify__content .atlas-loc-tip__lbl {
+  font-weight: 700;
 }
 
 .atlas-loc-tip__coords {

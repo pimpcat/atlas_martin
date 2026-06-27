@@ -1,0 +1,22 @@
+{
+  "id": "point_by_attribute",
+  "label": "Punto por atributo",
+  "geometry": "point",
+  "type": "circle",
+  "attribute": {
+    "paint": "circle-color",
+    "default_color": "#94a3b8"
+  },
+  "paint": {
+    "circle-radius": 5,
+    "circle-stroke-width": 1,
+    "circle-stroke-color": "#ffffff",
+    "circle-opacity": 0.92
+  },
+  "style_schema": {
+    "radius": { "paint": "circle-radius", "default": 5 },
+    "stroke_color": { "paint": "circle-stroke-color", "default": "#ffffff" },
+    "stroke_width": { "paint": "circle-stroke-width", "default": 1 },
+    "opacity": { "paint": "circle-opacity", "default": 0.92 }
+  }
+}
