@@ -4,7 +4,7 @@ Guía para configurar **desde el catálogo** la interacción al pasar el ratón 
 
 **Alcance:** solo el **Visor geográfico** (`geo_visor`). No aplica a Datos geográficos, explorador municipal ni Inventario de viviendas.
 
-**Documentos relacionados:** [VISOR_CATALOG.md](./VISOR_CATALOG.md), [AGREGAR_CAPA.md](./AGREGAR_CAPA.md), [VISOR_SYMBOLOGY.md](./VISOR_SYMBOLOGY.md).
+**Documentos relacionados:** [VISOR_CATALOG.md](./VISOR_CATALOG.md), [AGREGAR_CAPA.md](./AGREGAR_CAPA.md), [VISOR_SYMBOLOGY.md](./VISOR_SYMBOLOGY.md), [VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md), [VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md).
 
 ---
 
@@ -78,6 +78,20 @@ Equivalente a `identify` con un solo campo. Si existen **ambos**, gana `identify
 ### Requisito Martin
 
 Las columnas usadas en `fields`, `join` o `tooltip.field` deben publicarse en el **MVT** de Martin (igual que para identify y export).
+
+### Capas con clusters (`style.cluster.enabled`)
+
+En zoom **alejado** (por debajo del zoom de entrega del preset):
+
+- **No** hay hover ni identify sobre los **círculos de agrupación**; el clic solo acerca el mapa.
+- **Sí** hay hover e identify en **puntos sueltos** (capa `-unclustered`), con enriquecimiento async vía `/api/visor/feature-geometry` si faltan atributos en el GeoJSON.
+- A partir del zoom de entrega, el comportamiento es el de una capa MVT normal.
+
+Detalle completo: **[VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md)**.
+
+### Apilado con polígonos u otras capas
+
+Si hay **polígonos y puntos** activos a la vez, el visor reordena capas por `geometry` del catálogo (polígono abajo, punto arriba) para que hover e identify reaccionen al elemento visible encima. Ver **[VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md)**.
 
 ### Capas nuevas (solo catálogo)
 
@@ -272,6 +286,7 @@ Si una capa **nueva** usa `overlay_key` ya reservado con etiquetas en código, v
 | Síntoma | Revisar |
 |---------|---------|
 | Sin globo al pasar ratón | ¿`identify` o `tooltip`? ¿Columna en MVT? Consola al cargar catálogo |
+| Globo solo del polígono (no del punto encima) | Apilado por geometría — [VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md); togglear capas o Ctrl+F5 |
 | Globo en capa nueva no funciona | Recargar visor (Ctrl+F5); catálogo debe cargar antes de enlazar eventos |
 | Sin letreritos | ¿Bloque `labels`? ¿Zoom ≥ `minzoom`? ¿Capa activa? |
 | Todo muestra `—` | Nombre de columna (`field`) incorrecto o no publicada en Martin |

@@ -11,6 +11,7 @@ let _modalBackdrop = null;
 let _getCveMun = () => null;
 let _getMunicipio = () => null;
 let _layers = [];
+let _layersReady = false;
 let _ultimoResultado = null;
 let _loading = false;
 
@@ -86,6 +87,7 @@ function closeTabularModal() {
   document.body.style.removeProperty("padding-right");
   _modalBackdrop?.remove();
   _modalBackdrop = null;
+  import("./atlasModalCleanup.js").then((m) => m.purgeOrphanModalBackdrops()).catch(() => {});
 }
 
 function showTabularModal() {
@@ -116,11 +118,17 @@ function setStatus(msg, isError = false) {
   el.classList.toggle("text-success", !isError);
 }
 
+function padCveMun(cve) {
+  const digits = String(cve ?? "").replace(/\D/g, "");
+  if (!digits) return null;
+  return digits.slice(-3).padStart(3, "0");
+}
+
 function syncActionButtons() {
   const layerOk = Boolean(selectedLayerId());
   const runBtn = _modalEl?.querySelector("#visorTabularRunBtn");
   const exportBtn = _modalEl?.querySelector("#visorTabularExportBtn");
-  if (runBtn) runBtn.disabled = _loading || !layerOk;
+  if (runBtn) runBtn.disabled = _loading || !_layersReady || !layerOk;
   if (exportBtn) exportBtn.disabled = _loading || !_ultimoResultado;
 }
 
@@ -205,10 +213,13 @@ function renderTable(data) {
 async function loadLayerSelect() {
   const sel = _modalEl?.querySelector("#visorTabularLayerSelect");
   if (!sel) return;
+  _layersReady = false;
+  syncActionButtons();
   _layers = await fetchVisorTabularLayers();
   sel.innerHTML = "";
   if (!_layers.length) {
     sel.innerHTML = '<option value="">Sin capas disponibles</option>';
+    _layersReady = true;
     syncActionButtons();
     return;
   }
@@ -219,12 +230,26 @@ async function loadLayerSelect() {
     sel.appendChild(opt);
   }
   sel.value = _layers[0].id;
+  _layersReady = true;
   syncActionButtons();
+}
+
+async function fetchTabularWithRetry(layer, cve, attempt = 0) {
+  try {
+    return await fetchVisorTabularData({ layer, cve_mun: cve });
+  } catch (err) {
+    const msg = String(err?.message || "");
+    if (attempt < 1 && /no disponible|UNKNOWN_LAYER/i.test(msg)) {
+      await new Promise((r) => setTimeout(r, 350));
+      return fetchTabularWithRetry(layer, cve, attempt + 1);
+    }
+    throw err;
+  }
 }
 
 async function onGenerateTable() {
   const layer = selectedLayerId();
-  const cve = resolveCveMun();
+  const cve = padCveMun(resolveCveMun());
 
   if (!cve) {
     setStatus("Selecciona un municipio en el explorador lateral.", true);
@@ -234,6 +259,10 @@ async function onGenerateTable() {
     setStatus("Elige una capa para consultar.", true);
     return;
   }
+  if (!_layersReady) {
+    setStatus("Espere a que cargue el listado de capas.", true);
+    return;
+  }
 
   _loading = true;
   syncActionButtons();
@@ -241,7 +270,7 @@ async function onGenerateTable() {
   clearResults();
 
   try {
-    const data = await fetchVisorTabularData({ layer, cve_mun: cve });
+    const data = await fetchTabularWithRetry(layer, cve);
     renderTable(data);
     const n = data.total_registros ?? data.rows?.length ?? 0;
     setStatus(`Tabla generada · ${n.toLocaleString("es-MX")} localidad(es).`, false);
@@ -369,11 +398,14 @@ async function openTabularModal() {
   ensureModal();
   clearResults();
   setStatus("");
+  _layersReady = false;
+  syncActionButtons();
   updateMunBanner();
 
   try {
     await loadLayerSelect();
   } catch (err) {
+    _layersReady = false;
     setStatus(err.message || "No se pudo cargar el catálogo de capas.", true);
     syncActionButtons();
   }

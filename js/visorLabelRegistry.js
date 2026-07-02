@@ -7,8 +7,9 @@ import {
   registerVisorCatalogLabelDefs,
   remountVisorCatalogLabelLayers,
 } from "./map.js";
-import { SYMBOL_POINT_LABEL_TEXT_OFFSET } from "./martinLayerStyle.js";
+import { SYMBOL_POINT_LABEL_TEXT_OFFSET, labelTextOpacityAtMinZoom } from "./martinLayerStyle.js";
 import { getOrderedVisorLayerEntries } from "./visorCatalog.js";
+import { mapLibreLayoutMinzoom } from "./visorMapZoom.js";
 
 /** @type {string[]} */
 let _lastWarnings = [];
@@ -157,7 +158,7 @@ export function buildCatalogLabelDef(entry, labels) {
     "text-halo-color": haloColor,
     "text-halo-width": labels.halo_width ?? 2,
     "text-halo-blur": labels.halo_blur ?? 0.5,
-    "text-opacity": ["step", ["zoom"], 0, minzoom, 1],
+    "text-opacity": labelTextOpacityAtMinZoom(minzoom),
   };
 
   return {
@@ -169,6 +170,9 @@ export function buildCatalogLabelDef(entry, labels) {
       "text-color": labels.color_claro || color,
       "text-halo-color": labels.halo_color_claro || haloColor,
     },
+    source:
+      labels.source || (geometry === "polygon" ? "centroid" : "vector"),
+    layerId: entry.id,
   };
 }
 

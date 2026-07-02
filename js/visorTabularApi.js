@@ -23,9 +23,11 @@ async function parseJsonResponse(res) {
   return data;
 }
 
+const FETCH_TABULAR_OPTS = { headers: { Accept: "application/json" }, cache: "no-store" };
+
 /** Capas habilitadas para consulta tabular. */
 export async function fetchVisorTabularLayers() {
-  const res = await fetch(API_CAPAS_URL, { headers: { Accept: "application/json" } });
+  const res = await fetch(API_CAPAS_URL, FETCH_TABULAR_OPTS);
   const data = await parseJsonResponse(res);
   return data.layers || [];
 }
@@ -38,7 +40,7 @@ export async function fetchVisorTabularData(params) {
     layer: String(params.layer),
     cve_mun: String(params.cve_mun),
   });
-  const res = await fetch(`${API_TABLA_URL}?${qs}`, { headers: { Accept: "application/json" } });
+  const res = await fetch(`${API_TABLA_URL}?${qs}`, FETCH_TABULAR_OPTS);
   const data = await parseJsonResponse(res);
   if (!data.ok) throw new Error(data.message || "No se pudo cargar la tabla.");
   return data;

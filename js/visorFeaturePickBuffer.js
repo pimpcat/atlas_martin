@@ -259,11 +259,27 @@ export function pickVisorFeatureGid(props) {
   return null;
 }
 
+function stripMapLayerKeySuffix(key) {
+  if (!key) return key;
+  if (key.endsWith("-cluster-count")) return key.slice(0, -"-cluster-count".length);
+  if (key.endsWith("-clusters")) return key.slice(0, -"-clusters".length);
+  if (key.endsWith("-unclustered")) return key.slice(0, -"-unclustered".length);
+  if (key.endsWith("-hit")) return key.slice(0, -4);
+  if (key.endsWith("-labels-loose")) return key.slice(0, -"-labels-loose".length);
+  if (key.endsWith("-labels")) return key.slice(0, -7);
+  if (key.endsWith("-halo")) return key.replace(/-halo$/, "");
+  if (key.endsWith("-fill")) return key.replace(/-fill$/, "");
+  return key;
+}
+
 /** Capa del API (/api/visor/export) a partir del id MapLibre ly-*. */
 export function resolveVisorApiLayerId(mapLayerId) {
   if (!mapLayerId) return null;
   if (mapLayerId === MARTIN_USO_SUELO.layerId) return "uso_suelo";
-  const key = mapLayerId.replace(/^ly-/, "").replace(/-visor-labels$/, "").replace(/-labels$/, "");
+  const normalized = stripMapLayerKeySuffix(
+    mapLayerId.replace(/^ly-/, "").replace(/-visor-labels$/, "").replace(/-labels$/, ""),
+  );
+  const key = normalized;
   const base = key.split("-")[0];
   const map = {
     hcuerpos: "hidro_cuerpos",

@@ -5,6 +5,7 @@
 
 import { fetchLocsAtlasLabels } from "./api.js";
 import { getTurf } from "./mapGeo.js";
+import { isMapZoomAtLeast, mapLibreLayoutMinzoom } from "./visorMapZoom.js";
 import {
   LOCS_ATLAS_LABEL_MIN_ZOOM,
   MARTIN_TABLES,
@@ -157,7 +158,7 @@ export function ensureLocsAtlasLabelLayer(map, labelDef, paintForTheme) {
     id: labelId,
     type: "symbol",
     source: LOCS_ATLAS_LABEL_GEO_SRC,
-    minzoom: labelDef.minzoom,
+    minzoom: mapLibreLayoutMinzoom(labelDef.minzoom),
     layout: { ...labelDef.layout, visibility: "none" },
     paint: paintForTheme(labelDef),
   });
@@ -222,7 +223,7 @@ function labelsShouldLoad(ctx) {
 
 function labelsShouldRender(map, ctx) {
   if (!labelsShouldLoad(ctx)) return false;
-  return map.getZoom() >= LOCS_ATLAS_LABEL_MIN_ZOOM;
+  return isMapZoomAtLeast(map.getZoom(), LOCS_ATLAS_LABEL_MIN_ZOOM);
 }
 
 /** Sincroniza puntos de etiqueta (API → respaldo por teselas). */
@@ -264,12 +265,6 @@ export async function syncLocsAtlasLabels(map, ctx, munFilter, ensureLayer) {
     if (!fc.features.length) {
       console.warn("[locs-atlas-labels] sin puntos (API y teselas):", err);
     }
-  }
-
-  try {
-    map.moveLayer(labelId);
-  } catch {
-    /* noop */
   }
 }
 

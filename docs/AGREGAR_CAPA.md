@@ -13,6 +13,11 @@ Guía **práctica** para cargar una capa nueva en el **Visor geográfico** del A
 | [VISOR_SEARCH.md](./VISOR_SEARCH.md) | Buscador y campos obligatorios |
 | [VISOR_LABELS_TOOLTIPS.md](./VISOR_LABELS_TOOLTIPS.md) | Globo al pasar ratón y letreritos por zoom |
 | [VISOR_EXPORT.md](./VISOR_EXPORT.md) | Exportación KML y SHP |
+| [VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md) | Análisis espacial, bloque `spatial_analysis` e índices |
+| [VISOR_STUDIO.md](./VISOR_STUDIO.md) | Publicar capas sin editar JSON a mano |
+| [VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md) | Agrupación de puntos (clusters híbridos GeoJSON + MVT) |
+| [VISOR_STATE_WIDE.md](./VISOR_STATE_WIDE.md) | Vista estatal del visor (mapa sin filtro municipal) |
+| [VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md) | Orden de capas para hover/identify (polígono vs punto) |
 
 ---
 
@@ -20,7 +25,7 @@ Guía **práctica** para cargar una capa nueva en el **Visor geográfico** del A
 
 | Nivel | Significado | Ejemplos |
 |-------|-------------|----------|
-| **Solo catálogo** | PostGIS + Martin + editar `catalog.json` | Polígono contorno/relleno simple, línea un color, punto círculo, **color por atributo**, **tooltip**, **etiquetas por zoom** |
+| **Solo catálogo** | PostGIS + Martin + editar `catalog.json` | Polígono contorno/relleno simple, línea un color, punto círculo, **color por atributo**, **tooltip**, **etiquetas por zoom**, **clusters** (punto con icono genérico) |
 | **Catálogo + código (una vez)** | Lo anterior + registro en `map.js` o iconos | Icono PNG/SVG, polígono estilo colonias (doble línea) |
 | **Desarrollo a medida** | Lógica especial en mapa | RNC por zoom, uso de suelo con reglas de texto, curvas maestras |
 
@@ -98,7 +103,9 @@ En `groups`, añada el **id** de su capa al array `layers` del grupo que corresp
 |-------|-------------------|
 | `export: ["kml","shp"]` | Botones KML y SHP en el panel de capas |
 | `tabular: true` | Tabla de atributos (útil en puntos DENUE, CLUES) |
-| `spatial_analysis: true` | Disponible en herramientas de análisis espacial |
+| `spatial_analysis: true` | Disponible en herramientas de análisis espacial (ver nota abajo) |
+
+> **Análisis espacial (capas nuevas):** además del flag en `capabilities`, las capas publicadas desde Visor Studio necesitan el bloque `spatial_analysis` en el catálogo. La forma recomendada es activarlo en el paso **Identificación** del asistente. Guía completa: **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)**. Alternativa sin JSON manual: **[VISOR_STUDIO.md](./VISOR_STUDIO.md)**.
 
 Para export, con `export.mode: "all"` **no** hace falta listar columnas; con `columns`, declare solo si necesita un subconjunto:
 
@@ -248,6 +255,28 @@ Añada `search` a la capa. Requisitos: [VISOR_SEARCH.md — Requisitos obligator
 | `municipio` | Solo con municipio seleccionado |
 | `estatal` | Solo en visor de todo Guerrero |
 | `both` | En ambos modos |
+
+---
+
+## Zoom mínimo de la capa (geometría)
+
+**Nivel:** catálogo (`style.minzoom`) — configurable en Visor Studio, paso **Estilo** → «Visible solo desde un zoom mínimo».
+
+La capa solo se **dibuja** en el mapa cuando el zoom actual es ≥ el valor indicado. Si el usuario activa la capa estando más alejado, el visor muestra el aviso contextual (como **Manzanas**):
+
+> Acerca el mapa a zoom 14+ para ver Manzanas.
+
+```json
+"style": {
+  "color": "rgb(245, 225, 145)",
+  "opacity": 0.6,
+  "minzoom": 14
+}
+```
+
+Implementación: `visorStyleRegistry.js` → `minzoom` en `OVERLAY_DEFS`; hint en `visorMapUi.js` + `getActiveVisorLayersWithMinZoom()` en `visorLayers.js`.
+
+**No confundir** con `labels.minzoom` (solo letreritos de texto).
 
 ---
 
@@ -740,6 +769,137 @@ El tamaño en pantalla se controla con `icon-size` interpolado por zoom (ver ico
 
 ---
 
+## 5C — Puntos densos con clusters (agrupación)
+
+**Nivel:** solo catálogo (Visor Studio o JSON a mano)  
+**Preset:** `point_symbol` («Punto con icono»)  
+**Cuándo:** cientos o miles de puntos **por municipio** (localidades, equipamiento denso, muestras) y el mapa se satura de iconos en zoom alejado.
+
+**Qué obtiene el usuario:**
+
+- Zoom alejado → **círculos teal con número** donde hay muchos puntos juntos; **icono** donde queda un punto suelto.
+- Clic en un círculo → el mapa **se acerca** (no abre identify).
+- Hover e identify **completos** en pins sueltos y, al acercar, en todos los puntos vía MVT.
+- A partir del zoom de **entrega** del preset (p. ej. **14** con `standard`), la capa MVT muestra todos los iconos.
+
+Arquitectura y presets: **[VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md)**. Referencia en producción: capa **`rnc_loc`** (Localidades RNC).
+
+### Requisitos previos
+
+| Requisito | Notas |
+|-----------|--------|
+| `geometry: "point"` | Clusters no aplican a líneas ni polígonos |
+| `gid` en PostGIS | Obligatorio para identify y enriquecimiento API |
+| `cve_mun` | Capa municipal; el GeoJSON cluster filtra por municipio activo |
+| Municipio seleccionado en el visor | Sin municipio, la capa no carga puntos cluster |
+| Icono registrado | Preset «Punto con icono» (`style.icon_key`) — propio o del catálogo (`locs_punto_pin`, etc.) |
+| Tabla en **Martin** | MVT desde el zoom de entrega |
+
+### Opción A — Visor Studio (recomendada)
+
+1. **PostGIS + Martin** — Pasos comunes §1–2 de esta guía.
+2. Inicie sesión en **Visor Studio** → Visor geográfico → **+**.
+3. **Tabla:** elija su `c_*` (o suba shapefile).
+4. **Estilo:** preset **Punto con icono**; seleccione o suba icono SVG.
+5. **Mapa:**
+   - Active **Agrupar puntos (clusters)**.
+   - Preset de agrupación:
+     - **`standard`** — equilibrado (entrega en zoom 14); uso general.
+     - **`compact`** — clusters más pequeños; entrega en zoom 15.
+     - **`wide`** — agrupa más lejos; entrega en zoom 13.
+     - **`sparse`** — exige más puntos para agrupar; entrega en zoom 12.
+   - (Opcional) Etiquetas: campo + zoom mínimo; en zoom alejado solo en **puntos sueltos**.
+6. **Identificación:** marque las columnas del popup (nombre, claves, tipo…). El asistente puede añadirlas también a export.
+7. **Revisión → Publicar.**
+8. **Ctrl+F5** en el visor; active la capa con un **municipio** ya elegido.
+
+### Opción B — Editar `catalog.json` a mano
+
+Añada el bloque `cluster` dentro de `style` (junto al icono):
+
+```json
+"localidades_rnc": {
+  "label": "Localidades RNC",
+  "overlay_key": "localidadesRnc",
+  "checkbox_id": "visorLocalidadesRnc",
+  "geometry": "point",
+  "renderer": "overlay",
+  "style_preset": "point_symbol",
+  "data": {
+    "table": "c_rnc_loc",
+    "mun_filter": "cve_mun",
+    "export": {
+      "mode": "columns",
+      "columns": ["gid", "nombre", "tipo", "cvegeo", "cve_ent", "cve_mun", "cve_loc"]
+    }
+  },
+  "style": {
+    "opacity": 0.9,
+    "icon_key": "locs_punto_pin",
+    "cluster": {
+      "enabled": true,
+      "preset": "standard"
+    }
+  },
+  "identify": {
+    "title": "Localidad (RNC)",
+    "fields": [
+      { "column": "nombre", "label": "Nombre" },
+      { "column": "tipo", "label": "Tipo" },
+      { "column": "cvegeo", "label": "Clave geoestadística" },
+      { "column": "cve_mun", "label": "Clave municipio" }
+    ]
+  },
+  "labels": {
+    "field": "nombre",
+    "minzoom": 12,
+    "above_icon": true,
+    "color": "#2c3e50"
+  },
+  "capabilities": {
+    "export": ["kml", "shp"],
+    "tabular": true,
+    "spatial_analysis": true
+  }
+}
+```
+
+Incluya la capa en un `groups[].layers` y sincronice `config/visor/catalog.json` con la copia en `htdocs` si no usa Docker.
+
+### Parámetros de cluster
+
+| Campo | Valores | Efecto |
+|-------|---------|--------|
+| `style.cluster.enabled` | `true` | Activa modo híbrido GeoJSON + MVT |
+| `style.cluster.preset` | `standard` \| `compact` \| `wide` \| `sparse` | Radio de agrupación y **zoom de entrega** a MVT |
+
+No confundir el zoom de entrega del cluster con `style.minzoom` (cuándo se dibuja la capa) ni con `labels.minzoom` (cuándo aparecen letreritos).
+
+### Checklist de prueba
+
+1. Municipio seleccionado (p. ej. Acapulco).
+2. Activar capa → en zoom **9–13** se ven círculos con número e iconos sueltos.
+3. **Clic en círculo teal** → mapa se acerca; **no** debe abrir identify.
+4. **Hover / clic en pin suelto** → ficha con todos los campos de `identify`.
+5. Zoom **≥ 14** (preset `standard`) → clusters desaparecen; iconos densos vía MVT.
+6. Panel **Simbología** → icono + «Grupo de puntos (cluster)».
+7. **Vista estatal:** activar botón estatal → clusters de **todo Guerrero** (recarga GeoJSON); desactivar → vuelve al municipio activo. Detalle: [VISOR_STATE_WIDE.md](./VISOR_STATE_WIDE.md).
+
+Tras editar el catálogo: **Ctrl+F5** y desactivar/reactivar la capa (recarga GeoJSON). Tras cambios en el API Python: `docker compose restart api_backend`.
+
+### Problemas frecuentes (clusters)
+
+| Síntoma | Qué revisar |
+|---------|-------------|
+| No hay círculos, solo iconos o nada | ¿Municipio activo o vista estatal? Consola `[visor-cluster]`; `GET …/points?cve_mun=…` o `?scope=estatal` |
+| Identify solo muestra nombre | Columnas en `identify.fields` vs PostGIS; que exista `gid` en la tabla |
+| Hover vacío en círculos | Comportamiento esperado — solo sueltos y MVT tienen hover |
+| Clusters del municipio previo con vista estatal ON | Reiniciar API; togglear vista estatal; ver [VISOR_STATE_WIDE.md](./VISOR_STATE_WIDE.md) |
+| Hover solo muestra polígono (Regiones) sobre pins | Apilado por `geometry` — [VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md); Ctrl+F5 |
+| Leyenda sin cluster | `style.cluster.enabled: true` y preset `point_symbol` |
+
+---
+
 # Caso 6 — Color por atributo (líneas, puntos o polígonos)
 
 **Nivel:** solo catálogo  
@@ -863,6 +1023,7 @@ La leyenda del visor se genera automáticamente desde `style.classes` (un ítem 
 | Punto color por atributo | `point_by_attribute` | Sí |
 | Polígono color por atributo | `polygon_by_attribute` | Sí |
 | Punto icono | `clues` / DENUE / custom | No (icono + código) |
+| Punto icono + clusters | `point_symbol` + `style.cluster` | Sí (Visor Studio o catálogo) |
 | Puntos DENUE por SCIAN | `overlay_denue` | Parcial (icono si es nuevo) |
 
 ---
@@ -945,4 +1106,4 @@ Una capa **nueva** de líneas con colores por tipo **no** necesita el patrón RN
 5. Decida **con o sin buscador**.  
 6. Pruebe en Acapulco u otro municipio con datos reales.
 
-Para detalle técnico adicional: [VISOR_CATALOG.md](./VISOR_CATALOG.md), [VISOR_SYMBOLOGY.md](./VISOR_SYMBOLOGY.md), [VISOR_SEARCH.md](./VISOR_SEARCH.md), [VISOR_LABELS_TOOLTIPS.md](./VISOR_LABELS_TOOLTIPS.md).
+Para detalle técnico adicional: [VISOR_CATALOG.md](./VISOR_CATALOG.md), [VISOR_SYMBOLOGY.md](./VISOR_SYMBOLOGY.md), [VISOR_SEARCH.md](./VISOR_SEARCH.md), [VISOR_LABELS_TOOLTIPS.md](./VISOR_LABELS_TOOLTIPS.md), [VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md).

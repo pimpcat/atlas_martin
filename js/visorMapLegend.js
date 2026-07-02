@@ -103,31 +103,32 @@ function buildLayerSectionHtml(layerDef) {
   let sym = resolveVisorLegendForLayer(layerDef.id, entry) || VISOR_SYMBOLOGY[layerDef.id];
   if (!sym) return "";
 
-  let listHtml = "";
-  if (sym.iconItems) {
-    const items = sym.iconItems;
-    const largePin =
-      layerDef.id === "locspunto" ||
-      layerDef.id === "clues" ||
-      layerDef.id === "saneamiento_agua" ||
-      layerDef.id === "residuo_solido" ||
-      layerDef.id.startsWith("denue_");
-    listHtml = items
-      .map(
-        (item) =>
-          `<li>${iconSwatchHtml(item.icon, { large: largePin })}<span>${escapeHtml(item.label)}</span></li>`,
-      )
-      .join("");
-  } else if (sym.items?.length) {
-    listHtml = sym.items
-      .map((item) => `<li>${swatchHtml(item)}<span>${escapeHtml(item.label)}</span></li>`)
-      .join("");
+  const listParts = [];
+  const largePin =
+    layerDef.id === "locspunto" ||
+    layerDef.id === "clues" ||
+    layerDef.id === "saneamiento_agua" ||
+    layerDef.id === "residuo_solido" ||
+    layerDef.id.startsWith("denue_") ||
+    (entry?.geometry === "point" && sym.iconItems?.length);
+
+  if (sym.iconItems?.length) {
+    for (const item of sym.iconItems) {
+      listParts.push(
+        `<li>${iconSwatchHtml(item.icon, { large: largePin })}<span>${escapeHtml(item.label)}</span></li>`,
+      );
+    }
   }
-  if (!listHtml) return "";
+  if (sym.items?.length) {
+    for (const item of sym.items) {
+      listParts.push(`<li>${swatchHtml(item)}<span>${escapeHtml(item.label)}</span></li>`);
+    }
+  }
+  if (!listParts.length) return "";
 
   return `<section class="visor-map-legend__section">
     <div class="visor-map-legend__title">${escapeHtml(layerDef.label)}</div>
-    <ul class="visor-map-legend__list">${listHtml}</ul>
+    <ul class="visor-map-legend__list">${listParts.join("")}</ul>
   </section>`;
 }
 

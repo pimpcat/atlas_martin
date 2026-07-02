@@ -15,6 +15,7 @@ const API_MUNICIPIOS_URL = apiUrl("/api/municipios");
 const API_MUNICIPIO_EXTENT_URL = apiUrl("/api/municipio/extent");
 const API_COLONIAS_LABELS_URL = apiUrl("/api/visor/colonias-labels");
 const API_LOCS_ATLAS_LABELS_URL = apiUrl("/api/visor/locs-atlas-labels");
+const API_POLYGON_LABELS_URL = apiUrl("/api/visor/polygon-labels");
 const API_GEO_CONTEXTO_URL = apiUrl("/api/geo/contexto");
 const API_SUPERFICIE_COMPARATIVA_URL = apiUrl("/api/comparativas/superficie");
 const API_POBLACION_URL = apiUrl("/api/comparativas/poblacion");
@@ -334,6 +335,27 @@ export async function fetchLocsAtlasLabels(cve_mun) {
   const json = await res.json();
   if (!json?.ok || !json.featureCollection) {
     throw new Error(json?.message || json?.detail || "Sin etiquetas de localidades");
+  }
+  return json.featureCollection;
+}
+
+/** Puntos de etiqueta para polígonos del catálogo (ST_PointOnSurface, una etiqueta por feature). */
+export async function fetchPolygonCatalogLabels(layerId, opts = {}) {
+  const lid = String(layerId || "").trim();
+  if (!lid) throw new Error("layer_id requerido");
+  const stateWide = Boolean(opts.stateWide);
+  const url = new URL(`${API_POLYGON_LABELS_URL}/${encodeURIComponent(lid)}`, window.location.href);
+  if (stateWide) {
+    url.searchParams.set("state_wide", "true");
+  } else {
+    const cve = String(opts.cveMun ?? "").trim();
+    if (cve) url.searchParams.set("cve_mun", cve);
+  }
+  const res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+  if (!json?.ok || !json.featureCollection) {
+    throw new Error(json?.message || json?.detail?.message || "Sin etiquetas de polígono");
   }
   return json.featureCollection;
 }

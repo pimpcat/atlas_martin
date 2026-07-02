@@ -8,6 +8,7 @@ import {
   whenAtlasMapReady,
   syncVisorOverlayLayersFromState,
 } from "./map.js";
+import { formatVisorZoom, isMapZoomAtLeast } from "./visorMapZoom.js";
 import { scheduleVisorCompareSync } from "./visorMapCompare.js";
 import { syncVisorMapLegend } from "./visorMapLegend.js";
 import { dismissVisorMapIdentifyIfLayerHidden } from "./visorMapIdentify.js";
@@ -24,7 +25,7 @@ function mapZoomLevel(map) {
 function pickZoomHint(layers, z) {
   let best = null;
   for (const layer of layers) {
-    if (z >= layer.minZ) continue;
+    if (isMapZoomAtLeast(z, layer.minZ)) continue;
     if (!best || layer.minZ > best.minZ) best = layer;
   }
   return best;
@@ -35,7 +36,7 @@ function syncVisorMapUi() {
   if (!map || !_zoomEl?.isConnected) return;
 
   const z = mapZoomLevel(map);
-  _zoomEl.textContent = `Zoom ${Math.round(z * 10) / 10}`;
+  _zoomEl.textContent = `Zoom ${formatVisorZoom(z)}`;
   _zoomEl.style.display = "";
 
   if (!_hintEl?.isConnected) return;

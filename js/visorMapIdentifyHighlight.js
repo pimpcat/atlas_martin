@@ -159,6 +159,11 @@ function cloneFeature(feature) {
 export function normalizeIdentifyPrimary(layerId) {
   if (!layerId) return null;
   let base = layerId;
+  if (base.endsWith("-cluster-count")) base = base.slice(0, -"-cluster-count".length);
+  if (base.endsWith("-clusters")) base = base.slice(0, -"-clusters".length);
+  if (base.endsWith("-unclustered")) base = base.slice(0, -"-unclustered".length);
+  if (base.endsWith("-hit")) base = base.slice(0, -4);
+  if (base.endsWith("-labels-loose")) base = base.slice(0, -"-labels-loose".length);
   if (base.endsWith("-labels")) base = base.slice(0, -7);
   if (base.endsWith("-halo")) base = base.slice(0, -5);
   if (base.endsWith("-fill")) base = base.slice(0, -5);

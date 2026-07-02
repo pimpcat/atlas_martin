@@ -3,11 +3,19 @@
  * source-layer en MVT = id del catálogo Martin (p. ej. "c_mun", no "atlas.c_mun").
  */
 
+import { mapLibreLayoutMinzoom } from "./visorMapZoom.js";
+
 /** Suavizado sutil del trazo central (overlays / detalle). */
 export const LINE_BLUR_SOFT = 0.2;
 
 /** Glyphs MapLibre (requerido para capas symbol / etiquetas). */
 export const MAPLIBRE_GLYPHS_URL = "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
+
+/** Opacidad de etiqueta visible desde el zoom mínimo (inclusivo en el entero configurado). */
+export function labelTextOpacityAtMinZoom(minZ) {
+  const z = mapLibreLayoutMinzoom(minZ);
+  return ["step", ["zoom"], 0, z, 1];
+}
 
 /** Visor geográfico — etiquetas de localidades (puntos) desde este zoom. */
 export const LOCS_PUNTO_LABEL_MIN_ZOOM = 13;
@@ -56,7 +64,7 @@ export const LOCS_PUNTO_LABEL_PAINT = {
   "text-halo-color": "#ffffff",
   "text-halo-width": 2,
   "text-halo-blur": 0.5,
-  "text-opacity": ["step", ["zoom"], 0, LOCS_PUNTO_LABEL_MIN_ZOOM, 1],
+  "text-opacity": labelTextOpacityAtMinZoom(LOCS_PUNTO_LABEL_MIN_ZOOM),
 };
 
 export const LOCS_PUNTO_LABEL_PAINT_CLARO = {
@@ -129,7 +137,7 @@ export const COLONIAS_LABEL_PAINT = {
   "text-halo-color": "#ffffff",
   "text-halo-width": 2,
   "text-halo-blur": 0.5,
-  "text-opacity": ["step", ["zoom"], 0, COLONIAS_LABEL_MIN_ZOOM, 1],
+  "text-opacity": labelTextOpacityAtMinZoom(COLONIAS_LABEL_MIN_ZOOM),
 };
 
 export const COLONIAS_LABEL_PAINT_CLARO = { ...COLONIAS_LABEL_PAINT };
@@ -177,7 +185,7 @@ export const RESIDUO_SOLIDO_LABEL_PAINT = {
   "text-halo-color": "#ffffff",
   "text-halo-width": 2,
   "text-halo-blur": 0.5,
-  "text-opacity": ["step", ["zoom"], 0, RESIDUO_SOLIDO_LABEL_MIN_ZOOM, 1],
+  "text-opacity": labelTextOpacityAtMinZoom(RESIDUO_SOLIDO_LABEL_MIN_ZOOM),
 };
 
 export const RESIDUO_SOLIDO_LABEL_PAINT_CLARO = { ...RESIDUO_SOLIDO_LABEL_PAINT };
@@ -224,7 +232,7 @@ export const SANEAMIENTO_AGUA_LABEL_PAINT = {
   "text-halo-color": "#ffffff",
   "text-halo-width": 2,
   "text-halo-blur": 0.5,
-  "text-opacity": ["step", ["zoom"], 0, SANEAMIENTO_AGUA_LABEL_MIN_ZOOM, 1],
+  "text-opacity": labelTextOpacityAtMinZoom(SANEAMIENTO_AGUA_LABEL_MIN_ZOOM),
 };
 
 export const SANEAMIENTO_AGUA_LABEL_PAINT_CLARO = { ...SANEAMIENTO_AGUA_LABEL_PAINT };
@@ -288,7 +296,7 @@ export const CLUES_LABEL_PAINT = {
   "text-halo-color": "#ffffff",
   "text-halo-width": 2,
   "text-halo-blur": 0.5,
-  "text-opacity": ["step", ["zoom"], 0, CLUES_LABEL_MIN_ZOOM, 1],
+  "text-opacity": labelTextOpacityAtMinZoom(CLUES_LABEL_MIN_ZOOM),
 };
 
 export const CLUES_LABEL_PAINT_CLARO = { ...CLUES_LABEL_PAINT };
@@ -324,7 +332,7 @@ export function denueLabelPaint(textColor = "#333333") {
     "text-halo-color": "#ffffff",
     "text-halo-width": 2,
     "text-halo-blur": 0.5,
-    "text-opacity": ["step", ["zoom"], 0, DENUE_LABEL_MIN_ZOOM, 1],
+    "text-opacity": labelTextOpacityAtMinZoom(DENUE_LABEL_MIN_ZOOM),
   };
 }
 
@@ -369,7 +377,7 @@ export const HCORRIENTES_LABEL_PAINT = {
   "text-halo-color": "#ffffff",
   "text-halo-width": 2,
   "text-halo-blur": 0.5,
-  "text-opacity": ["step", ["zoom"], 0, HCORRIENTES_LABEL_MIN_ZOOM, 1],
+  "text-opacity": labelTextOpacityAtMinZoom(HCORRIENTES_LABEL_MIN_ZOOM),
 };
 
 export const HCORRIENTES_LABEL_PAINT_CLARO = { ...HCORRIENTES_LABEL_PAINT };
@@ -402,7 +410,7 @@ export const HCUERPOS_LABEL_PAINT = {
   "text-halo-color": "#ffffff",
   "text-halo-width": 2,
   "text-halo-blur": 0.5,
-  "text-opacity": ["step", ["zoom"], 0, HCUERPOS_LABEL_MIN_ZOOM, 1],
+  "text-opacity": labelTextOpacityAtMinZoom(HCUERPOS_LABEL_MIN_ZOOM),
 };
 
 export const HCUERPOS_LABEL_PAINT_CLARO = { ...HCUERPOS_LABEL_PAINT };

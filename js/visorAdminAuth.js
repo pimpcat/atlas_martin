@@ -78,10 +78,14 @@ export async function loginAdmin(username, password) {
     throw new Error("No se pudo contactar al servidor de autenticación");
   }
   if (!res.ok) {
+    const detail = data?.detail;
     const msg =
-      (data && data.detail && (data.detail.message || data.detail.error)) ||
+      (typeof detail === "object" && detail !== null && (detail.message || detail.error)) ||
+      (typeof detail === "string" && detail) ||
       (data && data.message) ||
-      "No se pudo iniciar sesión";
+      (res.status === 429
+        ? "Demasiados intentos. Espere un minuto e intente de nuevo."
+        : "No se pudo iniciar sesión");
     throw new Error(String(msg));
   }
   if (!data?.token) throw new Error("Respuesta de login inválida");
@@ -111,4 +115,60 @@ export async function verifyAdminSession() {
 
 export async function logoutAdmin() {
   clearAdminSession();
+}
+
+function _detailMessage(data, fallback) {
+  const detail = data?.detail;
+  if (typeof detail === "object" && detail !== null) {
+    return detail.message || detail.error || fallback;
+  }
+  if (typeof detail === "string" && detail) return detail;
+  return data?.message || fallback;
+}
+
+export async function fetchAdminUsers() {
+  const { res, data, networkError } = await adminFetch("/api/admin/users");
+  if (networkError || !res) throw new Error("No se pudo contactar al servidor");
+  if (!res.ok) throw new Error(_detailMessage(data, "No se pudo listar usuarios"));
+  return data?.users || [];
+}
+
+export async function createAdminUserAccount(payload) {
+  const { res, data, networkError } = await adminFetch("/api/admin/users", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+  if (networkError || !res) throw new Error("No se pudo contactar al servidor");
+  if (!res.ok) throw new Error(_detailMessage(data, "No se pudo crear el usuario"));
+  return data;
+}
+
+export async function patchAdminUserAccount(userId, payload) {
+  const { res, data, networkError } = await adminFetch(`/api/admin/users/${userId}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+  if (networkError || !res) throw new Error("No se pudo contactar al servidor");
+  if (!res.ok) throw new Error(_detailMessage(data, "No se pudo actualizar el usuario"));
+  return data;
+}
+
+export async function changeMyAdminPassword(currentPassword, newPassword) {
+  const { res, data, networkError } = await adminFetch("/api/admin/me/password", {
+    method: "POST",
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+  });
+  if (networkError || !res) throw new Error("No se pudo contactar al servidor");
+  if (!res.ok) throw new Error(_detailMessage(data, "No se pudo cambiar la contraseña"));
+  return data;
+}
+
+export async function resetAdminUserPassword(userId, newPassword) {
+  const { res, data, networkError } = await adminFetch(`/api/admin/users/${userId}/password`, {
+    method: "POST",
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+  if (networkError || !res) throw new Error("No se pudo contactar al servidor");
+  if (!res.ok) throw new Error(_detailMessage(data, "No se pudo restablecer la contraseña"));
+  return data;
 }

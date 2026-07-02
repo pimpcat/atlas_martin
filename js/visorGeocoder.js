@@ -7,10 +7,16 @@
  */
 import { getLeafletMap, getVisorStateWideMode, whenAtlasMapReady } from "./map.js";
 import { fetchBuscarGeocoder, fetchBuscarGeometria, geocoderRowsToFeatureCollection } from "./geocoderApi.js";
-import { ensureVisorSearchConfig, buildSearchPlaceholderHint } from "./visorSearchCatalog.js";
+import {
+  ensureVisorSearchConfig,
+  buildSearchPlaceholderHint,
+  findSearchSourceByTable,
+  isPolygonGeomMode,
+} from "./visorSearchCatalog.js";
 import { ensureVisorToolsExtrasHost } from "./visorDraw.js";
 import {
   clearGeocoderHighlight,
+  restackGeocoderHighlightLayers,
   showGeocoderHighlight,
   teardownGeocoderHighlight,
 } from "./visorGeocoderHighlight.js";
@@ -116,7 +122,7 @@ function buildGeocoderOptions(maplibregl) {
     minLength: 2,
     limit: 15,
     zoom: FLY_ZOOM,
-    flyTo: { zoom: FLY_ZOOM, speed: 1.25, essential: true },
+    flyTo: false,
     marker: false,
     showResultsWhileTyping: true,
     collapsed: false,
@@ -251,9 +257,26 @@ function getTurf() {
   return null;
 }
 
-function isPolygonSearchResult(selected) {
+function resolveSearchResultMeta(selected) {
   const p = selected?.properties || {};
-  return p.geom_tipo === "polygon";
+  let tabla = String(p.tabla_origen || "").toLowerCase();
+  let cvegeo = String(p.cvegeo || p.id_origen || "").trim();
+  if (selected?.id) {
+    const parts = String(selected.id).split(":");
+    if (parts.length >= 2) {
+      if (!tabla) tabla = parts[0].toLowerCase();
+      if (!cvegeo) cvegeo = parts.slice(1).join(":").trim();
+    }
+  }
+  return { ...p, tabla_origen: tabla, cvegeo, id_origen: cvegeo };
+}
+
+function isPolygonSearchResult(selected) {
+  const meta = resolveSearchResultMeta(selected);
+  if (meta.geom_tipo === "polygon") return true;
+  if (meta.geom_tipo === "point") return false;
+  const source = findSearchSourceByTable(meta.tabla_origen);
+  return Boolean(source && isPolygonGeomMode(source.geom_mode));
 }
 
 function fitMapToFeature(map, feature) {
@@ -276,9 +299,9 @@ function fitMapToFeature(map, feature) {
 }
 
 async function drawPolygonHighlight(selected, map) {
-  const p = selected?.properties || {};
-  const tabla = String(p.tabla_origen || "").toLowerCase();
-  const cvegeo = String(p.cvegeo || p.id_origen || "").trim();
+  const meta = resolveSearchResultMeta(selected);
+  const tabla = meta.tabla_origen;
+  const cvegeo = meta.cvegeo;
   if (!isPolygonSearchResult(selected) || !tabla || !cvegeo) {
     clearGeocoderHighlight(map);
     return false;
@@ -289,16 +312,28 @@ async function drawPolygonHighlight(selected, map) {
       ...data.feature,
       properties: {
         ...(data.feature?.properties || {}),
-        nombre_busqueda: p.nombre_busqueda,
-        tipo: p.tipo,
+        nombre_busqueda: meta.nombre_busqueda,
+        tipo: meta.tipo,
       },
     };
     showGeocoderHighlight(map, feature);
+    restackGeocoderHighlightLayers(map);
     return feature;
   } catch (err) {
     console.warn("[visor geocoder] geometría:", err);
     clearGeocoderHighlight(map);
     return null;
+  }
+}
+
+function scheduleGeocoderHighlightRestack(map) {
+  if (!map) return;
+  const restack = () => restackGeocoderHighlightLayers(map);
+  restack();
+  try {
+    map.once("moveend", restack);
+  } catch {
+    /* noop */
   }
 }
 
@@ -329,13 +364,17 @@ async function flyToGeocoderResult(selected, map) {
 
   if (isPolygonSearchResult(selected)) {
     const feature = await drawPolygonHighlight(selected, targetMap);
-    if (feature && fitMapToFeature(targetMap, feature)) return;
+    if (feature && fitMapToFeature(targetMap, feature)) {
+      scheduleGeocoderHighlightRestack(targetMap);
+      return;
+    }
   } else {
     clearGeocoderHighlight(targetMap);
   }
 
   try {
     targetMap.flyTo({ center, zoom: FLY_ZOOM, speed: 1.25, essential: true });
+    scheduleGeocoderHighlightRestack(targetMap);
   } catch (err) {
     console.warn("[visor geocoder] flyTo:", err);
   }

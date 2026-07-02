@@ -4,6 +4,7 @@
 import {
   atlasMapIconUrl,
   getSymbolIconRasterPx,
+  invalidateSvgFileCache,
   loadSvgFileAsMapSymbol,
   symbolLayoutIconSize,
 } from "./mapSvgIcons.js";
@@ -45,6 +46,9 @@ export function buildIconSizeFromLayerStyle(layerStyle = {}) {
   const maxScale = layerStyle.max_scale ?? 2.63;
   const iconSz = (v) => symbolLayoutIconSize(v, maxScale, layerStyle.supersample ?? 3);
   const pairs = [];
+  if (stops.length >= 2 && stops[0] > 0) {
+    pairs.push(0, iconSz(stops[1]));
+  }
   for (let i = 0; i < stops.length - 1; i += 2) {
     pairs.push(stops[i], iconSz(stops[i + 1]));
   }
@@ -163,10 +167,16 @@ export async function ensureVisorIconKeyOnMap(map, iconKey) {
   const ver = icon.version ?? 1;
   if (map[iconVersionKey(iconKey)] === ver) return;
   const maxScale = icon.max_scale ?? 2.63;
-  const supersample = icon.supersample ?? 3;
-  const base = (icon.logical_px ?? 32) / 2;
+  const supersample = icon.supersample ?? 4;
+  const logical = icon.logical_px ?? 32;
+  const base = icon.raster_base ?? logical / 2;
   const rasterPx = getSymbolIconRasterPx(base, maxScale, supersample);
-  await loadSvgFileAsMapSymbol(map, icon.id, icon.file, rasterPx);
+  const anchor = icon.texture_anchor || "bottom";
+  invalidateSvgFileCache(icon.file);
+  await loadSvgFileAsMapSymbol(map, icon.id, icon.file, rasterPx, {
+    cacheBust: ver,
+    textureAnchor: anchor,
+  });
   map[iconVersionKey(iconKey)] = ver;
 }
 
@@ -210,6 +220,20 @@ export function buildSymbolOverlayDefFromPreset(entry, preset) {
   if (!layout) return null;
 
   const style = entry.style || {};
+  if (style.icon_scale != null && Number.isFinite(Number(style.icon_scale))) {
+    const scale = Number(style.icon_scale);
+    if (layout["icon-size"] != null) {
+      const base = layout["icon-size"];
+      layout["icon-size"] =
+        typeof base === "number"
+          ? base * scale
+          : ["*", base, scale];
+    }
+  }
+  if (Array.isArray(style.icon_offset) && style.icon_offset.length >= 2) {
+    layout["icon-offset"] = style.icon_offset;
+  }
+
   const paint = { ...(preset.paint || {}) };
   if (style.opacity != null) paint["icon-opacity"] = style.opacity;
   else if (preset.style_schema?.opacity?.default != null) {

@@ -8,21 +8,23 @@
  */
 import { getLeafletMap, whenAtlasMapReady } from "./map.js";
 import { getLastDrawnPolygonFeature, formatDrawArea, normalizePolygonForAnalysis, ensureVisorToolsExtrasHost, syncVisorToolsExtrasVisibility } from "./visorDraw.js";
-import { loadVisorCatalog, getAnalysisCatalog } from "./visorCatalog.js";
+import { loadVisorCatalog, getAnalysisCatalog, getVisorCatalog } from "./visorCatalog.js";
 import { getActiveBufferFeature } from "./visorBuffer.js";
 import {
   fetchCapasIntersectantes,
   fetchColumnasCapa,
   ejecutarAnalisisDinamico,
 } from "./spatialAnalysisApi.js";
+import { purgeOrphanModalBackdrops } from "./atlasModalCleanup.js";
 
 const NO_INTERSECT_MSG =
-  "No es posible realizar el análisis espacial: el polígono no intersecta datos censales (INV/ITER), capas DENUE ni establecimientos de salud. Ajusta el área dibujada.";
+  "No es posible realizar el análisis espacial: el polígono no intersecta ninguna capa habilitada para análisis. Ajusta el área dibujada o activa capas en el panel.";
 
 const GRUPO_ETIQUETAS = {
   censales: "Censales (INV / ITER)",
   denue: "DENUE",
   salud: "Salud",
+  tematicas: "Capas configuradas",
 };
 
 /** Pseudo-capa del combo: abre la sección de tipos DENUE debajo (como ITER/INV). */
@@ -61,8 +63,45 @@ async function ensureAnalysisUiCatalog() {
         "No se encontraron registros dentro del polígono. Ajusta el área dibujada.",
     };
   }
+
+  const visorLayers = getVisorCatalog()?.layers || {};
+  for (const [id, entry] of Object.entries(visorLayers)) {
+    if (!entry?.capabilities?.spatial_analysis || uiMap[id]) continue;
+    const spatial = entry.spatial_analysis;
+    if (!spatial || typeof spatial !== "object") continue;
+    const modo = spatial.modo || (entry.geometry === "point" ? "conteo" : "agregacion");
+    const hasSections =
+      Array.isArray(spatial.sections) &&
+      spatial.sections.some((s) => Array.isArray(s?.campos) && s.campos.length);
+    if (modo === "agregacion" && !hasSections) continue;
+    if (modo !== "conteo" && modo !== "agregacion") continue;
+    const ui = spatial.ui || {};
+    const geometry = entry.geometry || "polygon";
+    const defaultUnidad =
+      geometry === "point"
+        ? "elemento(s)"
+        : geometry === "line"
+          ? "tramo(s)"
+          : "polígono(s)";
+    uiMap[id] = {
+      capaId: id,
+      secciones: spatial.sections || [],
+      unidadRegistro: ui.unidad_registro || defaultUnidad,
+      emptyMsg:
+        ui.empty_msg ||
+        `No se encontraron registros de esta capa dentro del polígono.`,
+    };
+  }
+
   _capaUiById = uiMap;
   _analysisCatalogReady = true;
+}
+
+/** Tras publicar/editar capa en Visor Studio: recargar secciones UI del catálogo. */
+export function resetSpatialAnalysisUiCatalog() {
+  _analysisCatalogReady = false;
+  _capaUiById = {};
+  _countCapaUiById = {};
 }
 
 function rebuildCountCapaUiFromCapas(capas) {
@@ -72,15 +111,18 @@ function rebuildCountCapaUiFromCapas(capas) {
     if (!id) continue;
     if (meta.modo !== "conteo" && meta.grupo !== "denue") continue;
     const label = (meta.etiqueta || id).toLowerCase();
+    const uiEntry = _capaUiById[id];
     out[id] = {
       capaId: id,
       modoConteo: true,
       unidadRegistro:
-        id === "clues" ? "establecimiento(s)" : meta.grupo === "denue" ? "elemento(s)" : "registro(s)",
+        uiEntry?.unidadRegistro ||
+        (id === "clues" ? "establecimiento(s)" : meta.grupo === "denue" ? "elemento(s)" : "registro(s)"),
       emptyMsg:
-        id === "clues"
+        uiEntry?.emptyMsg ||
+        (id === "clues"
           ? "No se encontraron establecimientos de salud dentro del polígono."
-          : `No se encontraron ${label} dentro del polígono.`,
+          : `No se encontraron ${label} dentro del polígono.`),
     };
   }
   _countCapaUiById = out;
@@ -126,6 +168,9 @@ let _seccionesUI = [];
 let _ordenCampos = new Map();
 let _capaUi = { capaId: "c_inv", secciones: [], unidadRegistro: "manzana(s)", emptyMsg: "" };
 let _ultimoResultado = null;
+let _analysisRunning = false;
+let _capaChangePromise = null;
+let _capaLayerReady = false;
 let _polygonHandler = null;
 let _intersectCacheKey = null;
 let _intersectCacheCapas = null;
@@ -239,6 +284,13 @@ function getSelectedCapaTabla() {
   return _selectedCapaId || "";
 }
 
+function getSelectedCapaEtiqueta() {
+  const tabla = getSelectedCapaTabla();
+  if (!tabla) return "";
+  if (isDenuePanelCapa(tabla)) return "DENUE — Establecimientos";
+  return capaMetaById(tabla)?.etiqueta || tabla;
+}
+
 function selectedDenueCapas() {
   return [
     ...(_modalEl?.querySelectorAll(
@@ -340,9 +392,11 @@ function buildCapaPickerPanel() {
     byGrupo.get(g).push(c);
   }
 
-  for (const grupo of ["censales", "salud", "otros"]) {
-    const list = byGrupo.get(grupo);
-    if (!list?.length) continue;
+  const grupoOrder = ["censales", "salud", "tematicas", "otros"];
+  const renderedGrupos = new Set();
+
+  const appendGrupoSection = (grupo, list) => {
+    if (!list?.length) return;
     const section = document.createElement("div");
     section.className = "visor-spatial-capa-picker__section";
     const head = document.createElement("div");
@@ -358,7 +412,7 @@ function buildCapaPickerPanel() {
       btn.textContent = c.etiqueta || id;
       btn.addEventListener("click", (ev) => {
         ev.stopPropagation();
-        _selectedCapaId = _selectedCapaId === id ? "" : id;
+        _selectedCapaId = id;
         highlightCapaPickerSelection();
         syncCapaPickerSummary();
         closeCapaPickerPanel();
@@ -367,6 +421,14 @@ function buildCapaPickerPanel() {
       section.appendChild(btn);
     }
     panel.appendChild(section);
+    renderedGrupos.add(grupo);
+  };
+
+  for (const grupo of grupoOrder) {
+    appendGrupoSection(grupo, byGrupo.get(grupo));
+  }
+  for (const [grupo, list] of byGrupo) {
+    if (!renderedGrupos.has(grupo)) appendGrupoSection(grupo, list);
   }
 
   if (_capasDenue.length) {
@@ -383,7 +445,7 @@ function buildCapaPickerPanel() {
     btn.textContent = "Establecimientos";
     btn.addEventListener("click", (ev) => {
       ev.stopPropagation();
-      _selectedCapaId = _selectedCapaId === DENUE_PANEL_CAPA_ID ? "" : DENUE_PANEL_CAPA_ID;
+      _selectedCapaId = DENUE_PANEL_CAPA_ID;
       highlightCapaPickerSelection();
       syncCapaPickerSummary();
       closeCapaPickerPanel();
@@ -420,29 +482,103 @@ function panelStopPropagation() {
   getCapaPickerPanel()?.addEventListener("click", (e) => e.stopPropagation());
 }
 
+const RUN_BTN_LABEL = "⚡ Ejecutar consulta";
+const RUN_BTN_LOADING_LABEL = "Consultando…";
+
+function setRunButtonLoading(loading) {
+  const runBtn = _modalEl?.querySelector("#visorSpatialRunBtn");
+  if (!runBtn) return;
+  runBtn.classList.toggle("visor-spatial-run-btn--loading", loading);
+  runBtn.setAttribute("aria-busy", loading ? "true" : "false");
+  if (loading) {
+    runBtn.disabled = true;
+    runBtn.innerHTML =
+      '<span class="spinner-border spinner-border-sm me-1" role="presentation" aria-hidden="true"></span>' +
+      RUN_BTN_LOADING_LABEL;
+    return;
+  }
+  runBtn.textContent = RUN_BTN_LABEL;
+}
+
 function syncRunButtonState() {
   const runBtn = _modalEl?.querySelector("#visorSpatialRunBtn");
   if (!runBtn) return;
+  if (_analysisRunning) {
+    setRunButtonLoading(true);
+    return;
+  }
 
   const tabla = getSelectedCapaTabla();
   const campos = selectedFields();
 
+  if (!_capaLayerReady && tabla) {
+    runBtn.disabled = true;
+    runBtn.textContent = "Preparando capa…";
+    runBtn.classList.remove("visor-spatial-run-btn--loading");
+    runBtn.removeAttribute("aria-busy");
+    return;
+  }
+
   if (isDenuePanelCapa(tabla)) {
     runBtn.disabled = selectedDenueCapas().length === 0;
+    runBtn.textContent = RUN_BTN_LABEL;
+    runBtn.classList.remove("visor-spatial-run-btn--loading");
+    runBtn.removeAttribute("aria-busy");
     return;
   }
 
   if (!tabla) {
     runBtn.disabled = true;
+    runBtn.textContent = RUN_BTN_LABEL;
+    runBtn.classList.remove("visor-spatial-run-btn--loading");
+    runBtn.removeAttribute("aria-busy");
     return;
   }
 
   if (isConteoCapaModo(tabla)) {
     runBtn.disabled = false;
+    runBtn.textContent = RUN_BTN_LABEL;
+    runBtn.classList.remove("visor-spatial-run-btn--loading");
+    runBtn.removeAttribute("aria-busy");
     return;
   }
 
   runBtn.disabled = campos.length === 0;
+  runBtn.textContent = RUN_BTN_LABEL;
+  runBtn.classList.remove("visor-spatial-run-btn--loading");
+  runBtn.removeAttribute("aria-busy");
+}
+
+function renderAnalysisError(msg) {
+  const host = _modalEl?.querySelector("#visorSpatialResults");
+  if (!host) return;
+  host.classList.remove("d-none");
+  host.innerHTML = `
+    <div class="alert alert-danger mb-0" role="alert">
+      <strong>No se pudo completar la consulta.</strong>
+      <div class="small mt-1">${escapeHtml(msg || "Error desconocido")}</div>
+    </div>`;
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function scrollResultsIntoView() {
+  _modalEl?.querySelector("#visorSpatialResults")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+
+function showAnalysisLoadingPanel() {
+  const host = _modalEl?.querySelector("#visorSpatialResults");
+  if (!host) return;
+  const label = getSelectedCapaEtiqueta() || "la capa seleccionada";
+  host.classList.remove("d-none");
+  host.innerHTML = `
+    <div class="visor-spatial-loading" role="status" aria-live="polite">
+      <div class="visor-spatial-loading__spinner spinner-border text-primary" role="presentation" aria-hidden="true"></div>
+      <div class="visor-spatial-loading__body">
+        <strong class="d-block">Ejecutando consulta…</strong>
+        <span class="text-muted small">Analizando «${escapeHtml(label)}». En tablas grandes sin índice espacial puede tardar varios segundos; espere sin volver a pulsar el botón.</span>
+      </div>
+    </div>`;
+  host.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 function getTurf() {
@@ -483,6 +619,7 @@ function closeSpatialModal() {
   _modalBackdrop?.remove();
   _modalBackdrop = null;
   syncTriggerVisibility();
+  purgeOrphanModalBackdrops();
 }
 
 function showSpatialModal() {
@@ -600,29 +737,41 @@ function ensureModal() {
   return _modalEl;
 }
 
-function setStatus(msg, isError = true) {
+function normalizeStatusTone(tone) {
+  if (tone === false || tone === "success") return "success";
+  if (tone === "info" || tone === "loading") return "info";
+  return "error";
+}
+
+function setStatus(msg, tone = "error") {
   const el = _modalEl?.querySelector("#visorSpatialStatus");
   if (!el) return;
   if (!msg) {
     el.hidden = true;
     el.textContent = "";
     el.innerHTML = "";
+    el.classList.remove("text-danger", "text-success", "text-info");
     return;
   }
   el.hidden = false;
   if (typeof msg === "object" && msg !== null && msg.html != null) {
     el.innerHTML = msg.html;
-    el.classList.remove("text-danger", "text-success");
+    el.classList.remove("text-danger", "text-success", "text-info");
     if (!msg.mixed) {
-      el.classList.toggle("text-danger", isError);
-      el.classList.toggle("text-success", !isError);
+      const t = normalizeStatusTone(msg.tone ?? tone);
+      if (t === "success") el.classList.add("text-success");
+      else if (t === "info") el.classList.add("text-info");
+      else el.classList.add("text-danger");
     }
     return;
   }
   el.textContent = String(msg);
   el.innerHTML = "";
-  el.classList.toggle("text-danger", isError);
-  el.classList.toggle("text-success", !isError);
+  const t = normalizeStatusTone(tone);
+  el.classList.remove("text-danger", "text-success", "text-info");
+  if (t === "success") el.classList.add("text-success");
+  else if (t === "info") el.classList.add("text-info");
+  else el.classList.add("text-danger");
 }
 
 function escapeHtml(value) {
@@ -668,7 +817,7 @@ async function loadCapasSelect() {
   wrap?.classList.add("d-none");
   closeCapaPickerPanel();
   if (runBtn) runBtn.disabled = true;
-  setStatus("Comprobando intersecciones…", false);
+  setStatus("Comprobando intersecciones…", "info");
 
   try {
     const intersectCapas = await resolveIntersectCapas(feat);
@@ -685,6 +834,13 @@ async function loadCapasSelect() {
     }
 
     buildCapaPickerPanel();
+    const dropdownCapas = capasForDropdown(intersectCapas);
+    if (!_selectedCapaId && dropdownCapas.length) {
+      const first = dropdownCapas[0];
+      _selectedCapaId = first.id || first.tabla || "";
+      syncCapaPickerSummary();
+      highlightCapaPickerSelection();
+    }
     setStatus("");
     await onCapaChange();
     syncRunButtonState();
@@ -700,11 +856,17 @@ async function onCapaChange() {
   if (!wrap) return;
 
   const tabla = getSelectedCapaTabla();
+  _capaLayerReady = false;
+  syncRunButtonState();
+
   if (!tabla) {
     wrap.classList.add("d-none");
+    _capaLayerReady = true;
     syncRunButtonState();
     return;
   }
+
+  const runChange = async () => {
 
   if (isDenuePanelCapa(tabla)) {
     setFieldsSectionTitle("Establecimientos");
@@ -739,14 +901,24 @@ async function onCapaChange() {
     return;
   }
 
-  setStatus("Cargando indicadores…", false);
+  setStatus("Cargando indicadores…", "info");
   try {
     const apiCols = await fetchColumnasCapa(tabla);
     const apiMap = new Map((apiCols || []).map((c) => [c.columna, c]));
-    _columnas = camposUI.filter((c) => apiMap.has(c.columna)).map((c) => ({
-      ...c,
-      agregacion: apiMap.get(c.columna)?.agregacion || "sum",
-    }));
+    if (camposUI.length) {
+      _columnas = camposUI
+        .filter((c) => apiMap.has(c.columna))
+        .map((c) => ({
+          ...c,
+          agregacion: apiMap.get(c.columna)?.agregacion || c.agregacion || "sum",
+        }));
+    } else {
+      _columnas = (apiCols || []).map((c) => ({
+        columna: c.columna,
+        etiqueta: c.etiqueta || c.columna,
+        agregacion: c.agregacion || "sum",
+      }));
+    }
     wrap.classList.remove("d-none");
     renderFieldCheckboxes();
     if (runBtn) runBtn.disabled = _columnas.length === 0;
@@ -759,6 +931,14 @@ async function onCapaChange() {
     setStatus("");
   }
   syncRunButtonState();
+  };
+
+  _capaChangePromise = runChange().finally(() => {
+    _capaLayerReady = true;
+    _capaChangePromise = null;
+    syncRunButtonState();
+  });
+  await _capaChangePromise;
 }
 
 function renderActiveFieldCheckboxes() {
@@ -790,6 +970,8 @@ function renderDenueFieldCheckboxes() {
     list.appendChild(head);
   }
 
+  const autoCheckAll = !filter && prev.size === 0;
+
   for (const c of filtered) {
     const id = c.id || c.tabla;
     const cbId = `vsp-denue-${id}`;
@@ -800,7 +982,7 @@ function renderDenueFieldCheckboxes() {
       <label class="form-check-label visor-spatial-field-label-only" for="${cbId}">${escapeHtml(c.etiqueta || id)}</label>
     `;
     const cb = row.querySelector("input");
-    if (cb && prev.has(id)) cb.checked = true;
+    if (cb && (prev.has(id) || autoCheckAll)) cb.checked = true;
     cb?.addEventListener("change", () => {
       syncCapaPickerSummary();
       syncRunButtonState();
@@ -1071,7 +1253,8 @@ function renderResults(data) {
       "<div class=\"table-responsive atlas-scroll\"><table class=\"table table-sm table-striped visor-spatial-table\">" +
       "<thead><tr><th>Establecimiento</th><th class=\"text-end\">Total de elementos</th></tr></thead><tbody>";
     for (const fila of data.filas) {
-      tbl += `<tr><td>${escapeHtml(fila.etiqueta || "—")}</td>` +
+      const errNote = fila.error ? `<div class="small text-danger">${escapeHtml(fila.error)}</div>` : "";
+      tbl += `<tr><td>${escapeHtml(fila.etiqueta || "—")}${errNote}</td>` +
         `<td class="text-end fw-semibold">${Number(fila.total || 0).toLocaleString("es-MX")}</td></tr>`;
     }
     tbl += "</tbody></table></div>";
@@ -1098,6 +1281,7 @@ function renderResults(data) {
     );
     host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailPanel}`;
     wireDetailToggleButtons(host);
+    scrollResultsIntoView();
     return;
   }
 
@@ -1120,6 +1304,7 @@ function renderResults(data) {
     const detailPanel = buildDetailToggleSection(detailHtml, "Mostrar detalle de elementos");
     host.innerHTML = `<h3 class="h6 fw-bold mb-2">Resultados</h3>${metaHtml}${tbl}${detailPanel}`;
     wireDetailToggleButtons(host);
+    scrollResultsIntoView();
     return;
   }
 
@@ -1133,14 +1318,27 @@ function renderResults(data) {
   tbl += "</tbody></table></div>";
 
   host.innerHTML = `<h3 class=\"h6 fw-bold mb-2\">Resultados</h3>${metaHtml}${tbl}`;
+  scrollResultsIntoView();
 }
 
 async function onRunAnalysis() {
+  if (_analysisRunning) return;
+  if (_capaChangePromise) {
+    try {
+      await _capaChangePromise;
+    } catch {
+      /* noop */
+    }
+  }
+  if (!_capaLayerReady) {
+    setStatus("Espere a que la capa termine de cargarse.", true);
+    return;
+  }
+
   const feat = getAnalysisTargetFeature();
   const tabla = getSelectedCapaTabla();
   const denueIds = selectedDenueCapas();
   const campos = selectedFields();
-  const runBtn = _modalEl?.querySelector("#visorSpatialRunBtn");
   const cve_mun = _getCveMun?.() || null;
 
   if (!feat) {
@@ -1165,12 +1363,15 @@ async function onRunAnalysis() {
     return;
   }
 
-  if (runBtn) runBtn.disabled = true;
-  setStatus("Ejecutando consulta…", false);
+  _analysisRunning = true;
+  _modalEl?.setAttribute("aria-busy", "true");
+  setRunButtonLoading(true);
+  showAnalysisLoadingPanel();
+  setStatus("Ejecutando consulta espacial…", "info");
 
   try {
     if (modoDenue || denueIds.length > 0) {
-      const results = await Promise.all(
+      const settled = await Promise.allSettled(
         denueIds.map((id) =>
           ejecutarAnalisisDinamico({
             tabla: id,
@@ -1180,29 +1381,54 @@ async function onRunAnalysis() {
           }),
         ),
       );
-      const filas = results.map((r) => ({
-        id: r.capa_id,
-        etiqueta: r.capa_etiqueta,
-        total: r.registros_intersectados ?? 0,
-        columns: r.columns || [],
-        rows: r.rows || [],
-        filas_truncadas: Boolean(r.filas_truncadas),
-      }));
+      const filas = settled.map((entry, index) => {
+        const id = denueIds[index];
+        const meta = capaMetaById(id);
+        if (entry.status === "rejected") {
+          return {
+            id,
+            etiqueta: meta?.etiqueta || id,
+            total: 0,
+            error: entry.reason?.message || String(entry.reason || "Error"),
+            columns: [],
+            rows: [],
+            filas_truncadas: false,
+          };
+        }
+        const r = entry.value;
+        return {
+          id: r.capa_id || id,
+          etiqueta: r.capa_etiqueta || meta?.etiqueta || id,
+          total: r.registros_intersectados ?? 0,
+          columns: r.columns || [],
+          rows: r.rows || [],
+          filas_truncadas: Boolean(r.filas_truncadas),
+        };
+      });
+      const errores = filas.filter((f) => f.error);
       const data = {
         ok: true,
         modo: "conteo_multi",
         capa_etiqueta: "DENUE — Establecimientos",
-        poligono: results[0]?.poligono || {},
+        poligono: settled.find((e) => e.status === "fulfilled")?.value?.poligono || {},
         filas,
         registros_intersectados: filas.reduce((acc, f) => acc + Number(f.total || 0), 0),
         filas_truncadas: filas.some((f) => f.filas_truncadas),
       };
       renderResults(data);
-      const vacias = filas.filter((f) => !f.total);
-      if (vacias.length === filas.length) {
+      scrollResultsIntoView();
+      const vacias = filas.filter((f) => !f.total && !f.error);
+      if (errores.length === filas.length) {
+        setStatus(errores[0]?.error || "Error en la consulta DENUE.", true);
+      } else if (vacias.length === filas.length && !errores.length) {
         setStatus("No se encontraron establecimientos DENUE dentro del polígono.", true);
+      } else if (errores.length) {
+        setStatus(
+          `Consulta parcial · ${errores.length} tipo(s) con error. Revise la tabla de resultados.`,
+          "info",
+        );
       } else {
-        setStatus(formatConsultaCompletada(data), false);
+        setStatus(formatConsultaCompletada(data), "success");
       }
       return;
     }
@@ -1214,15 +1440,19 @@ async function onRunAnalysis() {
       cve_mun,
     });
     renderResults(data);
+    scrollResultsIntoView();
     const n = data.registros_intersectados ?? 0;
     if (n === 0) {
       setStatus(_capaUi.emptyMsg, true);
     } else {
-      setStatus(formatConsultaCompletada(data), false);
+      setStatus(formatConsultaCompletada(data), "success");
     }
   } catch (err) {
-    setStatus(err.message || "Error en la consulta.");
+    setStatus(err.message || "Error en la consulta.", true);
+    renderAnalysisError(err.message || "Error en la consulta.");
   } finally {
+    _analysisRunning = false;
+    _modalEl?.removeAttribute("aria-busy");
     syncRunButtonState();
   }
 }
@@ -1308,7 +1538,9 @@ function onExportExcel() {
 
 async function openSpatialModal() {
   ensureModal();
-  await ensureAnalysisUiCatalog();
+  resetSpatialAnalysisUiCatalog();
+  _selectedCapaId = "";
+  _capaLayerReady = false;
   renderPolyInfo();
   _modalEl.querySelector("#visorSpatialResults")?.classList.add("d-none");
   _modalEl.querySelector("#visorSpatialExportBtn")?.classList.add("d-none");
@@ -1319,7 +1551,12 @@ async function openSpatialModal() {
   showSpatialModal();
   syncTriggerVisibility();
 
+  await ensureAnalysisUiCatalog();
   void loadCapasSelect();
+}
+
+function isSpatialModalOpen() {
+  return Boolean(_modalEl && _modalEl.style.display !== "none");
 }
 
 function onPolygonEvent() {
@@ -1327,9 +1564,11 @@ function onPolygonEvent() {
   clearTimeout(_prefetchTimer);
   if (!getAnalysisTargetFeature()) {
     clearIntersectCache();
+    if (isSpatialModalOpen()) void loadCapasSelect();
     return;
   }
   _prefetchTimer = setTimeout(() => prefetchIntersectCapas(), 350);
+  if (isSpatialModalOpen()) void loadCapasSelect();
 }
 
 function tryAttach(attempt) {

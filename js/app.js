@@ -6,6 +6,7 @@
  * visorLayers.js, invViv.js, módulos *Viz.js / *Export.js y theme.js.
  */
 import { createMenu, collapseAllMenuSections, clearActiveMenuItem } from "./menu.js";
+import { purgeOrphanModalBackdrops } from "./atlasModalCleanup.js";
 import {
   setMapView,
   getMapBaseUrl,
@@ -503,10 +504,12 @@ function visorLayerPanelOptions() {
 
 function spatialAnalysisOptions() {
   return {
-    getCveMun: () =>
-      state.selectedMunicipio?.cve_mun != null
+    getCveMun: () => {
+      if (getVisorStateWideMode()) return null;
+      return state.selectedMunicipio?.cve_mun != null
         ? String(state.selectedMunicipio.cve_mun)
-        : null,
+        : null;
+    },
   };
 }
 
@@ -903,6 +906,7 @@ async function onIndicatorSelected(indicator) {
 
   // --- Indicador: Visor geográfico (capas WMS + panel lateral) ---
   if (isVisorIndicator(indicator)) {
+    purgeOrphanModalBackdrops();
     setPoblacionLayout(false);
     setCrecimientoLayout(false);
     setEdadMedianaLayout(false);
@@ -944,6 +948,9 @@ async function onIndicatorSelected(indicator) {
       setTimeout(() => {
         invalidateMapSize();
         refreshMapViewerPlugins({ includeMapUi: true });
+        if (state.selectedMunicipio?.cve_mun && isVisorIndicator(state.activeIndicator)) {
+          scheduleAppMunicipioFocus("visor");
+        }
       }, 400);
     });
     setActivePill(indicator.title);
@@ -2074,6 +2081,7 @@ async function bootstrap() {
           }
         },
       });
+      purgeOrphanModalBackdrops();
       void ensureGeoContextoBulk().catch(() => {});
       void ensureExploradorBulk().catch(() => {});
 

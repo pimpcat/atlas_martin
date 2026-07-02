@@ -4,57 +4,137 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Visor Studio — Atlas Municipal</title>
+  <link rel="stylesheet" href="./css/layout.css" />
   <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
   <link rel="stylesheet" href="./css/main.css" />
 </head>
 <body class="visor-studio-page">
-  <main class="container py-5" style="max-width: 420px">
-    <div class="card shadow-sm">
-      <div class="card-body p-4">
-        <h1 class="h5 mb-1">Visor Studio</h1>
-        <p class="small text-muted mb-3">Acceso restringido para administración del catálogo de capas.</p>
-        <form id="visorStudioLoginForm" class="d-grid gap-3">
-          <div>
-            <label class="form-label small" for="visorStudioUser">Usuario</label>
-            <input id="visorStudioUser" class="form-control form-control-sm" autocomplete="username" required />
-          </div>
-          <div>
-            <label class="form-label small" for="visorStudioPass">Contraseña</label>
-            <input id="visorStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
-          </div>
-          <div id="visorStudioError" class="small text-danger d-none" role="alert"></div>
-          <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
-        </form>
-        <p class="small text-muted mt-3 mb-0">
-          Tras iniciar sesión volverá al portal. Esta URL no aparece en el menú público.
-        </p>
+  <main class="container py-4 visor-studio-shell">
+    <section id="visorStudioLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Visor Studio</h1>
+          <p class="small text-muted mb-3">Acceso restringido para administración del catálogo de capas.</p>
+          <form id="visorStudioLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="visorStudioUser">Usuario</label>
+              <input id="visorStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="visorStudioPass">Contraseña</label>
+              <input id="visorStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="visorStudioError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0">
+            Esta URL no aparece en el menú público. Tras iniciar sesión podrá gestionar usuarios o abrir el visor.
+          </p>
+        </div>
       </div>
-    </div>
+    </section>
+
+    <section id="visorStudioDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+          <h1 class="h5 mb-0">Visor Studio</h1>
+          <p class="small text-muted mb-0" id="visorStudioWelcome"></p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="./index.html?visor=1" class="btn btn-sm btn-primary">Abrir visor</a>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="visorStudioLogoutBtn">Cerrar sesión</button>
+        </div>
+      </div>
+
+      <div class="card shadow-sm visor-studio-card">
+        <div class="card-body p-3 p-md-4">
+          <ul class="nav nav-tabs nav-tabs-sm mb-3 visor-studio-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+              <button class="nav-link active" type="button" data-studio-tab="users" role="tab" aria-selected="true">Usuarios</button>
+            </li>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link" type="button" data-studio-tab="password" role="tab" aria-selected="false">Mi contraseña</button>
+            </li>
+          </ul>
+
+          <div id="visorStudioUsersPanel" role="tabpanel">
+            <div class="row g-3">
+              <div class="col-lg-5">
+                <h2 class="h6 mb-2">Nuevo usuario</h2>
+                <form id="visorStudioCreateUserForm" class="d-grid gap-2">
+                  <div>
+                    <label class="form-label small" for="visorStudioNewUsername">Usuario</label>
+                    <input id="visorStudioNewUsername" class="form-control form-control-sm" pattern="[A-Za-z0-9_]{2,64}" required />
+                  </div>
+                  <div>
+                    <label class="form-label small" for="visorStudioNewDisplay">Nombre para mostrar</label>
+                    <input id="visorStudioNewDisplay" class="form-control form-control-sm" maxlength="120" />
+                  </div>
+                  <div>
+                    <label class="form-label small" for="visorStudioNewRole">Rol</label>
+                    <select id="visorStudioNewRole" class="form-select form-select-sm">
+                      <option value="visor_admin">Administrador del visor</option>
+                      <option value="viewer">Solo lectura (sin login admin)</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label class="form-label small" for="visorStudioNewPassword">Contraseña</label>
+                    <input id="visorStudioNewPassword" type="password" class="form-control form-control-sm" minlength="8" required />
+                  </div>
+                  <div>
+                    <label class="form-label small" for="visorStudioNewPassword2">Repetir contraseña</label>
+                    <input id="visorStudioNewPassword2" type="password" class="form-control form-control-sm" minlength="8" required />
+                  </div>
+                  <button type="submit" class="btn btn-sm btn-primary">Crear usuario</button>
+                </form>
+              </div>
+              <div class="col-lg-7">
+                <div class="d-flex align-items-center justify-content-between gap-2 mb-2">
+                  <h2 class="h6 mb-0">Cuentas registradas</h2>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="visorStudioRefreshUsersBtn">Actualizar</button>
+                </div>
+                <div id="visorStudioUsersStatus" class="small text-muted mb-2">Cargando…</div>
+                <div class="visor-studio-users-table-wrap">
+                  <table class="table table-sm visor-studio-users-table mb-0">
+                    <thead>
+                      <tr>
+                        <th>Usuario</th>
+                        <th>Rol</th>
+                        <th>Estado</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody id="visorStudioUsersTableBody"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="visorStudioPasswordPanel" class="d-none" role="tabpanel">
+            <h2 class="h6 mb-2">Cambiar mi contraseña</h2>
+            <form id="visorStudioPasswordForm" class="visor-studio-password-form d-grid gap-2">
+              <div>
+                <label class="form-label small" for="visorStudioCurrentPass">Contraseña actual</label>
+                <input id="visorStudioCurrentPass" type="password" class="form-control form-control-sm" required />
+              </div>
+              <div>
+                <label class="form-label small" for="visorStudioNewPass">Contraseña nueva</label>
+                <input id="visorStudioNewPass" type="password" class="form-control form-control-sm" minlength="8" required />
+              </div>
+              <div>
+                <label class="form-label small" for="visorStudioNewPass2">Repetir contraseña nueva</label>
+                <input id="visorStudioNewPass2" type="password" class="form-control form-control-sm" minlength="8" required />
+              </div>
+              <button type="submit" class="btn btn-sm btn-primary">Guardar contraseña</button>
+            </form>
+          </div>
+
+          <div id="visorStudioDashMessage" class="small mt-3 d-none" role="status"></div>
+        </div>
+      </div>
+    </section>
   </main>
-  <script type="module">
-    import { loginAdmin, isVisorAdminLoggedIn } from "./js/visorAdminAuth.js";
-
-    if (isVisorAdminLoggedIn()) {
-      window.location.replace("./index.html?visor=1");
-    }
-
-    const form = document.getElementById("visorStudioLoginForm");
-    const errEl = document.getElementById("visorStudioError");
-    form?.addEventListener("submit", async (ev) => {
-      ev.preventDefault();
-      errEl?.classList.add("d-none");
-      const username = document.getElementById("visorStudioUser")?.value?.trim();
-      const password = document.getElementById("visorStudioPass")?.value || "";
-      try {
-        await loginAdmin(username, password);
-        window.location.replace("./index.html?visor=1");
-      } catch (err) {
-        if (errEl) {
-          errEl.textContent = err?.message || "Error de acceso";
-          errEl.classList.remove("d-none");
-        }
-      }
-    });
-  </script>
+  <script type="module" src="./js/visorStudioPage.js"></script>
 </body>
 </html>

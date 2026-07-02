@@ -173,6 +173,8 @@ function applyStyleSchema(preset, layerStyle, target = "paint") {
     base = deepClone(preset.paintHalo || {});
   } else if (target === "fillHit") {
     base = deepClone(preset.fillHitPaint || {});
+  } else if (target === "layout") {
+    base = deepClone(preset.layout || {});
   } else {
     base = deepClone(preset.paint || {});
   }
@@ -182,9 +184,15 @@ function applyStyleSchema(preset, layerStyle, target = "paint") {
   for (const [styleKey, spec] of Object.entries(schema)) {
     const specTarget = spec.target || "paint";
     if (specTarget !== target) continue;
-    if (!spec.paint) continue;
+    const mapKey = spec.paint || spec.layout;
+    if (!mapKey) continue;
     const val = style[styleKey] !== undefined ? style[styleKey] : spec.default;
-    if (val !== undefined) base[spec.paint] = val;
+    if (val === undefined || val === null || val === "") continue;
+    if (mapKey === "line-dasharray") {
+      if (Array.isArray(val) && val.length) base[mapKey] = val;
+      continue;
+    }
+    base[mapKey] = val;
   }
 
   return base;
@@ -196,12 +204,37 @@ function applyStyleSchema(preset, layerStyle, target = "paint") {
  */
 function attachOverlayDefExtras(def, entry) {
   if (!def) return null;
+  if (entry.id) {
+    def.layerId = entry.id;
+    def.catalogLayerId = entry.id;
+  }
+  const cluster = entry.style?.cluster;
+  if (cluster?.enabled && entry.geometry === "point") {
+    def.cluster = {
+      enabled: true,
+      preset: cluster.preset || "standard",
+    };
+    def.clusterColor =
+      entry.style?.color || entry.style?.default_color || def.paint?.["circle-color"] || "#0d9488";
+  }
   const codigoAct = entry.data?.filter?.codigo_act;
   if (Array.isArray(codigoAct) && codigoAct.length) def.codigoAct = codigoAct;
+  const attrField = entry.data?.filter?.field;
+  const attrValues = entry.data?.filter?.values;
+  if (
+    attrField &&
+    Array.isArray(attrValues) &&
+    attrValues.length &&
+    !codigoAct?.length
+  ) {
+    def.attributeFilter = { field: String(attrField), values: attrValues.map(String) };
+  }
   const mf = entry.data?.mun_filter;
   if (mf === false || mf === "false" || mf === "none" || mf === 0) {
     def.skipMunFilter = true;
   }
+  const geom = String(entry.geometry || "").trim().toLowerCase();
+  if (geom) def.geometry = geom;
   return def;
 }
 
@@ -245,6 +278,38 @@ export function buildOverlayDefFromGenericPreset(entry, preset) {
   if (preset.lineStack) {
     def.lineStack = true;
     def.paintHalo = applyStyleSchema(preset, entry.style, "paintHalo");
+    const dash = entry.style?.line_dash;
+    if (Array.isArray(dash) && dash.length) {
+      def.paint["line-dasharray"] = dash;
+      if (def.paintHalo) def.paintHalo["line-dasharray"] = dash;
+    }
+  } else if (preset.type === "line") {
+    const dash = entry.style?.line_dash;
+    if (Array.isArray(dash) && dash.length) {
+      def.paint["line-dasharray"] = dash;
+    }
+  }
+
+  if (preset.type === "fill") {
+    const style = entry.style || {};
+    const outlineW = Number(style.outline_width);
+    if (Number.isFinite(outlineW) && outlineW > 0) {
+      const outlineColor =
+        style.outline_color ||
+        preset.style_schema?.outline_color?.default ||
+        "#64748b";
+      const outlineOpacity =
+        style.outline_opacity ?? style.opacity ?? preset.style_schema?.opacity?.default ?? 1;
+      /** @type {object} */
+      const outlinePaint = {
+        "line-color": outlineColor,
+        "line-width": outlineW,
+        "line-opacity": outlineOpacity,
+      };
+      const dash = style.line_dash;
+      if (Array.isArray(dash) && dash.length) outlinePaint["line-dasharray"] = dash;
+      def.polygonOutline = { paint: outlinePaint };
+    }
   }
   const wantsFillHit = preset.fillHit || entry.style?.fill_hit === true;
   if (wantsFillHit) {
@@ -465,6 +530,23 @@ export function buildGenericLegendForLayer(entry, preset) {
     );
     if (fallback) iconItems.push(fallback);
     return iconItems.length ? { iconItems } : null;
+  }
+
+  if (preset.type === "symbol" && style.icon_key) {
+    const item = legendItemForIconKey(style.icon_key, label);
+    if (!item) return null;
+    /** @type {{ iconItems: object[], items?: object[] }} */
+    const legend = { iconItems: [item] };
+    if (style.cluster?.enabled) {
+      legend.items = [
+        {
+          kind: "circle",
+          color: String(style.color || style.default_color || "#0d9488"),
+          label: "Grupo de puntos (cluster)",
+        },
+      ];
+    }
+    return legend;
   }
 
   if (preset.type === "circle") {

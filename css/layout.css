@@ -411,6 +411,13 @@ html[data-theme="oscuro"] .sidebar-theme-picker {
 .sidebar-municipios {
   grid-row: 1;
   min-height: 0;
+  position: relative;
+  z-index: 30;
+}
+
+.municipio-select-wrap {
+  position: relative;
+  z-index: 31;
 }
 
 .app-sidebar .menu {

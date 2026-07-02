@@ -86,7 +86,9 @@ export function renderMunicipiosSelect(selectEl, statusEl, rows, { onSelect } = 
     }
   };
 
-  selectEl.addEventListener("change", emit);
+  selectEl.onchange = () => {
+    emit();
+  };
 }
 
 /**

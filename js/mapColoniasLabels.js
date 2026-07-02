@@ -11,6 +11,7 @@
 
 import { fetchColoniasLabels } from "./api.js";
 import { getTurf } from "./mapGeo.js";
+import { isMapZoomAtLeast, mapLibreLayoutMinzoom } from "./visorMapZoom.js";
 import {
   COLONIAS_LABEL_MIN_ZOOM,
   MARTIN_TABLES,
@@ -163,7 +164,7 @@ export function ensureColoniasLabelLayer(map, labelDef, paintForTheme) {
     id: labelId,
     type: "symbol",
     source: COLONIAS_LABEL_GEO_SRC,
-    minzoom: labelDef.minzoom,
+    minzoom: mapLibreLayoutMinzoom(labelDef.minzoom),
     layout: { ...labelDef.layout, visibility: "none" },
     paint: paintForTheme(labelDef),
   });
@@ -218,7 +219,7 @@ function labelsShouldLoad(ctx) {
 
 function labelsShouldRender(map, ctx) {
   if (!labelsShouldLoad(ctx)) return false;
-  return map.getZoom() >= COLONIAS_LABEL_MIN_ZOOM;
+  return isMapZoomAtLeast(map.getZoom(), COLONIAS_LABEL_MIN_ZOOM);
 }
 
 /** Sincroniza puntos de etiqueta (API → respaldo por teselas). */
@@ -260,12 +261,6 @@ export async function syncColoniasLabels(map, ctx, munFilter, ensureLayer) {
     if (!fc.features.length) {
       console.warn("[colonias-labels] sin puntos (API y teselas):", err);
     }
-  }
-
-  try {
-    map.moveLayer(labelId);
-  } catch {
-    /* noop */
   }
 }
 

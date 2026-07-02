@@ -92,12 +92,31 @@ function ensureLayers(map) {
   return true;
 }
 
+function readHighlightData(map) {
+  const src = map?.getSource?.(SOURCE_ID);
+  if (!src) return EMPTY_FC;
+  const data = src._data || src._options?.data;
+  return data?.type === "FeatureCollection" ? data : EMPTY_FC;
+}
+
 function setData(map, feature) {
   if (!map?.getSource?.(SOURCE_ID)) return;
   const data = feature
     ? { type: "FeatureCollection", features: [feature] }
     : EMPTY_FC;
   map.getSource(SOURCE_ID).setData(data);
+}
+
+export function geocoderHighlightIsActive(map) {
+  const data = readHighlightData(map);
+  return Boolean(data.features?.length);
+}
+
+/** Mantiene el contorno del buscador encima de capas temáticas tras restack. */
+export function restackGeocoderHighlightLayers(map) {
+  if (!map?.getStyle?.() || !geocoderHighlightIsActive(map)) return;
+  if (!ensureLayers(map)) return;
+  stackHighlightLayers(map);
 }
 
 /** Muestra el contorno/relleno del polígono buscado. */

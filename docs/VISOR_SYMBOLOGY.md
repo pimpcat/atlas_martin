@@ -4,6 +4,10 @@ Documento complementario de [VISOR_CATALOG.md](./VISOR_CATALOG.md). Describe **c
 
 **Alcance:** solo el **Visor geográfico** (`geo_visor`). No aplica a Datos geográficos, explorador municipal ni Inventario de viviendas.
 
+**Clusters (agrupación de puntos):** ver **[VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md)** — icono + círculo de grupo en leyenda, capas `-clusters` / `-unclustered` / MVT.
+
+**Apilado hover/identify:** polígonos abajo, puntos arriba según `geometry` del catálogo — **[VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md)**.
+
 ---
 
 ## Respuesta directa

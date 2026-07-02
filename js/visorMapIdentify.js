@@ -20,7 +20,8 @@ import {
   rebindOverlayIdentifyForMap,
 } from "./mapOverlayTips.js";
 import { getVisorDrawControl } from "./visorDraw.js";
-import { isVisorFeaturePickBusy, resolveVisorApiLayerId } from "./visorFeaturePickBuffer.js";
+import { isVisorFeaturePickBusy, resolveVisorApiLayerId, pickVisorFeatureGid } from "./visorFeaturePickBuffer.js";
+import { fetchVisorFeatureGeometry } from "./visorBufferApi.js";
 import { getVisorGeocoderContainer } from "./visorGeocoder.js";
 import { getVisorLayerEntry } from "./visorCatalog.js";
 import {
@@ -64,12 +65,20 @@ function isIdentifyPanelOpen() {
 function isIdentifiedLayerActive(primary) {
   if (!primary) return true;
   if (primary === MARTIN_USO_SUELO.layerId) return getUsoSueloLayerActive();
-  if (primary.startsWith("ly-")) {
-    const key = primary.slice(3);
+  const normalized = primary.startsWith("ly-") ? normalizeIdentifyPrimary(primary) : primary;
+  if (normalized?.startsWith("ly-")) {
+    const key = normalized.slice(3);
     if (key === "hidro") return getHidroCorrientesVisorLayerActive();
     if (key === "hcuerpos") return getHidroCuerposVisorLayerActive();
     if (key === "curnivel" || key === "curnivel-ma") return getCurvasNivelVisorLayerActive();
-    if (key.startsWith("rnc")) return getOverlayActive("rnc");
+    if (
+      key === "rnc" ||
+      key.startsWith("rnc-estatal") ||
+      key.startsWith("rnc-troncal") ||
+      key === "rnc-warm"
+    ) {
+      return getOverlayActive("rnc");
+    }
     return getOverlayActive(key);
   }
   return getOverlayActive(primary);
@@ -85,7 +94,9 @@ function resetIdentifySelection() {
 
 function rebuildIdentifyPanelHtml() {
   if (!_lastFeature || !_lastLngLat) return null;
-  const catalogId = resolveVisorApiLayerId(_lastPrimary || _lastLayerId || "");
+  const catalogId = resolveVisorApiLayerId(
+    normalizeIdentifyPrimary(_lastPrimary || _lastLayerId || ""),
+  );
   const entry = catalogId ? getVisorLayerEntry(catalogId) : null;
   const identify = entry ? resolveVisorHoverConfig(entry) : null;
   const props = _lastFeature.properties || {};
@@ -248,10 +259,30 @@ function onFeatureIdentifyClick(map, lngLat, html, feature, meta = {}) {
   _lastPoint = meta.point ?? null;
   _lastPrimary = normalizeIdentifyPrimary(meta.layerId) || meta.layerId || null;
 
-  prefetchLastFeatureGeometry();
-
   const enriched = appendIdentifyCoords(html, lngLat.lng, lngLat.lat);
   showIdentifyPanel(enriched);
+
+  prefetchLastFeatureGeometry();
+
+  const catalogId = resolveVisorApiLayerId(
+    normalizeIdentifyPrimary(_lastPrimary || _lastLayerId || ""),
+  );
+  const gid = pickVisorFeatureGid(feature?.properties);
+  if (!catalogId || !gid) return;
+
+  void fetchVisorFeatureGeometry({ layer_id: catalogId, gid })
+    .then(({ feature: full }) => {
+      if (!_lastFeature || gid !== pickVisorFeatureGid(_lastFeature.properties)) return;
+      if (full?.properties && Object.keys(full.properties).length) {
+        _lastFeature = {
+          type: "Feature",
+          properties: { ...(_lastFeature.properties || {}), ...full.properties },
+          geometry: full.geometry || _lastFeature.geometry,
+        };
+        refreshIdentifyPanelContent();
+      }
+    })
+    .catch(() => {});
 }
 
 function registerIdentifyHandler() {

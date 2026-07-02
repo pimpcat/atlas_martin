@@ -2,7 +2,8 @@
 
 Este documento describe cómo funciona el catálogo de capas del **Visor geográfico** (indicador `geo_visor`), cómo agregar o modificar capas sin tocar la lógica del explorador municipal, Datos geográficos ni Inventario de viviendas.
 
-> **Guía práctica por tipo de geometría** (polígono, línea, punto, iconos, buscador): **[AGREGAR_CAPA.md](./AGREGAR_CAPA.md)**.
+> **Guía práctica por tipo de geometría** (polígono, línea, punto, iconos, buscador): **[AGREGAR_CAPA.md](./AGREGAR_CAPA.md)**.  
+> **Análisis espacial e índices PostGIS:** **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)**.
 
 ## Resumen
 
@@ -12,9 +13,13 @@ Este documento describe cómo funciona el catálogo de capas del **Visor geográ
 | `layer_catalog()` hardcodeado en Python | Mismo JSON vía `visor_catalog_loader.py` |
 | Popup al clic: función JS por capa | Bloque `identify` en el catálogo (+ plantillas) |
 | Tooltips hover + letreritos por zoom | `identify`/`tooltip` y `labels` — ver **[VISOR_LABELS_TOOLTIPS.md](./VISOR_LABELS_TOOLTIPS.md)** |
+| Agrupación de puntos (clusters) | `style.cluster` — ver **[VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md)** |
+| Vista estatal (todo Guerrero) | Toggle en panel Capas — ver **[VISOR_STATE_WIDE.md](./VISOR_STATE_WIDE.md)** |
+| Apilado hover/identify (polígono vs punto) | Automático por `geometry` — ver **[VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md)** |
 | Export KML/SHP data-driven | `data.export` + `capabilities.export` — ver **[VISOR_EXPORT.md](./VISOR_EXPORT.md)** |
 | DENUE: array en `denueLayers.js` | Grupo `denue` en el catálogo |
 | Buscador: SQL fijo en `geocoder.py` | Bloque `search` en el catálogo — ver **[VISOR_SEARCH.md](./VISOR_SEARCH.md)** |
+| Análisis espacial: capas fijas en Python | Catálogo + `spatial_analysis` — ver **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)** |
 
 **La simbología en mapa** (colores, iconos, RNC por zoom, etc.) **no se aplica solo con el catálogo**: hoy vive en `map.js`, `martinLayerStyle.js` e iconos, enlazada por `overlay_key` y `renderer`. El catálogo documenta `style_preset` como contrato; ver guía completa en **[VISOR_SYMBOLOGY.md](./VISOR_SYMBOLOGY.md)**.
 
@@ -89,6 +94,8 @@ Define el orden, los encabezados **colapsables** del panel **Capas** y qué capa
 - La preferencia del usuario (plegado/desplegado) se guarda en `sessionStorage` por `id` de grupo, de modo que al cambiar de municipio o refrescar el panel se respeta su última elección.
 - Si no hay estado guardado, se usa `collapsed` del catálogo.
 
+**Visor Studio:** desde el modal **Gestionar** → pestaña **Grupos** puede crear apartados nuevos, renombrarlos o eliminar los que estén vacíos (sin capas en `layers`). Ver **[VISOR_STUDIO.md](./VISOR_STUDIO.md)**.
+
 **Ejemplo — DENUE plegado al abrir el visor** (lista larga):
 
 ```json
@@ -114,7 +121,10 @@ Define el orden, los encabezados **colapsables** del panel **Capas** y qué capa
 | `identify` | Contenido del popup al clic **y** globo al pasar el ratón |
 | `tooltip` | Atajo opcional si no usa `identify` (`field`, `title`) — ver [VISOR_LABELS_TOOLTIPS.md](./VISOR_LABELS_TOOLTIPS.md) |
 | `labels` | Letreritos en mapa desde `minzoom` (campo, color, placement) |
+| `style.cluster` | Agrupación de puntos (solo `geometry: point`) — `{ enabled, preset }`; ver **[VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md)** |
+| `style.minzoom` | Zoom mínimo para **dibujar la geometría** de la capa; si el mapa está más alejado, aviso «Acerca el mapa a zoom N+…» (como Manzanas). Ver `visorMapUi.js` + `getOverlayMinZoom` |
 | `capabilities` | `export`, `tabular`, `spatial_analysis` |
+| `spatial_analysis` | Bloque de configuración del análisis espacial (capas Studio) — ver **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)** |
 | `identify_visor_only` | Si `true`, identify solo en visor (hidro, curvas) |
 
 ### Valores de `renderer`
@@ -126,6 +136,21 @@ Define el orden, los encabezados **colapsables** del panel **Capas** y qué capa
 | `overlay_composite` | Varias capas MapLibre (ej. RNC) |
 | `visor_shared_martin` | Capa compartida con Datos geo (uso suelo, hidro) |
 | `visor_shared_composite` | Compuesta visor (curvas de nivel) |
+
+### Vista estatal del mapa temático
+
+El botón **Visor estatal** en la barra del panel Capas alterna el filtro runtime por `cve_mun` en capas overlay (MVT y GeoJSON cluster). No modifica `catalog.json`.
+
+| Modo | Capas con `mun_filter` habitual | Clusters (zoom alejado) |
+|------|----------------------------------|-------------------------|
+| Municipal | Solo municipio del explorador | `GET …/points?cve_mun=…` |
+| Vista estatal | Todo Guerrero en el mapa | `GET …/points?scope=estatal` |
+
+Export KML/SHP y consulta tabular **siguen** usando el municipio del explorador. Guía completa: **[VISOR_STATE_WIDE.md](./VISOR_STATE_WIDE.md)**.
+
+### Apilado para hover e identify
+
+Las capas overlay se reordenan automáticamente **polígono → línea → punto** según el campo `geometry` del catálogo, para que pins y clusters reciban hover/identify aunque haya polígonos activos debajo. Ver **[VISOR_LAYER_STACK.md](./VISOR_LAYER_STACK.md)**.
 
 ## Convenciones de datos PostGIS
 
@@ -323,12 +348,28 @@ Bloque opcional `tabular` en la capa:
 
 ### Análisis espacial
 
+Documentación completa: **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)**.
+
 | Fuente | Contenido |
 |--------|-----------|
-| `config/visor/analysis_catalog.json` | INV / ITER (secciones de indicadores) |
-| `catalog.json` + `capabilities.spatial_analysis` | DENUE y CLUES |
+| `config/visor/analysis_catalog.json` | INV / ITER (secciones de indicadores censales) |
+| `catalog.json` + `capabilities.spatial_analysis` | DENUE, CLUES (legacy) |
+| `catalog.json` + bloque `spatial_analysis` | Capas publicadas desde Visor Studio |
 
-El API expone `analysis_catalog` en `GET /api/visor/catalog`.
+El API fusiona ambos catálogos en `merge_capas_analisis()` y expone las capas en `GET /api/analisis/capas`. Las capas Studio **requieren** el bloque `spatial_analysis` (no basta el flag en `capabilities`).
+
+Campos habituales del bloque:
+
+| Clave | Uso |
+|-------|-----|
+| `modo` | `conteo` o `agregacion` |
+| `geom_column` | Columna PostGIS (default `the_geom`) |
+| `grupo` | Agrupación en el picker (`tematicas`, `salud`, `denue`, …) |
+| `sections` | Indicadores con `sum` / `avg` (modo agregación) |
+| `detail_table` / `detail_columns` | Tabla detalle de elementos intersectados |
+| `ui` | `unidad_registro`, `empty_msg` |
+
+Tras editar el catálogo en producción, reinicie FastAPI o guarde la capa vía Visor Studio para invalidar la caché de `CAPAS_ANALISIS`.
 
 ---
 
@@ -372,6 +413,10 @@ No basta con JSON: la lógica multi-capa vive en `map.js`. El catálogo **declar
 | `htdocs/atlas_gro/js/map.js` | Estilos y activación |
 | `martin.yaml` | Tiles vectoriales |
 | **`docs/VISOR_SYMBOLOGY.md`** | **Arquitectura y guía de simbología** |
+| **`docs/VISOR_CLUSTERS.md`** | **Agrupación híbrida GeoJSON + MVT (clusters)** |
+| **`docs/VISOR_STATE_WIDE.md`** | **Vista estatal del visor (sin filtro municipal en mapa)** |
+| **`docs/VISOR_LAYER_STACK.md`** | **Apilado polígono/línea/punto para hover e identify** |
+| **`docs/VISOR_SPATIAL_ANALYSIS.md`** | **Análisis espacial, wizard e índices PostGIS** |
 
 ## Qué NO cambia este catálogo
 

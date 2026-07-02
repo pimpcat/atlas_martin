@@ -4,7 +4,7 @@ Guía para configurar la descarga de capas desde el **Visor geográfico** usando
 
 **Alcance:** solo visor geográfico. Endpoint: `GET /api/visor/export?layer=<id>&format=kml|shp&cve_mun=001`.
 
-**Documentos relacionados:** [AGREGAR_CAPA.md](./AGREGAR_CAPA.md), [VISOR_CATALOG.md](./VISOR_CATALOG.md).
+**Documentos relacionados:** [AGREGAR_CAPA.md](./AGREGAR_CAPA.md), [VISOR_CATALOG.md](./VISOR_CATALOG.md), [VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md) (si también usa análisis espacial).
 
 ---
 
@@ -96,6 +96,19 @@ Listas distintas por formato (opcional):
 ```
 
 equivale a `{ "mode": "all" }`.
+
+### Etiqueta de cada elemento en KML
+
+Por defecto el `<name>` de cada Placemark se infiere de columnas conocidas (`nombre`, `nom_estab`, …). Para capas donde otro campo es más descriptivo (p. ej. localidades con `tipo` = Rural/Urbana), configure:
+
+```json
+"export": {
+  "mode": "all",
+  "kml_name_field": "nombre"
+}
+```
+
+En **Visor Studio** (paso Capa → Permitir KML) hay un combo con las columnas de la tabla.
 
 ---
 

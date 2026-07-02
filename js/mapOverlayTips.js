@@ -4,6 +4,9 @@
  */
 import { MARTIN_USO_SUELO } from "./martinLayerStyle.js";
 import { buildDenueTipDefs } from "./denueLayers.js";
+import { isClusterNonPickLayerId } from "./visorClusterLayer.js";
+import { fetchVisorFeatureGeometry } from "./visorBufferApi.js";
+import { pickVisorFeatureGid, resolveVisorApiLayerId } from "./visorFeaturePickBuffer.js";
 
 const TIP_DEFS = [
   { primary: "ly-locsPunto", tipHtml: locsPuntoTipHtml },
@@ -100,6 +103,7 @@ let _tipEl = null;
 let _tipHoverFeatKey = null;
 let _tipOpen = false;
 let _tipLeaveTimer = null;
+let _tipFetchGen = 0;
 
 function featureProp(props, ...keys) {
   if (!props) return "";
@@ -321,6 +325,24 @@ function isGroupVisible(map, overlayLayerIds, primary) {
   });
 }
 
+const SYMBOL_IDENTIFY_PICK_PAD = 24;
+
+function pickSymbolFeatureAtClick(map, layerId, e) {
+  const layer = map.getLayer(layerId);
+  if (layer?.type === "symbol") {
+    const pad = SYMBOL_IDENTIFY_PICK_PAD;
+    const hits = map.queryRenderedFeatures(
+      [
+        [e.point.x - pad, e.point.y - pad],
+        [e.point.x + pad, e.point.y + pad],
+      ],
+      { layers: [layerId] },
+    );
+    if (hits[0]) return hits[0];
+  }
+  return e.features?.[0] || null;
+}
+
 function ensureTipEl(map) {
   const container = map.getContainer();
   if (_tipEl && _tipEl.parentNode !== container) {
@@ -350,10 +372,28 @@ function hideTip(map) {
     clearTimeout(_tipLeaveTimer);
     _tipLeaveTimer = null;
   }
+  _tipFetchGen += 1;
   _tipHoverFeatKey = null;
   _tipOpen = false;
   if (_tipEl) _tipEl.style.display = "none";
   if (map) map.getCanvas().style.cursor = "";
+}
+
+function maybeEnrichHoverTip(map, feature, primary, tipHtml, point) {
+  const catalogId = resolveVisorApiLayerId(primary);
+  const gid = pickVisorFeatureGid(feature?.properties);
+  if (!catalogId || !gid) return;
+
+  const featKey = overlayFeatureKey(feature);
+  const gen = ++_tipFetchGen;
+
+  void fetchVisorFeatureGeometry({ layer_id: catalogId, gid })
+    .then(({ feature: full }) => {
+      if (gen !== _tipFetchGen || !_tipOpen || _tipHoverFeatKey !== featKey) return;
+      const props = { ...(feature.properties || {}), ...(full?.properties || {}) };
+      showTip(map, point, tipHtml(props));
+    })
+    .catch(() => {});
 }
 
 function scheduleHideIfIdle(map) {
@@ -372,6 +412,7 @@ function scheduleHideIfIdle(map) {
 }
 
 function bindLayerTipHandlers(map, layerId, primary, tipHtml, visorOnly = false) {
+  if (isClusterNonPickLayerId(layerId)) return;
   const bound = boundLayerSet(map);
   if (!map.getLayer(layerId) || bound.has(layerId)) return;
 
@@ -393,6 +434,7 @@ function bindLayerTipHandlers(map, layerId, primary, tipHtml, visorOnly = false)
     map.getCanvas().style.cursor = "pointer";
     _tipHoverFeatKey = overlayFeatureKey(f);
     showTip(map, e.point, tipHtml(f.properties || {}));
+    maybeEnrichHoverTip(map, f, primary, tipHtml, e.point);
   };
 
   const onMove = (e) => {
@@ -404,7 +446,8 @@ function bindLayerTipHandlers(map, layerId, primary, tipHtml, visorOnly = false)
     const key = overlayFeatureKey(f);
     if (key && key !== _tipHoverFeatKey) {
       _tipHoverFeatKey = key;
-      _tipEl.innerHTML = tipHtml(f.properties || {});
+      showTip(map, e.point, tipHtml(f.properties || {}));
+      maybeEnrichHoverTip(map, f, primary, tipHtml, e.point);
     }
   };
 
@@ -421,6 +464,7 @@ function bindLayerTipHandlers(map, layerId, primary, tipHtml, visorOnly = false)
 }
 
 function bindLayerIdentifyClick(map, layerId, primary, tipHtml, visorOnly = false) {
+  if (isClusterNonPickLayerId(layerId)) return;
   const bound = boundIdentifyLayerSet(map);
   if (!map.getLayer(layerId) || bound.has(layerId)) return;
 
@@ -429,7 +473,7 @@ function bindLayerIdentifyClick(map, layerId, primary, tipHtml, visorOnly = fals
     if (visorOnly && !_visorGeograficoActiveFn()) return;
     if (!_onIdentifyClick) return;
     if (!_overlayLayerIdsFn || !isGroupVisible(map, _overlayLayerIdsFn, primary)) return;
-    const f = e.features?.[0];
+    const f = pickSymbolFeatureAtClick(map, layerId, e);
     if (!f) return;
     const html = tipHtml(f.properties || {});
     if (!html) return;

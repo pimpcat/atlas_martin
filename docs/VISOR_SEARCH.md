@@ -4,7 +4,7 @@ Guía del **buscador offline** del Visor geográfico: cómo declarar nuevas fuen
 
 **Alcance:** solo el **Visor geográfico** (`geo_visor`). No aplica al explorador municipal, Datos geográficos ni Inventario de viviendas.
 
-**Documentos relacionados:** [VISOR_CATALOG.md](./VISOR_CATALOG.md) (alta de capas), [VISOR_SYMBOLOGY.md](./VISOR_SYMBOLOGY.md) (pintura en mapa).
+**Documentos relacionados:** [VISOR_CATALOG.md](./VISOR_CATALOG.md) (alta de capas), [VISOR_SYMBOLOGY.md](./VISOR_SYMBOLOGY.md) (pintura en mapa), [VISOR_STATE_WIDE.md](./VISOR_STATE_WIDE.md) (vista estatal y `search.scope`).
 
 ---
 

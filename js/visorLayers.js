@@ -397,8 +397,24 @@ export async function reloadVisorLayerCatalog() {
   initVisorLabelsFromCatalog();
   initVisorExportFromCatalog();
   await initVisorLegendFromCatalog();
+  try {
+    const { invalidateCatalogPolygonLabelCache } = await import("./mapCatalogPolygonLabels.js");
+    invalidateCatalogPolygonLabelCache();
+  } catch {
+    /* noop */
+  }
   _visorLayerDefs = buildDefsFromCatalog();
   registerVisorCatalogIdentify();
   _catalogReady = true;
+  try {
+    const { resetVisorSearchConfig } = await import("./visorSearchCatalog.js");
+    resetVisorSearchConfig();
+    const { refreshVisorGeocoder } = await import("./visorGeocoder.js");
+    refreshVisorGeocoder();
+    const { resetSpatialAnalysisUiCatalog } = await import("./visorSpatialAnalysis.js");
+    resetSpatialAnalysisUiCatalog();
+  } catch (err) {
+    console.warn("[visor] Recarga buscador:", err);
+  }
   return _visorLayerDefs;
 }

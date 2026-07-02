@@ -74,6 +74,32 @@ export async function ensureVisorSearchConfig() {
   return cfg;
 }
 
+/** Invalida caché tras publicar/editar capas en Visor Studio. */
+export function resetVisorSearchConfig() {
+  _searchReady = false;
+}
+
+/**
+ * @param {string} table
+ * @returns {import("./visorSearchCatalog.js").VisorSearchSource | null}
+ */
+export function findSearchSourceByTable(table) {
+  const t = String(table || "").toLowerCase();
+  if (!t) return null;
+  const cat = getVisorCatalog();
+  const sources =
+    Array.isArray(cat?.search?.sources) && cat.search.sources.length
+      ? cat.search.sources
+      : buildSourcesFromCatalog(cat || {});
+  return sources.find((s) => String(s.table || "").toLowerCase() === t) || null;
+}
+
+/** Indica si una fuente del catálogo debe dibujar contorno al seleccionar. */
+export function isPolygonGeomMode(geomMode) {
+  const mode = String(geomMode || "").toLowerCase();
+  return mode === "polygon" || mode === "centroid";
+}
+
 /**
  * Texto de ayuda para el placeholder del buscador según fuentes activas.
  * @param {VisorSearchSource[]} sources

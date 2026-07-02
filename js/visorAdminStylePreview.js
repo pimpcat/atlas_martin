@@ -1,7 +1,7 @@
 /**
  * Mini-vista previa de simbología para el asistente Visor Studio (Fase 3).
- * Canvas ligero; no requiere MapLibre.
  */
+import { atlasMapIconUrl } from "./mapSvgIcons.js";
 
 const PREVIEW_W = 280;
 
@@ -101,9 +101,9 @@ function drawPolygonPreview(ctx, classes, fallbackColor, previewH) {
 
 /**
  * @param {HTMLElement|null} container
- * @param {{ geometry?: string, preset?: string, color?: string, classes?: object[], defaultColor?: string }} opts
+ * @param {{ geometry?: string, preset?: string, color?: string, classes?: object[], defaultColor?: string, iconKey?: string, iconVersion?: number }} opts
  */
-export function renderAdminStylePreview(container, opts = {}) {
+export async function renderAdminStylePreview(container, opts = {}) {
   if (!container) return;
   container.innerHTML = "";
   const geometry = String(opts.geometry || "point").toLowerCase();
@@ -114,6 +114,17 @@ export function renderAdminStylePreview(container, opts = {}) {
   const byAttr = preset.endsWith("_by_attribute");
   const items = byAttr && Array.isArray(classes) && classes.length ? classes : [];
   const previewH = byAttr ? previewHeightForItems(items) : 100;
+
+  if (preset === "point_symbol") {
+    const iconKey = (opts.iconKey || "").trim();
+    if (iconKey) {
+      const file = `${iconKey.replace(/_/g, "-")}.svg`;
+      const bust = opts.iconVersion ? `?v=${opts.iconVersion}` : "";
+      const url = `${atlasMapIconUrl(file)}${bust}`;
+      container.innerHTML = `<div class="visor-admin-style-preview__icon-wrap" style="width:${PREVIEW_W}px;height:${previewH}px;background:#f1f5f9;border-radius:4px;display:flex;align-items:flex-end;justify-content:center;"><img src="${url}" alt="" class="visor-admin-style-preview__img" style="max-width:100%;max-height:100%;object-fit:contain;object-position:center bottom;" /></div>`;
+      return;
+    }
+  }
 
   const canvas = document.createElement("canvas");
   canvas.width = PREVIEW_W;
@@ -145,7 +156,7 @@ export function renderAdminStylePreview(container, opts = {}) {
     ctx.fillStyle = "#64748b";
     ctx.font = "10px system-ui,sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("Símbolo del catálogo", PREVIEW_W / 2, previewH - 8);
+    ctx.fillText("Elija un icono del catálogo", PREVIEW_W / 2, previewH - 8);
     return;
   }
 

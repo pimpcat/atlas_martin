@@ -13,22 +13,32 @@ export function atlasMapIconUrl(filename) {
 }
 
 /** Descarga texto SVG con caché en memoria (mismo origen). */
-export function fetchSvgText(url) {
-  const cached = svgTextCache.get(url);
+export function fetchSvgText(url, options = {}) {
+  const bust = options.cacheBust ? `?v=${encodeURIComponent(String(options.cacheBust))}` : "";
+  const fetchUrl = bust && !url.includes("?") ? `${url}${bust}` : url;
+  const cacheKey = fetchUrl;
+  const cached = svgTextCache.get(cacheKey);
   if (cached) return cached;
-  const promise = fetch(url).then((res) => {
-    if (!res.ok) throw new Error(`SVG ${url}: HTTP ${res.status}`);
+  const promise = fetch(fetchUrl, { cache: options.cacheBust ? "no-store" : "default" }).then((res) => {
+    if (!res.ok) throw new Error(`SVG ${fetchUrl}: HTTP ${res.status}`);
     return res.text();
   });
-  svgTextCache.set(url, promise);
+  svgTextCache.set(cacheKey, promise);
   return promise;
 }
 
+export function invalidateSvgFileCache(filename) {
+  const base = atlasMapIconUrl(filename);
+  for (const key of [...svgTextCache.keys()]) {
+    if (key === base || key.startsWith(`${base}?`)) svgTextCache.delete(key);
+  }
+}
+
 /** Carga un SVG desde assets/icons/map/ y lo registra en MapLibre. */
-export async function loadSvgFileAsMapSymbol(map, id, filename, rasterPx) {
+export async function loadSvgFileAsMapSymbol(map, id, filename, rasterPx, options = {}) {
   const url = atlasMapIconUrl(filename);
-  const svg = await fetchSvgText(url);
-  return loadSvgAsMapSymbol(map, id, svg, rasterPx);
+  const svg = await fetchSvgText(url, { cacheBust: options.cacheBust });
+  return loadSvgAsMapSymbol(map, id, svg, rasterPx, options);
 }
 
 /** Tamaño en px del bitmap (alta resolución para el icon-size máximo). */
@@ -41,8 +51,12 @@ export function symbolLayoutIconSize(visualSize, maxIconScale, supersample) {
   return visualSize / (maxIconScale * supersample);
 }
 
-/** Registra un SVG rasterizado en el estilo MapLibre (sin pixelRatio). */
-export function loadSvgAsMapSymbol(map, id, svg, rasterPx) {
+/**
+ * Rasteriza SVG en textura cuadrada para MapLibre.
+ * Conserva proporción y alinea al fondo (icon-anchor: bottom en presets de pin).
+ */
+export function loadSvgAsMapSymbol(map, id, svg, rasterPx, options = {}) {
+  const anchor = options.textureAnchor || "bottom";
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -58,7 +72,16 @@ export function loadSvgAsMapSymbol(map, id, svg, rasterPx) {
         ctx.clearRect(0, 0, rasterPx, rasterPx);
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        ctx.drawImage(img, 0, 0, rasterPx, rasterPx);
+        const iw = img.naturalWidth || rasterPx;
+        const ih = img.naturalHeight || rasterPx;
+        const scale = Math.min(rasterPx / iw, rasterPx / ih);
+        const drawW = iw * scale;
+        const drawH = ih * scale;
+        const ox = (rasterPx - drawW) / 2;
+        let oy = (rasterPx - drawH) / 2;
+        if (anchor === "bottom") oy = rasterPx - drawH;
+        else if (anchor === "top") oy = 0;
+        ctx.drawImage(img, ox, oy, drawW, drawH);
         if (map.hasImage(id)) map.removeImage(id);
         map.addImage(id, ctx.getImageData(0, 0, rasterPx, rasterPx), { sdf: false });
         resolve();
