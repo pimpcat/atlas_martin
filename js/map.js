@@ -8,6 +8,8 @@ import {
   HOME_MUN_DISP_FILL_PAINT,
   HOME_MUN_DISP_LINE_HALO_PAINT,
   HOME_MUN_DISP_LINE_PAINT,
+  VISOR_STATEWIDE_MUN_LINE_HALO_PAINT,
+  VISOR_STATEWIDE_MUN_LINE_PAINT,
   COLONIAS_LABEL_LAYOUT,
   COLONIAS_LABEL_MIN_ZOOM,
   COLONIAS_LABEL_PAINT,
@@ -131,6 +133,7 @@ import {
   overlayBaseLayerIdOnMap,
   overlaySubLayerIdOnMap,
   resolveMapLayerId,
+  resolveOverlayPickPrimary,
 } from "./visorMapLayerIds.js";
 
 const SRC_ENT = "src-c_ent";
@@ -662,9 +665,78 @@ function applyHomeMunLinePaint(map) {
   }
 }
 
+function isLayerVisibleOnMap(map, id) {
+  if (!map?.getLayer(id)) return false;
+  try {
+    return map.getLayoutProperty(id, "visibility") !== "none";
+  } catch {
+    return false;
+  }
+}
+
+function visorSharedThematicAnchorIds() {
+  return [
+    MARTIN_USO_SUELO.layerId,
+    "ly-clima",
+    HIDRO_CORRIENTES_ID,
+    HIDRO_CUERPOS_ID,
+    ...lineLayerIds(CURNIVEL_LAYERS.base),
+    ...lineLayerIds(CURNIVEL_LAYERS.master),
+  ];
+}
+
+function collectVisorSharedThematicPolygonLayerIds(map) {
+  if (!map) return [];
+  const out = [];
+  for (const id of [MARTIN_USO_SUELO.layerId, "ly-clima", HIDRO_CUERPOS_ID, HIDRO_CORRIENTES_ID]) {
+    if (isLayerVisibleOnMap(map, id)) out.push(id);
+  }
+  if (_visorSharedActive.curvas_nivel) {
+    for (const id of [
+      ...lineLayerIds(CURNIVEL_LAYERS.base),
+      ...lineLayerIds(CURNIVEL_LAYERS.master),
+    ]) {
+      if (isLayerVisibleOnMap(map, id)) out.push(id);
+    }
+  }
+  return out;
+}
+
+function hasVisibleVisorThematicStackContent(map) {
+  const { polygonLids, lineLids, pointLids } = classifyActiveThematicLayerIds(map);
+  return (
+    polygonLids.length > 0 ||
+    lineLids.length > 0 ||
+    pointLids.length > 0 ||
+    collectVisorSharedThematicPolygonLayerIds(map).length > 0
+  );
+}
+
+/** Líneas municipales en vista estatal: oscuras sobre capas temáticas; halo claro solo sobre mapa base. */
+function applyVisorStateWideMunLinePaint(map) {
+  if (!map || !_visorStateWideMode) return;
+  const onThematic = hasVisibleVisorThematicStackContent(map);
+  const haloPaint = onThematic ? VISOR_STATEWIDE_MUN_LINE_HALO_PAINT : HOME_MUN_DISP_LINE_HALO_PAINT;
+  const linePaint = onThematic ? VISOR_STATEWIDE_MUN_LINE_PAINT : HOME_MUN_DISP_LINE_PAINT;
+  for (const [layerId, paint] of [
+    [LAYER_IDS.munAllLineHalo, haloPaint],
+    [LAYER_IDS.munAllLine, linePaint],
+  ]) {
+    if (!map.getLayer(layerId)) continue;
+    for (const [key, value] of Object.entries(paint)) {
+      try {
+        map.setPaintProperty(layerId, key, value);
+      } catch {
+        /* noop */
+      }
+    }
+  }
+}
+
 /** Vista estatal del visor: mismo aspecto que Explorador municipal (líneas finas, sin relleno municipal). */
 function applyVisorStateWideRenderQuality(map) {
   applyHomeVectorRenderQuality(map);
+  applyVisorStateWideMunLinePaint(map);
   if (!map?.getLayer(LAYER_IDS.munAllFill)) return;
   try {
     map.setPaintProperty(LAYER_IDS.munAllFill, "fill-opacity", 0);
@@ -2036,39 +2108,119 @@ const ADMIN_STACK_LAYER_IDS = [
 ];
 
 function adminLayerVisibleOnMap(map, id) {
-  if (!map?.getLayer(id)) return false;
-  try {
-    return map.getLayoutProperty(id, "visibility") !== "none";
-  } catch {
-    return false;
-  }
+  return isLayerVisibleOnMap(map, id);
 }
 
-/** Orden relativo del marco administrativo, siempre bajo la primera capa temática de puntos. */
+function findVisorSharedThematicStructuralAnchor(map) {
+  if (!map?.getStyle) return null;
+  for (const layer of map.getStyle().layers || []) {
+    if (visorSharedThematicAnchorIds().includes(layer.id)) return layer.id;
+  }
+  return null;
+}
+
+function layerIdAfter(map, layerId) {
+  const style = map.getStyle()?.layers || [];
+  const idx = style.findIndex((l) => l.id === layerId);
+  if (idx < 0) return null;
+  return style[idx + 1]?.id || null;
+}
+
+function findTopmostActiveThematicPolygonLayerId(map) {
+  const style = map.getStyle()?.layers || [];
+  const { polygonLids } = classifyActiveThematicLayerIds(map);
+  const candidates = new Set([...polygonLids, ...collectVisorSharedThematicPolygonLayerIds(map)]);
+  if (!candidates.size) return null;
+  for (let i = style.length - 1; i >= 0; i -= 1) {
+    if (candidates.has(style[i].id)) return style[i].id;
+  }
+  return null;
+}
+
+function adminLayersNeedStackFix(map) {
+  const style = map.getStyle()?.layers || [];
+  const insertBefore =
+    findThematicStackInsertAnchor(map, OVERLAY_GEOMETRY_Z.line) ||
+    findThematicStackInsertAnchor(map, OVERLAY_GEOMETRY_Z.point);
+
+  if (insertBefore) {
+    const anchorIdx = style.findIndex((l) => l.id === insertBefore);
+    if (anchorIdx < 0) return false;
+    for (const id of ADMIN_STACK_LAYER_IDS) {
+      if (!adminLayerVisibleOnMap(map, id)) continue;
+      if (style.findIndex((l) => l.id === id) >= anchorIdx) return true;
+    }
+    return false;
+  }
+
+  const topPoly = findTopmostActiveThematicPolygonLayerId(map);
+  if (topPoly) {
+    const polyIdx = style.findIndex((l) => l.id === topPoly);
+    if (polyIdx < 0) return false;
+    for (const id of ADMIN_STACK_LAYER_IDS) {
+      if (!adminLayerVisibleOnMap(map, id)) continue;
+      const idx = style.findIndex((l) => l.id === id);
+      if (idx <= polyIdx) return true;
+    }
+  }
+  return false;
+}
+
+/** Explorador / inicio: marco administrativo encima del mapa base y capas temáticas apagadas. */
+function stackHomeAdministrativeLayersToFront(map) {
+  const visibleAdmin = ADMIN_STACK_LAYER_IDS.filter((id) => adminLayerVisibleOnMap(map, id));
+  if (!visibleAdmin.length) return false;
+  let moved = false;
+  for (const id of visibleAdmin) {
+    try {
+      map.moveLayer(id);
+      moved = true;
+    } catch {
+      /* noop */
+    }
+  }
+  return moved;
+}
+
+/** Orden relativo del marco administrativo bajo líneas/puntos temáticos y sobre polígonos temáticos. */
 function stackAdministrativeLayersRelative(map) {
+  if (_homeMode) return stackHomeAdministrativeLayersToFront(map);
+
   const visibleAdmin = ADMIN_STACK_LAYER_IDS.filter((id) => adminLayerVisibleOnMap(map, id));
   if (!visibleAdmin.length) return false;
 
-  const anchor = findThematicPointStackAnchor(map);
-  if (anchor) {
+  const insertBefore =
+    findThematicStackInsertAnchor(map, OVERLAY_GEOMETRY_Z.line) ||
+    findThematicStackInsertAnchor(map, OVERLAY_GEOMETRY_Z.point);
+
+  let moved = false;
+  if (insertBefore) {
     for (let i = visibleAdmin.length - 1; i >= 0; i -= 1) {
       try {
-        map.moveLayer(visibleAdmin[i], anchor);
+        map.moveLayer(visibleAdmin[i], insertBefore);
+        moved = true;
       } catch {
         /* noop */
       }
     }
-    return true;
-  }
-
-  for (const id of visibleAdmin) {
-    try {
-      map.moveLayer(id);
-    } catch {
-      /* capa aún no lista */
+  } else {
+    const topPoly = findTopmostActiveThematicPolygonLayerId(map);
+    if (topPoly) {
+      const beforeId = layerIdAfter(map, topPoly);
+      for (let i = visibleAdmin.length - 1; i >= 0; i -= 1) {
+        try {
+          if (beforeId) map.moveLayer(visibleAdmin[i], beforeId);
+          else map.moveLayer(visibleAdmin[i]);
+          moved = true;
+        } catch {
+          /* noop */
+        }
+      }
     }
   }
-  return true;
+
+  if (moved && _visorStateWideMode) applyVisorStateWideMunLinePaint(map);
+  return moved;
 }
 
 /** @deprecated Usar stackAdministrativeLayersRelative — no promover marco sobre puntos. */
@@ -2076,8 +2228,11 @@ function bringMarcoEntToFront(map) {
   return stackAdministrativeLayersRelative(map);
 }
 
-/** Orden en Inicio / vista estatal: marco bajo puntos temáticos. */
+/** Orden en Inicio / vista estatal sin temáticos activos: marco al frente. */
 function stackHomeLayers(map) {
+  if (_homeMode || !hasVisibleVisorThematicStackContent(map)) {
+    return stackHomeAdministrativeLayersToFront(map);
+  }
   return stackAdministrativeLayersRelative(map);
 }
 
@@ -2342,6 +2497,10 @@ function classifyActiveThematicLayerIds(map) {
     add(bucket, layer.id);
   }
 
+  for (const id of collectVisorSharedThematicPolygonLayerIds(map)) {
+    add(polygonLids, id);
+  }
+
   return { polygonLids, lineLids, pointLids };
 }
 
@@ -2372,17 +2531,11 @@ function thematicGeometryStackNeedsFix(map, polygonLids, lineLids, pointLids) {
 }
 
 function adminLayersRenderAboveThematicPoints(map) {
-  const anchor = findThematicPointStackAnchor(map);
-  if (!anchor) return false;
-  const style = map.getStyle()?.layers || [];
-  const anchorIdx = style.findIndex((l) => l.id === anchor);
-  if (anchorIdx < 0) return false;
-  for (const id of ADMIN_STACK_LAYER_IDS) {
-    if (!adminLayerVisibleOnMap(map, id)) continue;
-    const idx = style.findIndex((l) => l.id === id);
-    if (idx > anchorIdx) return true;
-  }
-  return false;
+  return adminLayersNeedStackFix(map);
+}
+
+function adminLayersRenderAboveThematicStack(map) {
+  return adminLayersNeedStackFix(map);
 }
 
 function pickLayersNeedRestack(map) {
@@ -2448,10 +2601,17 @@ export function restackVisorOverlayLayersByGeometry(map) {
     }
   }
 
-  if (pointLids.length && adminLayersRenderAboveThematicPoints(map)) {
+  if (
+    !_homeMode &&
+    (_visorStateWideMode || hasVisibleVisorThematicStackContent(map)) &&
+    adminLayersNeedStackFix(map)
+  ) {
     if (stackAdministrativeLayersRelative(map)) {
       changed = true;
     }
+  } else if (_visorStateWideMode && hasVisibleVisorThematicStackContent(map)) {
+    applyVisorStateWideMunLinePaint(map);
+    changed = true;
   }
 
   if (pickLayersNeedRestack(map)) {
@@ -2460,6 +2620,9 @@ export function restackVisorOverlayLayersByGeometry(map) {
   }
 
   restackGeocoderHighlightLayers(map);
+  void import("./visorMapIdentifyHighlight.js")
+    .then(({ raiseIdentifyHighlightLayers }) => raiseIdentifyHighlightLayers(map))
+    .catch(() => {});
   return changed;
 }
 
@@ -2489,6 +2652,10 @@ function scheduleOverlayTipRefresh(map) {
 }
 
 function overlayLayerIds(map, layerId) {
+  if (String(layerId || "").startsWith("lyr_")) {
+    const mainId = resolveMapLayerId(map, layerId);
+    return mainId ? [mainId] : [];
+  }
   const baseKey = layerId.startsWith("ly-") ? layerId.slice(3) : null;
   const def = baseKey ? findOverlayDefByKey(baseKey) || findOverlayDefByKeyLoose(baseKey) : null;
   if (def?.rncTiered) {
@@ -2518,9 +2685,11 @@ function overlayLayerIds(map, layerId) {
 
 /** Capas con hover/identify: en cluster solo sueltos + MVT (sin círculos de agrupación). */
 function overlayPickLayerIds(map, layerIdOrPrimary) {
-  const layerId = layerIdOrPrimary.startsWith("ly-") ? layerIdOrPrimary : `ly-${layerIdOrPrimary}`;
-  const def =
-    findOverlayDefByKey(layerId.slice(3)) || findOverlayDefByKeyLoose(layerId.slice(3));
+  const layerId = resolveOverlayPickPrimary(map, layerIdOrPrimary);
+  const overlayKey = layerId.startsWith("ly-") ? layerId.slice(3) : null;
+  const def = overlayKey
+    ? findOverlayDefByKey(overlayKey) || findOverlayDefByKeyLoose(overlayKey)
+    : null;
   if (def && overlayUsesCluster(def)) {
     return clusterPickLayerIds(map, layerId);
   }
@@ -3736,11 +3905,16 @@ function ensureMap(containerEl) {
       const { polygonLids, lineLids, pointLids } = classifyActiveThematicLayerIds(_map);
       const style = _map.getStyle().layers.map((l) => l.id);
       const idx = (id) => style.indexOf(id);
-      const pointAnchor = findThematicPointStackAnchor(_map);
+      const pointAnchor =
+        findThematicStackInsertAnchor(_map, OVERLAY_GEOMETRY_Z.line) ||
+        findThematicStackInsertAnchor(_map, OVERLAY_GEOMETRY_Z.point) ||
+        findVisorSharedThematicStructuralAnchor(_map);
       return {
         needsThematicFix: thematicGeometryStackNeedsFix(_map, polygonLids, lineLids, pointLids),
-        adminAbovePoints: adminLayersRenderAboveThematicPoints(_map),
+        adminNeedsStackFix: adminLayersNeedStackFix(_map),
+        adminAbovePoints: adminLayersRenderAboveThematicStack(_map),
         pointAnchor,
+        sharedThematic: collectVisorSharedThematicPolygonLayerIds(_map),
         polygonLids: polygonLids.map((id) => ({ id, index: idx(id) })),
         lineLids: lineLids.map((id) => ({ id, index: idx(id) })),
         pointLids: pointLids.map((id) => ({ id, index: idx(id) })),
@@ -4304,8 +4478,7 @@ function applyHomeMapModeLayers(map, homeMode) {
     show(LAYER_IDS.munAllFill, true);
     show(LAYER_IDS.munAllLineHalo, true);
     show(LAYER_IDS.munAllLine, true);
-    stackHomeLayers(map);
-    scheduleVisorOverlayRestack(map);
+    stackHomeAdministrativeLayersToFront(map);
     applyHomeVectorRenderQuality(map);
   } else {
     const preserveOutline = !_homeMode && _focusCve && isOutlineOnlyProfile(_lastFocusProfile);
@@ -4555,6 +4728,7 @@ export function setMapBaseLayer(kind) {
       applyBaseVisibilityOnMap(map, _activeBase);
       syncBaseLayerButtons();
       refreshHomeMapAfterBasemapChange();
+      syncGeoMacroBasemap(_activeBase);
     };
 
     if (_activeBase === "local") {
@@ -4808,21 +4982,42 @@ export function getHidrograficaLayerActive() {
   return Boolean(cor || cuer);
 }
 
+function geoMacroBasemapReady(map) {
+  if (!map) return false;
+  try {
+    if (map.getSource("base-osm")) return true;
+    if (map.getLayer("base-local-raster")) return true;
+    if (map.getStyle()?.layers?.some((l) => l.id.startsWith("base-bright-"))) return true;
+  } catch {
+    /* noop */
+  }
+  return false;
+}
+
+/** Hereda en el mini-mapa estatal la selección de mapa base del mapa principal. */
+function syncGeoMacroBasemap(kind = _activeBase) {
+  const macroMap = _geoMacro?.map;
+  if (!macroMap) return;
+  const apply = () => {
+    ensureBaseLayers(macroMap);
+    void applyMapInstanceBaseLayer(macroMap, kind).then(() => {
+      if (macroMap.isStyleLoaded()) stackGeoMacroLayers(macroMap);
+    });
+  };
+  if (macroMap.isStyleLoaded()) apply();
+  else macroMap.once("load", apply);
+}
+
 export function ensureGeoMacroMap(containerEl, cve_mun = null) {
   const ml = getMaplibregl();
   if (!ml || !containerEl) return null;
   if (cve_mun) _geoMacroPendingCve = pad3(cve_mun);
   if (_geoMacro?.map && _geoMacro.container === containerEl) {
-    let osmOk = false;
-    try {
-      const tiles = _geoMacro.map.getSource("gm-osm")?.tiles;
-      osmOk = typeof tiles?.[0] === "string";
-    } catch {
-      osmOk = false;
-    }
+    const baseOk = geoMacroBasemapReady(_geoMacro.map);
     const hiReady = Boolean(_geoMacro.map.getLayer("gm-mun-hi-fill"));
-    if (!osmOk || !hiReady) destroyGeoMacroMap();
+    if (!baseOk || !hiReady) destroyGeoMacroMap();
     else {
+      syncGeoMacroBasemap();
       return _geoMacro;
     }
   }
@@ -4837,13 +5032,8 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
     }),
   );
   map.on("load", () => {
-    map.addSource("gm-osm", buildOsmRasterSourceSpec());
-    map.addLayer({
-      id: "gm-osm",
-      type: "raster",
-      source: "gm-osm",
-      paint: RASTER_OSM_PAINT,
-    });
+    ensureBaseLayers(map);
+    void applyMapInstanceBaseLayer(map, _activeBase);
     addMartinSource(map, "gm-mun", MARTIN_TABLES.municipios);
     addMartinSource(map, "gm-ent", MARTIN_TABLES.entidad);
     map.addLayer({

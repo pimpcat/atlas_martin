@@ -37,3 +37,16 @@ export function overlaySubLayerIdOnMap(map, baseLayerId, suffix = "") {
 export function overlayBaseLayerIdOnMap(map, keyOrBaseId) {
   return overlaySubLayerIdOnMap(map, keyOrBaseId) || resolveMapLayerId(map, keyOrBaseId);
 }
+
+/**
+ * Clave para hover/identify: capas Martin compartidas (p. ej. lyr_usosuelo) no usan prefijo ly-.
+ * @param {import("maplibre-gl").Map|null|undefined} map
+ * @param {string} layerIdOrPrimary
+ */
+export function resolveOverlayPickPrimary(map, layerIdOrPrimary) {
+  const raw = String(layerIdOrPrimary || "").trim();
+  if (!raw) return raw;
+  if (raw.startsWith("lyr_") || raw.startsWith("ly-")) return raw;
+  if (map && resolveMapLayerId(map, raw)) return raw;
+  return `ly-${raw}`;
+}

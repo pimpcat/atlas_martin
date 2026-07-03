@@ -36,6 +36,8 @@ const ALL_LAYER_IDS = [
   LAYER_SYMBOL,
 ];
 
+export const IDENTIFY_HIGHLIGHT_LAYER_IDS = [...ALL_LAYER_IDS];
+
 const SYMBOL_LAYOUT_KEYS = [
   "icon-image",
   "icon-size",
@@ -47,6 +49,46 @@ const SYMBOL_LAYOUT_KEYS = [
   "icon-pitch-alignment",
   "icon-rotation-alignment",
 ];
+
+function resolveCatalogGeometryKind(layerId) {
+  const catalogId = resolveVisorApiLayerId(normalizeIdentifyPrimary(layerId || ""));
+  if (!catalogId) return null;
+  const entry = getVisorLayerEntry(catalogId);
+  const g = String(entry?.geometry || "").trim().toLowerCase();
+  if (g === "line" || g === "polygon" || g === "point") return g;
+  return null;
+}
+
+function isIdentifyHighlightSourceActive(map) {
+  if (_highlightFeatureActive) return true;
+  if (!map?.getSource(SOURCE_ID)) return false;
+  try {
+    const data = map.getSource(SOURCE_ID)?._data;
+    return Boolean(data?.features?.length);
+  } catch {
+    return _highlightFeatureActive;
+  }
+}
+
+/** Mantiene el resaltado de identify por encima de capas temáticas tras restack/zoom. */
+export function raiseIdentifyHighlightLayers(map) {
+  if (!map?.getStyle?.() || !isIdentifyHighlightSourceActive(map)) return false;
+  let moved = false;
+  for (const id of ALL_LAYER_IDS) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.moveLayer(id);
+      moved = true;
+    } catch {
+      /* noop */
+    }
+  }
+  return moved;
+}
+
+export function isIdentifyHighlightVisible(map) {
+  return isIdentifyHighlightSourceActive(map);
+}
 
 const POLYGON_FILTER = ["match", ["geometry-type"], ["Polygon", "MultiPolygon"], true, false];
 const LINE_FILTER = ["match", ["geometry-type"], ["LineString", "MultiLineString"], true, false];
@@ -65,6 +107,7 @@ const EMPTY_FC = { type: "FeatureCollection", features: [] };
 const MAX_GEOM_CACHE = 48;
 
 let _fetchGen = 0;
+let _highlightFeatureActive = false;
 /** @type {Map<string, object>} */
 const _geometryCache = new Map();
 
@@ -300,8 +343,33 @@ function applySymbolHighlightFromSource(map, sourceLayerId) {
   map.setLayoutProperty(LAYER_CIRCLE, "visibility", "none");
 }
 
+function syncLineHighlightMode(map, feature) {
+  if (!map) return;
+  const show = Boolean(feature && isLineGeometry(feature));
+  for (const [id, visible] of [
+    [LAYER_LINE_HALO, show],
+    [LAYER_LINE, show],
+  ]) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.setLayoutProperty(id, "visibility", visible ? "visible" : "none");
+    } catch {
+      /* noop */
+    }
+  }
+}
+
 function syncPointHighlightMode(map, feature, layerId) {
   if (!feature) {
+    if (map.getLayer(LAYER_CIRCLE)) map.setLayoutProperty(LAYER_CIRCLE, "visibility", "none");
+    if (map.getLayer(LAYER_SYMBOL)) map.setLayoutProperty(LAYER_SYMBOL, "visibility", "none");
+    if (map.getLayer(LAYER_SYMBOL_HALO)) map.setLayoutProperty(LAYER_SYMBOL_HALO, "visibility", "none");
+    syncLineHighlightMode(map, null);
+    return;
+  }
+
+  if (isLineGeometry(feature)) {
+    syncLineHighlightMode(map, feature);
     if (map.getLayer(LAYER_CIRCLE)) map.setLayoutProperty(LAYER_CIRCLE, "visibility", "none");
     if (map.getLayer(LAYER_SYMBOL)) map.setLayoutProperty(LAYER_SYMBOL, "visibility", "none");
     if (map.getLayer(LAYER_SYMBOL_HALO)) map.setLayoutProperty(LAYER_SYMBOL_HALO, "visibility", "none");
@@ -340,6 +408,11 @@ export function resolveIdentifyHighlightFeature(map, mapFeature, layerId, point)
   const cloned = cloneFeature(mapFeature);
   if (!cloned?.geometry || !map) return cloned;
   if (isPolygonGeometry(cloned) || isPointGeometry(cloned)) return cloned;
+
+  const catalogGeom = resolveCatalogGeometryKind(layerId);
+  if (catalogGeom === "line" || isLineGeometry(cloned)) {
+    return cloned;
+  }
 
   if (!isLineGeometry(cloned) || !point || !layerId) return cloned;
 
@@ -418,14 +491,7 @@ function stackHighlightLayers(map, feature, layerId) {
     }
   }
 
-  for (const id of ALL_LAYER_IDS) {
-    if (!map.getLayer(id)) continue;
-    try {
-      map.moveLayer(id);
-    } catch {
-      /* noop */
-    }
-  }
+  raiseIdentifyHighlightLayers(map);
 }
 
 function ensureHighlightLayers(map) {
@@ -498,7 +564,19 @@ function ensureHighlightLayers(map) {
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": IDENTIFY_LINE_HALO,
-          "line-width": 8,
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            8,
+            6,
+            12,
+            10,
+            16,
+            14,
+            20,
+            18,
+          ],
           "line-opacity": 0.9,
         },
       },
@@ -516,7 +594,19 @@ function ensureHighlightLayers(map) {
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
           "line-color": IDENTIFY_LINE,
-          "line-width": 4,
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            8,
+            3,
+            12,
+            5,
+            16,
+            7,
+            20,
+            9,
+          ],
         },
       },
       beforeId,
@@ -599,8 +689,13 @@ function setHighlightData(map, feature, layerId) {
   const commit = () => {
     if (feature && !ensureHighlightLayers(map)) return false;
     syncPointHighlightMode(map, feature, layerId);
+    syncLineHighlightMode(map, feature);
     const src = map.getSource(SOURCE_ID);
-    if (!src) return !feature;
+    if (!src) {
+      _highlightFeatureActive = false;
+      return !feature;
+    }
+    _highlightFeatureActive = Boolean(feature);
     src.setData(data);
     if (feature) stackHighlightLayers(map, feature, layerId);
     return true;
@@ -655,6 +750,7 @@ export function showIdentifyHighlight(map, mapFeature, layerId, point, onRefined
 /** Quita el resaltado del mapa. */
 export function clearIdentifyHighlight(map) {
   _fetchGen += 1;
+  _highlightFeatureActive = false;
   if (!map) return;
   setHighlightData(map, null, null);
 }
@@ -662,6 +758,7 @@ export function clearIdentifyHighlight(map) {
 /** Libera capas y fuente (p. ej. al salir del visor). */
 export function teardownIdentifyHighlight(map) {
   _fetchGen += 1;
+  _highlightFeatureActive = false;
   _geometryCache.clear();
   clearIdentifyHighlight(map);
   if (!map) return;

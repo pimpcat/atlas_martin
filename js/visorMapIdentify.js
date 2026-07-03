@@ -35,6 +35,8 @@ import {
   normalizeIdentifyPrimary,
   prefetchIdentifyGeometry,
   warmIdentifyHighlightLayers,
+  raiseIdentifyHighlightLayers,
+  isIdentifyHighlightVisible,
 } from "./visorMapIdentifyHighlight.js";
 
 const POINT_FLY_ZOOM = 16;
@@ -205,6 +207,8 @@ function zoomToLastFeature() {
 
   applyIdentifyHighlight();
 
+  const refocusHighlight = () => raiseIdentifyHighlightLayers(map);
+
   if (feature?.geometry) {
     const type = feature.geometry.type;
     if (type === "Point") {
@@ -215,6 +219,7 @@ function zoomToLastFeature() {
         speed: 1.2,
         essential: true,
       });
+      map.once("moveend", refocusHighlight);
       return;
     }
     if (type === "MultiPoint" && feature.geometry.coordinates?.length) {
@@ -225,9 +230,11 @@ function zoomToLastFeature() {
         speed: 1.2,
         essential: true,
       });
+      map.once("moveend", refocusHighlight);
       return;
     }
     if (fitMapToFeatures(map, [feature], { padding: 56, maxZoom: 18, duration: 900, animate: true })) {
+      map.once("moveend", refocusHighlight);
       return;
     }
   }
@@ -239,6 +246,7 @@ function zoomToLastFeature() {
       speed: 1.2,
       essential: true,
     });
+    map.once("moveend", refocusHighlight);
   }
 }
 
@@ -295,6 +303,15 @@ function attachToMap(map) {
   _mapRef = map;
   registerIdentifyHandler();
   rebindOverlayIdentifyForMap(map);
+  if (!map.__visorIdentifyHighlightRestackBound) {
+    map.__visorIdentifyHighlightRestackBound = true;
+    const refocus = () => {
+      if (!isIdentifyPanelOpen() || !isIdentifyHighlightVisible(map)) return;
+      raiseIdentifyHighlightLayers(map);
+    };
+    map.on("moveend", refocus);
+    map.on("zoomend", refocus);
+  }
 }
 
 function tryAttach(attempt = 0) {

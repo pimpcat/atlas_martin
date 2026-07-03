@@ -260,8 +260,12 @@ function normalizeLayerIdToPrimary(layerId) {
   if (base.endsWith("-labels")) base = base.slice(0, -7);
   if (base.endsWith("-halo")) base = base.slice(0, -5);
   if (base.endsWith("-fill")) base = base.slice(0, -5);
+  if (_catalogTipByPrimary.has(base)) return base;
   if (TIP_DEF_BY_PRIMARY[base]) return base;
 
+  for (const [primary] of _catalogTipByPrimary) {
+    if (layerId.startsWith(primary)) return primary;
+  }
   for (const def of TIP_DEFS) {
     if (layerId.startsWith(def.primary)) return def.primary;
   }

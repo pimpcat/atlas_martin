@@ -1039,3 +1039,18 @@ export const HOME_MUN_DISP_LINE_PAINT = {
   "line-opacity": 1,
   "line-blur": 0,
 };
+
+/** Vista estatal con capas temáticas visibles: contorno oscuro (evita halo blanco sobre polígonos). */
+export const VISOR_STATEWIDE_MUN_LINE_HALO_PAINT = {
+  "line-color": "#475569",
+  "line-width": 2.6,
+  "line-opacity": 0.38,
+  "line-blur": 0,
+};
+
+export const VISOR_STATEWIDE_MUN_LINE_PAINT = {
+  "line-color": "#1e293b",
+  "line-width": 1.35,
+  "line-opacity": 0.92,
+  "line-blur": 0,
+};
