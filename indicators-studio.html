@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Indicators Studio — Atlas Municipal</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page indicators-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell indicators-studio-shell">
+    <section id="indStudioLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Indicators Studio</h1>
+          <p class="small text-muted mb-3">Administración del catálogo de indicadores (misma sesión admin que Visor Studio).</p>
+          <form id="indStudioLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="indStudioUser">Usuario</label>
+              <input id="indStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="indStudioPass">Contraseña</label>
+              <input id="indStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="indStudioError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0">
+            URL no enlazada desde el portal público.
+            <a href="./visor-studio.html">Visor Studio</a> ·
+            <a href="./index.html">Atlas</a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="indStudioDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+          <h1 class="h5 mb-0">Indicators Studio</h1>
+          <p class="small text-muted mb-0" id="indStudioWelcome"></p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+          <a href="./index.html" class="btn btn-sm btn-outline-primary">Abrir Atlas</a>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioLogoutBtn">Cerrar sesión</button>
+        </div>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-lg-4 d-flex flex-column gap-3">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <span class="fw-semibold">Indicadores</span>
+              <button type="button" class="btn btn-sm btn-primary" id="indStudioNewBtn">+ Nuevo</button>
+            </div>
+            <div class="card-body p-2" id="indStudioList" style="max-height:42vh;overflow:auto"></div>
+          </div>
+          <div class="card shadow-sm visor-studio-card flex-grow-1">
+            <div class="card-header d-flex align-items-center justify-content-between gap-2">
+              <span class="fw-semibold">Registro de actividad</span>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioAuditRefreshBtn">Actualizar</button>
+            </div>
+            <div class="card-body p-2" id="indStudioAudit" style="max-height:28vh;overflow:auto">
+              <p class="small text-muted mb-0">Cargando registro…</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-body p-3 p-md-4">
+              <div id="indStudioFormEmpty" class="text-muted small">Seleccione un indicador o cree uno nuevo.</div>
+              <form id="indStudioForm" class="d-none d-grid gap-3">
+                <div class="d-flex flex-wrap gap-2 small" id="indStudioSteps"></div>
+
+                <div class="border rounded p-3">
+                  <div class="fw-semibold small mb-2">1. Identidad en el menú</div>
+                  <div class="row g-2">
+                    <div class="col-md-4">
+                      <label class="form-label small">Identificador interno</label>
+                      <input id="fId" class="form-control form-control-sm" required pattern="[a-z][a-z0-9_]*" placeholder="eco_mi_indicador" />
+                      <div class="form-text">Solo minúsculas, números y _. No se cambia después de publicar.</div>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Grupo del menú</label>
+                      <select id="fGroup" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">¿Visible en el Atlas?</label>
+                      <select id="fEnabled" class="form-select form-select-sm">
+                        <option value="true">Sí</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label small">Nombre que ve el usuario</label>
+                      <input id="fLabel" class="form-control form-control-sm" required placeholder="Características económicas" />
+                    </div>
+                    <div class="col-md-6">
+                      <label class="form-label small">Texto breve bajo el nombre</label>
+                      <input id="fSubtitle" class="form-control form-control-sm" placeholder="INEGI · Censos Económicos" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Unidad (opcional)</label>
+                      <input id="fUnit" class="form-control form-control-sm" placeholder="%, personas, ha…" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Nombre de archivos al exportar</label>
+                      <input id="fExportPrefix" class="form-control form-control-sm" placeholder="mi_indicador" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="border rounded p-3">
+                  <div class="fw-semibold small mb-2">2. Datos y columnas</div>
+                  <div class="row g-2">
+                    <div class="col-md-4">
+                      <label class="form-label small">Qué información incluye</label>
+                      <select id="fProfile" class="form-select form-select-sm"></select>
+                      <div class="form-text">Ranking de municipios, con nacional/estado, etc.</div>
+                    </div>
+                    <div class="col-md-4 d-none" data-studio-field="handler">
+                      <label class="form-label small">Cálculo especial (avanzado)</label>
+                      <select id="fHandler" class="form-select form-select-sm"></select>
+                      <div class="form-text">Déjelo en «ninguno» salvo indicación del equipo técnico.</div>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Tabla de la base de datos</label>
+                      <select id="fTable" class="form-select form-select-sm">
+                        <option value="tab_municipal">Municipios (tab_municipal)</option>
+                        <option value="tab_nacional">Nacional / entidades (tab_nacional)</option>
+                        <option value="c_mun">Catálogo municipal (c_mun)</option>
+                      </select>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label small">Columnas de la vista</label>
+                      <textarea id="fFields" class="form-control form-control-sm font-monospace" rows="5" placeholder="prod_brut|prod_brut|Producción bruta|float"></textarea>
+                      <div class="form-text">Al hacer clic se agrega en formato corto: <code>clave|Etiqueta|tipo</code>. Si la columna en la BD tiene otro nombre: <code>clave|columna_bd|Etiqueta|tipo</code>.</div>
+                    </div>
+                    <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioLoadColsBtn">Ver columnas de la tabla</button>
+                      <span class="small text-muted" id="indStudioColsHint"></span>
+                    </div>
+                    <div class="col-12">
+                      <div id="indStudioColsPicker" class="ind-studio-cols-picker d-none" aria-live="polite"></div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="border rounded p-3">
+                  <div class="fw-semibold small mb-2">3. Cómo se ve en el Atlas</div>
+                  <div class="row g-2">
+                    <div class="col-md-6">
+                      <label class="form-label small">Tipo de gráfica o tabla</label>
+                      <select id="fPreset" class="form-select form-select-sm"></select>
+                      <div class="form-text" id="indStudioPresetHint">Elija el diseño visual.</div>
+                    </div>
+                    <div class="col-md-6" data-studio-field="sort_by">
+                      <label class="form-label small">Ordenar el ranking por</label>
+                      <select id="fSortBy" class="form-select form-select-sm"></select>
+                      <div class="form-text">Se llena con las columnas definidas arriba.</div>
+                    </div>
+                    <div class="col-md-6 d-none" data-studio-field="ranking">
+                      <label class="form-label small">¿Mostrar ranking municipal?</label>
+                      <select id="fRanking" class="form-select form-select-sm">
+                        <option value="true">Sí (top N, seleccionado y bottom N)</option>
+                        <option value="false">No (solo municipio seleccionado)</option>
+                      </select>
+                    </div>
+                    <div class="col-md-6 d-none" data-studio-field="ranking_size">
+                      <label class="form-label small">Tamaño top / bottom (N)</label>
+                      <input
+                        id="fRankingSize"
+                        type="number"
+                        class="form-control form-control-sm"
+                        min="1"
+                        max="50"
+                        step="1"
+                        value="5"
+                      />
+                      <div class="form-text">Municipios en cada extremo del ranking (1–50).</div>
+                    </div>
+                    <div class="col-md-6 d-none" data-studio-field="bar_metrics">
+                      <label class="form-label small">Series / columnas de las barras</label>
+                      <select id="fBarMetrics" class="form-select form-select-sm" multiple size="4"></select>
+                      <div class="form-text">Ctrl+clic: una o varias (p. ej. 2008, 2009, 2010, 2011).</div>
+                    </div>
+                    <div class="col-md-6 d-none" data-studio-field="chart_metrics">
+                      <label class="form-label small">Categorías del eje X</label>
+                      <select id="fChartMetrics" class="form-select form-select-sm" multiple size="4"></select>
+                      <div class="form-text">Ctrl+clic: campos que serán las categorías (p. ej. electricidad, agua…).</div>
+                    </div>
+                    <div class="col-12 d-none" data-studio-field="y_series">
+                      <label class="form-label small d-block">Series del eje Y (comparar)</label>
+                      <div class="d-flex flex-wrap gap-3">
+                        <label class="form-check-label small"><input type="checkbox" class="form-check-input me-1" id="fYNacional" checked /> País (nacional)</label>
+                        <label class="form-check-label small"><input type="checkbox" class="form-check-input me-1" id="fYEstatal" checked /> Estado</label>
+                        <label class="form-check-label small"><input type="checkbox" class="form-check-input me-1" id="fYMunicipio" checked /> Municipio seleccionado</label>
+                      </div>
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label small">Título dentro de la vista</label>
+                      <input id="fTitle" class="form-control form-control-sm" />
+                    </div>
+                    <div class="col-12">
+                      <label class="form-label small">Pie de página (bajo la gráfica)</label>
+                      <textarea id="fFooter" class="form-control form-control-sm" rows="4" placeholder="Nota: …&#10;Fuente: INEGI. …"></textarea>
+                      <div class="form-text">Puede incluir varias líneas (Nota y Fuente). Se muestra tal cual bajo la gráfica. El panel Metadatos es aparte.</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="border rounded p-3 d-none" data-studio-field="bar_colors" id="indStudioColorsBlock">
+                  <div class="fw-semibold small mb-2">4. Colores de las barras</div>
+                  <p class="small text-muted mb-2">Opcional. Se aplican según el tema claro u oscuro del Atlas.</p>
+                  <div class="row g-2" data-studio-field="bar_colors_simple">
+                    <div class="col-md-3">
+                      <label class="form-label small">Barra (tema claro)</label>
+                      <input type="color" id="fColorBarClaro" class="form-control form-control-color form-control-sm" value="#5b8def" title="Barra normal, tema claro" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small">Destacada (tema claro)</label>
+                      <input type="color" id="fColorBarHlClaro" class="form-control form-control-color form-control-sm" value="#0d8a8a" title="Municipio o entidad destacada" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small">Barra (tema oscuro)</label>
+                      <input type="color" id="fColorBarOscuro" class="form-control form-control-color form-control-sm" value="#5b8def" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small">Destacada (tema oscuro)</label>
+                      <input type="color" id="fColorBarHlOscuro" class="form-control form-control-color form-control-sm" value="#2dbdb5" />
+                    </div>
+                  </div>
+                  <div class="d-none" data-studio-field="bar_colors_series">
+                    <p class="small text-muted mb-2">Un color por cada serie elegida en «Series / columnas de las barras» (tema claro y oscuro).</p>
+                    <div id="indStudioSeriesColorsHost" class="row g-2"></div>
+                  </div>
+                  <div class="row g-2 d-none" data-studio-field="bar_colors_grouped">
+                    <div class="col-12 small text-muted">Nacional · Estatal · Municipio</div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Nacional (claro)</label>
+                      <input type="color" id="fColorNatClaro" class="form-control form-control-color form-control-sm" value="#00264d" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Estatal (claro)</label>
+                      <input type="color" id="fColorEstClaro" class="form-control form-control-color form-control-sm" value="#00756e" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Municipio (claro)</label>
+                      <input type="color" id="fColorMunClaro" class="form-control form-control-color form-control-sm" value="#4d535c" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Nacional (oscuro)</label>
+                      <input type="color" id="fColorNatOscuro" class="form-control form-control-color form-control-sm" value="#2a6aaf" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Estatal (oscuro)</label>
+                      <input type="color" id="fColorEstOscuro" class="form-control form-control-color form-control-sm" value="#2dbdb5" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Municipio (oscuro)</label>
+                      <input type="color" id="fColorMunOscuro" class="form-control form-control-color form-control-sm" value="#9aa3ad" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="border rounded p-3" style="border-color: rgba(245,158,11,0.35) !important">
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <span class="badge text-bg-warning">5. Metadatos</span>
+                    <span class="small text-muted">Formato INEGI · botón «Metadatos» en el Atlas</span>
+                  </div>
+                  <div class="row g-2">
+                    <div class="col-md-3">
+                      <label class="form-label small">Mostrar botón</label>
+                      <select id="fMetaEnabled" class="form-select form-select-sm">
+                        <option value="true">Sí</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                    <div class="col-md-9">
+                      <label class="form-label small">Título del panel</label>
+                      <input id="fMetaTitle" class="form-control form-control-sm" placeholder="Por defecto: etiqueta del indicador" />
+                    </div>
+                    <div class="col-12">
+                      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-1">
+                        <label class="form-label small mb-0">Campos visibles en el Atlas</label>
+                        <div class="d-flex gap-2">
+                          <button type="button" class="btn btn-link btn-sm p-0 text-warning" id="fMetaShowAll">Todos</button>
+                          <span class="text-muted small">·</span>
+                          <button type="button" class="btn btn-link btn-sm p-0 text-warning" id="fMetaShowNone">Ninguno</button>
+                        </div>
+                      </div>
+                      <div id="fMetaShowHost" class="ind-studio-meta-show" role="group" aria-label="Campos visibles en el Atlas"></div>
+                      <div class="form-text">Activa o desactiva cada campo. Los valores se conservan aunque no se muestren en el panel Metadatos.</div>
+                    </div>
+                    <div class="col-md-4" data-meta-field="periodicidad">
+                      <label class="form-label small">Periodicidad</label>
+                      <input id="fMetaPeriodicidad" class="form-control form-control-sm" list="metaPeriodicidadOpts" placeholder="Quinquenal, Anual…" />
+                      <datalist id="metaPeriodicidadOpts">
+                        <option value="Quinquenal"></option>
+                        <option value="Anual"></option>
+                        <option value="Mensual"></option>
+                        <option value="Bienal"></option>
+                        <option value="Decenal"></option>
+                      </datalist>
+                    </div>
+                    <div class="col-md-4" data-meta-field="unidad_medida">
+                      <label class="form-label small">Unidad de medida</label>
+                      <input id="fMetaUnidad" class="form-control form-control-sm" placeholder="Personas, Porcentaje…" />
+                    </div>
+                    <div class="col-md-4" data-meta-field="ultima_actualizacion">
+                      <label class="form-label small">Última actualización</label>
+                      <input id="fMetaUltimaAct" class="form-control form-control-sm" placeholder="21/10/2024" />
+                    </div>
+                    <div class="col-12" data-meta-field="fuente">
+                      <label class="form-label small">Fuente</label>
+                      <textarea id="fMetaFuente" class="form-control form-control-sm" rows="2" placeholder="2020 Censos y Conteos de Población y Vivienda"></textarea>
+                    </div>
+                    <div class="col-12" data-meta-field="nota_general">
+                      <label class="form-label small">Nota general</label>
+                      <textarea id="fMetaNotaGeneral" class="form-control form-control-sm" rows="2" placeholder="Texto general sobre el indicador o su actualización…"></textarea>
+                    </div>
+                    <div class="col-12" data-meta-field="notas">
+                      <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                        <label class="form-label small mb-0">Notas por periodo</label>
+                        <button type="button" class="btn btn-sm btn-outline-warning" id="fMetaNotasAdd">+ Añadir nota</button>
+                      </div>
+                      <div id="fMetaNotasHost" class="d-flex flex-column gap-2"></div>
+                      <div class="form-text">Cada fila: año o rango (p. ej. 2010, 1995 -) y el texto de la nota.</div>
+                    </div>
+                    <div class="col-md-6" data-meta-field="fecha_inicial">
+                      <label class="form-label small">Fecha inicial</label>
+                      <input id="fMetaFechaInicial" class="form-control form-control-sm" placeholder="1910" />
+                    </div>
+                    <div class="col-md-6" data-meta-field="fecha_final">
+                      <label class="form-label small">Fecha final</label>
+                      <input id="fMetaFechaFinal" class="form-control form-control-sm" placeholder="2020" />
+                    </div>
+                  </div>
+                </div>
+
+                <div id="indStudioFormError" class="small text-danger d-none"></div>
+                <div id="indStudioFormOk" class="small text-success d-none"></div>
+
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="submit" class="btn btn-sm btn-primary">Publicar</button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="indStudioPreviewBtn">Vista previa JSON</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="indStudioDeleteBtn">Eliminar</button>
+                </div>
+
+                <pre id="indStudioPreview" class="small bg-dark text-light p-2 rounded d-none" style="max-height:240px;overflow:auto"></pre>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/indicatorsStudioApp.js"></script>
+</body>
+</html>

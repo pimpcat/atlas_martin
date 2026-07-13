@@ -1,6 +1,6 @@
 /**
  * Menú lateral acordeón (temáticas e indicadores).
- * Recibe el modelo de api.getMenuModel() y notifica onSelect a app.js.
+ * Recibe el modelo de api.getMenuModelAsync() / buildMenuModelFromCatalog() y notifica onSelect a app.js.
  */
 
 function el(tag, attrs = {}, children = []) {

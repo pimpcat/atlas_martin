@@ -1,7 +1,12 @@
 /**
- * Fábrica de controladores de exportación (PNG + CSV) para una vista de gráfico.
+ * Fábrica de controladores de exportación (PNG + CSV/XLSX) para una vista de gráfico.
  * Cada vista (Población, Crecimiento, etc.) crea su propia instancia.
+ *
+ * Fase 4: si se pasa ``backendExport.indicatorId``, CSV/XLSX se descargan desde
+ * ``GET /api/indicators/{id}/export`` (openpyxl en FastAPI). PNG sigue en cliente.
  */
+
+import { apiUrl } from "./atlasConfig.js";
 
 const CSV_SEP = ";";
 const CSV_COLS = 5;
@@ -68,12 +73,24 @@ export function joinCsv(lines) {
   return "\ufeff" + lines.join("\r\n") + "\r\n";
 }
 
+function filenameFromDisposition(header, fallback) {
+  if (!header) return fallback;
+  const m = /filename\*?=(?:UTF-8''|")?([^\";]+)"?/i.exec(header);
+  if (!m) return fallback;
+  try {
+    return decodeURIComponent(m[1].replace(/["']/g, "").trim());
+  } catch {
+    return m[1].replace(/["']/g, "").trim() || fallback;
+  }
+}
+
 /**
  * @param {{
  *   filenamePrefix: string,
  *   targetSelector: string,
- *   buttons: { png: string, csv: string },
- *   buildCsv: (payload: any, selected: any) => string | null,
+ *   buttons: { png?: string, csv?: string, xlsx?: string },
+ *   buildCsv?: (payload: any, selected: any) => string | null,
+ *   backendExport?: { indicatorId: string },
  * }} opts
  */
 export function createExportController(opts) {
@@ -83,12 +100,73 @@ export function createExportController(opts) {
   function fileBaseName() {
     const mun =
       (lastSelected && (lastSelected.nomgeo || lastSelected.cve_mun)) || "guerrero";
-    return `${opts.filenamePrefix}_${slugify(mun)}_${timestamp()}`;
+    const prefix =
+      typeof opts.filenamePrefix === "function"
+        ? opts.filenamePrefix()
+        : opts.filenamePrefix;
+    return `${prefix || "indicador"}_${slugify(mun)}_${timestamp()}`;
   }
 
-  function downloadCsv() {
+  async function downloadBackend(format, btnId) {
+    const indicatorId = opts.backendExport?.indicatorId;
+    if (!indicatorId) {
+      alert("Exportación backend no configurada.");
+      return;
+    }
     if (!lastPayload || !lastPayload.ok) {
       alert("No hay datos para exportar todavía.");
+      return;
+    }
+
+    const btn = btnId ? document.getElementById(btnId) : null;
+    if (btn) btn.disabled = true;
+
+    try {
+      const url = new URL(
+        apiUrl(`/api/indicators/${encodeURIComponent(indicatorId)}/export`),
+        window.location.href
+      );
+      url.searchParams.set("format", format);
+      if (lastSelected?.cve_mun) {
+        url.searchParams.set("cve_mun", String(lastSelected.cve_mun));
+        if (lastSelected.nomgeo) {
+          url.searchParams.set("nom_mun", String(lastSelected.nomgeo));
+        }
+      }
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try {
+          const body = await res.json();
+          const d = body?.detail;
+          msg = (d && (d.message || d.error)) || body?.message || msg;
+        } catch {
+          /* ignore */
+        }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      const fallback = `${fileBaseName()}.${format === "csv" ? "csv" : "xlsx"}`;
+      const filename = filenameFromDisposition(
+        res.headers.get("Content-Disposition"),
+        fallback
+      );
+      triggerDownload(blob, filename);
+    } catch (e) {
+      console.warn(e);
+      alert("Error al exportar: " + (e && e.message ? e.message : e));
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function downloadCsvLocal() {
+    if (!lastPayload || !lastPayload.ok) {
+      alert("No hay datos para exportar todavía.");
+      return;
+    }
+    if (typeof opts.buildCsv !== "function") {
+      alert("Exportación CSV no disponible.");
       return;
     }
     const csv = opts.buildCsv(lastPayload, lastSelected);
@@ -98,6 +176,22 @@ export function createExportController(opts) {
     }
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     triggerDownload(blob, `${fileBaseName()}.csv`);
+  }
+
+  function downloadCsv() {
+    if (opts.backendExport?.indicatorId) {
+      void downloadBackend("csv", opts.buttons?.csv);
+      return;
+    }
+    downloadCsvLocal();
+  }
+
+  function downloadXlsx() {
+    if (opts.backendExport?.indicatorId) {
+      void downloadBackend("xlsx", opts.buttons?.xlsx);
+      return;
+    }
+    alert("Exportación Excel no disponible para esta vista.");
   }
 
   async function downloadPng() {
@@ -149,15 +243,25 @@ export function createExportController(opts) {
     lastPayload = payload && payload.ok ? payload : null;
     lastSelected = selected || null;
     const enabled = !!lastPayload;
-    const btnPng = document.getElementById(opts.buttons.png);
-    const btnCsv = document.getElementById(opts.buttons.csv);
-    if (btnPng) btnPng.disabled = !enabled;
-    if (btnCsv) btnCsv.disabled = !enabled;
+    for (const key of ["png", "csv", "xlsx"]) {
+      const id = opts.buttons?.[key];
+      if (!id) continue;
+      const btn = document.getElementById(id);
+      if (btn) btn.disabled = !enabled;
+    }
   }
 
   function attach() {
-    const btnPng = document.getElementById(opts.buttons.png);
-    const btnCsv = document.getElementById(opts.buttons.csv);
+    const btnPng = opts.buttons?.png
+      ? document.getElementById(opts.buttons.png)
+      : null;
+    const btnCsv = opts.buttons?.csv
+      ? document.getElementById(opts.buttons.csv)
+      : null;
+    const btnXlsx = opts.buttons?.xlsx
+      ? document.getElementById(opts.buttons.xlsx)
+      : null;
+
     if (btnPng && !btnPng.dataset.bound) {
       btnPng.addEventListener("click", () => {
         void downloadPng();
@@ -170,8 +274,15 @@ export function createExportController(opts) {
       });
       btnCsv.dataset.bound = "1";
     }
+    if (btnXlsx && !btnXlsx.dataset.bound) {
+      btnXlsx.addEventListener("click", () => {
+        downloadXlsx();
+      });
+      btnXlsx.dataset.bound = "1";
+    }
     if (btnPng) btnPng.disabled = true;
     if (btnCsv) btnCsv.disabled = true;
+    if (btnXlsx) btnXlsx.disabled = true;
   }
 
   return { attach, setData };

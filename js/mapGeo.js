@@ -53,7 +53,9 @@ export function fitMapToFeatures(map, features, options = {}) {
  * Encuadra el mapa a features de una fuente Martin (reintenta en idle hasta cargar tiles).
  */
 export function fitMapToMartinSource(map, sourceId, sourceLayer, options = {}) {
-  const { filter, maxAttempts = 12, fallbackBounds, ...fitOpts } = options;
+  // Martin puede tardar en estar disponible (tiles/DB) tras un arranque.
+  // Subimos el número de reintentos para que el auto-zoom no falle en un arranque lento.
+  const { filter, maxAttempts = 30, fallbackBounds, ...fitOpts } = options;
   let attempts = 0;
 
   const tryFit = () => {
@@ -125,7 +127,9 @@ export async function fitMapToMunicipioExtent(map, cve_mun, options = {}) {
 
 /** Encuadra a un municipio (reintentos en idle; fallback si no hay API). */
 export function fitToMunicipioWhenReady(map, sourceId, sourceLayer, cve_mun, munFilter, options = {}) {
-  const { maxAttempts = 14, fallbackBounds, ...fitOpts } = options;
+  // Si el primer intento ocurre mientras las tiles todavía no responden,
+  // no queremos que el auto-zoom se rinda demasiado pronto.
+  const { maxAttempts = 30, fallbackBounds, ...fitOpts } = options;
   let attempts = 0;
 
   const tryFit = () => {

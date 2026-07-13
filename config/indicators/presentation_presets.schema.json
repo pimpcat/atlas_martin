@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-gro.local/config/indicators/presentation_presets.schema.json",
+  "title": "Atlas GRO — Presets de presentación de indicadores",
+  "type": "object",
+  "required": ["version", "presets"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "schema_version": { "type": "string" },
+    "description": { "type": "string" },
+    "presets": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/preset" }
+    },
+    "reserved": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/reserved" }
+    }
+  },
+  "$defs": {
+    "preset": {
+      "type": "object",
+      "required": ["id", "label", "status", "response_profiles", "config"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "status": {
+          "enum": ["implemented", "catalog_only", "alias", "reserved"]
+        },
+        "renderer_module": { "type": "string" },
+        "legacy_viz_examples": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "response_profiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        },
+        "payload_keys": {
+          "type": "object",
+          "properties": {
+            "required": { "type": "array", "items": { "type": "string" } },
+            "optional": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "row_keys": { "type": "array", "items": { "type": "string" } },
+        "row_keys_municipal": { "type": "array", "items": { "type": "string" } },
+        "row_keys_state": { "type": "array", "items": { "type": "string" } },
+        "config": {
+          "type": "object",
+          "required": ["required"],
+          "properties": {
+            "required": { "type": "array", "items": { "type": "string" } },
+            "optional": { "type": "array", "items": { "type": "string" } }
+          }
+        },
+        "config_notes": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "css_root_default": { "type": "string" },
+        "example_indicators": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "reserved": {
+      "type": "object",
+      "required": ["id", "label", "status"],
+      "properties": {
+        "id": { "type": "string" },
+        "label": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "enum": ["alias", "reserved"] },
+        "alias_of": { "type": "string" }
+      }
+    }
+  }
+}

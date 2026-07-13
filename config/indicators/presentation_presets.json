@@ -1,0 +1,374 @@
+{
+  "version": 1,
+  "schema_version": "2026.1",
+  "description": "Presets de presentación del dashboard. Cada preset tiene renderer en js/templates/* y style.root_class / style.chart. Sin dependencia de *Viz.js.",
+  "presets": [
+    {
+      "id": "horizontal_bars",
+      "label": "Barras horizontales (municipios, N series)",
+      "description": "Barras horizontales por municipio. Elija cuántas series (años/métricas) y si muestra ranking top/seleccionado/bottom.",
+      "status": "implemented",
+      "renderer_module": "templates/rankingDualBars.js",
+      "response_profiles": ["ranking_municipal"],
+      "payload_keys": {
+        "required": ["ok", "top5", "bottom5"],
+        "optional": ["middle", "cve_mun_selected"]
+      },
+      "config": {
+        "required": ["bar_metrics"],
+        "optional": ["sort_by", "ranking", "ranking_size", "title", "footer", "notes", "root_class", "style"]
+      },
+      "config_notes": {
+        "bar_metrics": "Una o más keys de fields[] (p. ej. años 2008–2011).",
+        "ranking": "Si true (default): top N + municipio + bottom N. Si false: solo municipio seleccionado.",
+        "ranking_size": "N municipios en cada extremo (default 5, máx. 50)."
+      },
+      "css_root_default": "poblacion-viz",
+      "style": { "root_class": "poblacion-viz" },
+      "example_indicators": ["socio_poblacion"]
+    },
+    {
+      "id": "ranking_dual_bars",
+      "label": "Barras horizontales con ranking (alias)",
+      "description": "Alias de horizontal_bars (compatibilidad). N series + ranking municipal.",
+      "status": "implemented",
+      "renderer_module": "templates/rankingDualBars.js",
+      "response_profiles": ["ranking_municipal"],
+      "payload_keys": {
+        "required": ["ok", "top5", "bottom5"],
+        "optional": ["middle", "cve_mun_selected"]
+      },
+      "config": {
+        "required": ["bar_metrics"],
+        "optional": ["sort_by", "ranking", "ranking_size", "title", "footer", "notes", "root_class", "style"]
+      },
+      "css_root_default": "poblacion-viz",
+      "example_indicators": [
+        "socio_poblacion",
+        "socio_edad_mediana",
+        "eco_unidades_economicas",
+        "geo_superficie_comparativa"
+      ]
+    },
+    {
+      "id": "ranking_with_rates_table",
+      "label": "Ranking con barras y tabla de tasas",
+      "description": "Layout mixto: barras del indicador principal (top/middle/bottom) más tabla o columnas de tasas/valores auxiliares. Puede incluir resumen nacional/estatal.",
+      "status": "implemented",
+      "renderer_module": "templates/rankingWithRatesTable.js",
+      "legacy_viz_examples": [
+        "crecimientoViz.js",
+        "viviendaParticipacionViz.js",
+        "habitantesPoliciaViz.js"
+      ],
+      "response_profiles": [
+        "ranking_municipal",
+        "ranking_with_national_state"
+      ],
+      "payload_keys": {
+        "required": ["ok", "top5", "bottom5"],
+        "optional": [
+          "middle",
+          "nacional",
+          "estatal",
+          "cve_mun_selected",
+          "selected_in_top",
+          "selected_in_bottom"
+        ]
+      },
+      "row_keys": ["cve_mun", "nom_mun", "highlight"],
+      "config": {
+        "required": ["bar_metrics"],
+        "optional": [
+          "sort_by",
+          "ranking_size",
+          "sections",
+          "table_metrics",
+          "title",
+          "footer",
+          "notes",
+          "legend_labels",
+          "root_class",
+          "show_national_state_summary"
+        ]
+      },
+      "config_notes": {
+        "bar_metrics": "Métrica(s) de la barra principal (normalmente 1).",
+        "table_metrics": "Columnas adicionales en la tabla anexa (tasas, población, etc.). Si se omite, se usan fields[] menos bar_metrics.",
+        "sections": "Puede incluir national/state además de top5/middle/bottom5.",
+        "ranking_size": "N municipios en cada extremo del ranking (default 5).",
+        "show_national_state_summary": "Si true, muestra bloque resumen nacional/estatal (vivienda participación)."
+      },
+      "css_root_default": "crecimiento-viz",
+      "style": {
+        "root_class": "crecimiento-viz",
+        "table_cols_var": "--rwrt-cols"
+      },
+      "example_indicators": [
+        "socio_crecimiento",
+        "viv_participacion_vivh",
+        "gov_habitantes_por_policia"
+      ]
+    },
+    {
+      "id": "entity_bars_municipal_table",
+      "label": "Barras por entidad + tabla municipal",
+      "description": "Panel izquierdo: barras horizontales por entidad federativa (states). Panel derecho: ranking municipal top/middle/bottom. Opcional porcentaje de la entidad respecto al nacional.",
+      "status": "implemented",
+      "renderer_module": "templates/entityBarsMunicipalTable.js",
+      "legacy_viz_examples": [
+        "nacimientosViz.js",
+        "defuncionesViz.js",
+        "escolaridadViz.js",
+        "poblacionOcupadaViz.js"
+      ],
+      "response_profiles": ["ranking_with_states"],
+      "payload_keys": {
+        "required": ["ok", "states", "top5", "bottom5"],
+        "optional": [
+          "middle",
+          "por_entidad_guerrero",
+          "tabla_nacional",
+          "tabla_entidad",
+          "cve_mun_selected"
+        ]
+      },
+      "row_keys_municipal": ["cve_mun", "nom_mun", "highlight"],
+      "row_keys_state": ["ent", "nom_ent", "estatal_si"],
+      "config": {
+        "required": ["sort_by"],
+        "optional": [
+          "sections",
+          "state_metric",
+          "municipal_metric",
+          "title",
+          "footer",
+          "notes",
+          "root_class",
+          "show_entity_share",
+          "ranking_size",
+          "section_labels"
+        ]
+      },
+      "config_notes": {
+        "state_metric": "Key numérica en cada elemento de states[] (p. ej. naci_24, defu, graproes, pea_ocup). Si se omite, se infiere del primer field con source_table tab_nacional.",
+        "municipal_metric": "Key en filas municipales (sort_by por defecto).",
+        "show_entity_share": "Muestra por_entidad_guerrero cuando existe.",
+        "sections": "Incluye \"states\" además de top5/middle/bottom5.",
+        "ranking_size": "N municipios en cada extremo del ranking municipal (tabla y gráfico, default 5).",
+        "style.split": "Proporción gráfico/tabla: chart_max, table_min. Etiquetas de entidad: entity_label_min / entity_label_max (p. ej. 10rem, 38%). Sin override, el renderer ajusta según el nombre más largo."
+      },
+      "css_root_default": "nacimientos-viz ind-preset-entity-bars",
+      "style": {
+        "root_class": "nacimientos-viz ind-preset-entity-bars",
+        "split": {
+          "table_min": "240px",
+          "chart_max": "52%"
+        },
+        "notes": "Con ≥4 columnas municipales: chart_max ~32% y table_min ~320px. Override en catalog presentation.style.split."
+      },
+      "example_indicators": [
+        "socio_nacimientos",
+        "socio_defunciones",
+        "socio_escolaridad",
+        "eco_poblacion_ocupada"
+      ]
+    },
+    {
+      "id": "multi_column_table",
+      "label": "Tabla multi-columna con ranking",
+      "description": "Tabla HTML con varias columnas de fields[]. Filas: entidad y/o nacional (opcional) + Top N + seleccionado + Bottom N. Orden por sort_by.",
+      "status": "implemented",
+      "renderer_module": "templates/multiColumnTable.js",
+      "legacy_viz_examples": [
+        "unidadesMedicasViz.js",
+        "caracteristicasEconomicasViz.js",
+        "superficieAgriculturaViz.js",
+        "inversionPublicaViz.js",
+        "institucionesAdminPublicaViz.js"
+      ],
+      "response_profiles": [
+        "ranking_entity_only",
+        "ranking_with_national_state",
+        "ranking_municipal"
+      ],
+      "payload_keys": {
+        "required": ["ok", "top5", "bottom5"],
+        "optional": [
+          "middle",
+          "entidad",
+          "tabla_entidad",
+          "tabla_nacional",
+          "cve_mun_selected"
+        ]
+      },
+      "row_keys": ["cve_mun", "nom_mun", "highlight"],
+      "config": {
+        "required": ["sort_by"],
+        "optional": [
+          "sections",
+          "table_columns",
+          "title",
+          "footer",
+          "notes",
+          "root_class",
+          "ranking_size",
+          "section_labels"
+        ]
+      },
+      "config_notes": {
+        "table_columns": "Orden de columnas (keys de fields[]). Si se omite, se usan todos los fields[].",
+        "sections": "Puede incluir entity, tabla_entidad, tabla_nacional, top5, middle, bottom5.",
+        "ranking_size": "N municipios en cada extremo del ranking (default 5)."
+      },
+      "css_root_default": "ind-preset-mct",
+      "style": {
+        "root_class": "ind-preset-mct",
+        "variant": "ranking_multi_column",
+        "notes": "CSS autónomo en main.css (.ind-preset-mct). Columnas vía --ind-mct-cols."
+      },
+      "example_indicators": [
+        "socio_unidades_medicas",
+        "eco_caracteristicas_economicas",
+        "eco_superficie_agricultura",
+        "gov_inversion_publica",
+        "gov_instituciones_admin_publica"
+      ]
+    },
+    {
+      "id": "chartjs_grouped_bars",
+      "label": "Barras agrupadas Chart.js (nacional / estatal / municipio)",
+      "description": "Una gráfica Chart.js de barras agrupadas: categorías = chart_metrics; series = nacional, estatal y municipio seleccionado.",
+      "status": "implemented",
+      "renderer_module": "templates/chartjsGroupedBars.js",
+      "legacy_viz_examples": ["viviendaServiciosViz.js"],
+      "response_profiles": ["national_state_municipio"],
+      "payload_keys": {
+        "required": ["ok", "nacional", "estatal"],
+        "optional": ["municipio", "cve_mun_selected"]
+      },
+      "config": {
+        "required": ["chart_metrics"],
+        "optional": [
+          "sections",
+          "title",
+          "footer",
+          "notes",
+          "legend_labels",
+          "root_class",
+          "series_labels"
+        ]
+      },
+      "config_notes": {
+        "chart_metrics": "Keys presentes en nacional/estatal/municipio (p. ej. por_redo_ener, por_redo_agua, por_redo_drenaje).",
+        "series_labels": "Etiquetas de series [Nacional, Estatal, Municipio]; por defecto fijas.",
+        "legend_labels": "Etiquetas del eje de categorías (mismo orden que chart_metrics)."
+      },
+      "css_root_default": "viv-serv-viz ind-preset-grouped-bars",
+      "style": {
+        "root_class": "viv-serv-viz ind-preset-grouped-bars",
+        "variant": "grouped_bars_national_state_mun",
+        "chart": {
+          "categoryPercentage": 0.72,
+          "barPercentage": 0.88,
+          "y_title": "Porcentaje",
+          "y_suffix": " %",
+          "value_labels": true
+        },
+        "notes": "Colores en variables CSS del preset (.ind-preset-grouped-bars). Opciones Chart.js en style.chart."
+      },
+      "example_indicators": ["viv_servicios_vivh"]
+    },
+    {
+      "id": "vertical_bars",
+      "label": "Barras verticales (categorías × país/estado/municipio)",
+      "description": "Eje X = campos elegidos (categorías). Series Y = país, estado y/o municipio (el usuario elige cuáles).",
+      "status": "implemented",
+      "renderer_module": "templates/chartjsGroupedBars.js",
+      "response_profiles": ["national_state_municipio"],
+      "payload_keys": {
+        "required": ["ok"],
+        "optional": ["nacional", "estatal", "municipio", "cve_mun_selected"]
+      },
+      "config": {
+        "required": ["chart_metrics"],
+        "optional": ["y_series", "title", "footer", "notes", "root_class", "style"]
+      },
+      "config_notes": {
+        "chart_metrics": "Categorías del eje X (keys de fields[]).",
+        "y_series": "Subconjunto de [\"nacional\",\"estatal\",\"municipio\"]."
+      },
+      "css_root_default": "viv-serv-viz ind-preset-grouped-bars",
+      "style": {
+        "root_class": "viv-serv-viz ind-preset-grouped-bars",
+        "chart": {
+          "categoryPercentage": 0.72,
+          "barPercentage": 0.88,
+          "y_title": "Valor",
+          "value_labels": true
+        }
+      },
+      "example_indicators": ["viv_servicios_vivh"]
+    },
+    {
+      "id": "analfabetismo_composite",
+      "label": "Compuesto: estados (dos periodos) + ranking municipal",
+      "description": "Vista compuesta específica de analfabetismo: barras por entidad (tasa 2020), mini comparativo nacional/entidad 2010–2020, y tabla municipal (tasa_an_red).",
+      "status": "implemented",
+      "renderer_module": "templates/analfabetismoComposite.js",
+      "legacy_viz_examples": ["analfabetismoViz.js"],
+      "response_profiles": ["ranking_with_states"],
+      "payload_keys": {
+        "required": ["ok", "states", "top5", "bottom5"],
+        "optional": [
+          "middle",
+          "tasa_nacional_2010",
+          "tasa_nacional_2020",
+          "tasa_entidad_2010",
+          "tasa_entidad_2020",
+          "nom_ent_estatal",
+          "cve_mun_selected"
+        ]
+      },
+      "config": {
+        "required": ["sort_by"],
+        "optional": [
+          "sections",
+          "state_metric",
+          "municipal_metric",
+          "period_keys",
+          "title",
+          "footer",
+          "notes",
+          "root_class",
+          "ranking_size",
+          "section_labels",
+          "table_title"
+        ]
+      },
+      "config_notes": {
+        "state_metric": "Métrica de barra por entidad (tasa_an2020).",
+        "municipal_metric": "Métrica de tabla municipal (tasa_an_red / sort_by).",
+        "period_keys": "Par de keys para mini comparativo 2010/2020 en nacional y entidad.",
+        "ranking_size": "N municipios en cada extremo de la tabla municipal (default 5)."
+      },
+      "css_root_default": "analfabetismo-viz",
+      "example_indicators": ["socio_analfabetismo"]
+    }
+  ],
+  "reserved": [
+    {
+      "id": "national_state_municipal_bars",
+      "label": "Alias reservado",
+      "description": "Reservado; usar chartjs_grouped_bars (mismo response_profile national_state_municipio).",
+      "status": "alias",
+      "alias_of": "chartjs_grouped_bars"
+    },
+    {
+      "id": "external_links",
+      "label": "Enlaces externos",
+      "description": "Reservado para vistas solo de enlaces (Sitios de interés). No es indicador tabular.",
+      "status": "reserved"
+    }
+  ]
+}

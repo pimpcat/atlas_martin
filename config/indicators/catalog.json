@@ -1,0 +1,1994 @@
+{
+  "version": 1,
+  "schema_version": "2026.1",
+  "description": "Catálogo declarativo de indicadores del dashboard Atlas GRO. Edite la copia canónica en Stack_Martin/config/indicators/catalog.json y sincronice aquí si no usa Docker.",
+  "groups": [
+    {
+      "id": "socio",
+      "label": "Sociodemografía",
+      "order": 1
+    },
+    {
+      "id": "viv",
+      "label": "Vivienda",
+      "order": 2
+    },
+    {
+      "id": "eco",
+      "label": "Economía",
+      "order": 3
+    },
+    {
+      "id": "gov",
+      "label": "Gobierno",
+      "order": 4
+    },
+    {
+      "id": "geo",
+      "label": "Geografía (indicadores tabulares)",
+      "order": 5
+    }
+  ],
+  "data_sources": {
+    "tab_municipal": {
+      "schema": "atlas",
+      "table": "tab_municipal",
+      "description": "Tabla ancha ETL: filas Nacional, Estatal y ~85 municipios (cve_mun 001–085).",
+      "row_types": [
+        "Nacional",
+        "Estatal",
+        "municipio_3digitos"
+      ]
+    },
+    "tab_nacional": {
+      "schema": "atlas",
+      "table": "tab_nacional",
+      "description": "Indicadores por entidad federativa (32) más filas nacional/estatal.",
+      "row_types": [
+        "entidad_01_32",
+        "nacional",
+        "estatal_guerrero"
+      ]
+    },
+    "c_mun": {
+      "schema": "atlas",
+      "table": "c_mun",
+      "description": "Marco municipal PostGIS; superficie comparativa.",
+      "row_types": [
+        "municipio_geometria"
+      ]
+    }
+  },
+  "indicators": [
+    {
+      "id": "socio_poblacion",
+      "group_id": "socio",
+      "label": "Población",
+      "subtitle": "INEGI · Censos 2010 y 2020",
+      "unit": "personas",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "studio"
+      },
+      "fields": [
+        {
+          "key": "pob_tot",
+          "column": "pob_tot",
+          "column_aliases": [
+            "pop_tot",
+            "POP_TOT"
+          ],
+          "label": "Población 2020",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "pob_tot_2010",
+          "column": "pob_tot_2010",
+          "column_aliases": [
+            "POB_TOT_2010"
+          ],
+          "label": "Población 2010",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_dual_bars",
+        "sort_by": "pob_tot",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "pob_tot_2010",
+          "pob_tot"
+        ],
+        "legend_labels": [
+          "2010",
+          "2020"
+        ],
+        "title": "Población total por municipios seleccionados 2010 y 2020",
+        "root_class": "poblacion-viz",
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
+        "ranking": true,
+        "style": {
+          "colors": {
+            "claro": {
+              "series": [
+                "#6342ff",
+                "#d08200"
+              ],
+              "serie1": "#6342ff",
+              "serie2": "#d08200"
+            },
+            "oscuro": {
+              "series": [
+                "#1a4971",
+                "#3dbdbd"
+              ],
+              "serie1": "#1a4971",
+              "serie2": "#3dbdbd"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Población",
+        "periodicidad": "Quinquenal",
+        "unidad_medida": "Personas",
+        "fuente": "2020 Censos y Conteos de Población y Vivienda",
+        "nota_general": "Esta información se actualiza cada cinco años mediante los Censos y Conteos de población y vivienda.",
+        "notas": [
+          {
+            "periodo": "2010",
+            "texto": "La información es censal y está referida al 12 de junio de 2010."
+          },
+          {
+            "periodo": "2020",
+            "texto": "La información es censal y está referida al 12 de marzo de 2020."
+          }
+        ],
+        "fecha_inicial": "1910",
+        "fecha_final": "2020",
+        "ultima_actualizacion": "21/10/2024"
+      },
+      "api": {
+        "path": "/api/indicators/socio_poblacion",
+        "legacy_paths": [
+          "/api/comparativas/poblacion",
+          "/api/poblacion_comparativa.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal"
+      },
+      "export": {
+        "filename_prefix": "poblacion",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".poblacion-viz",
+        "csv_columns": [
+          "seccion",
+          "cve_mun",
+          "nom_mun",
+          "pob_tot_2010",
+          "pob_tot"
+        ],
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2."
+      },
+      "legacy": {
+        "menu_flag": "poblacionComparativa"
+      }
+    },
+    {
+      "id": "socio_crecimiento",
+      "group_id": "socio",
+      "label": "Población y crecimiento",
+      "subtitle": "Distribución % y tasas (INEGI)",
+      "unit": "%",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "dist_porc",
+          "column": "dist_porc",
+          "label": "Distribución porcentual",
+          "type": "percent",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "DIST_PORC"
+          ]
+        },
+        {
+          "key": "creci_00_10",
+          "column": "creci_00_10",
+          "label": "Tasa crecimiento 2000–2010",
+          "type": "percent",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "CRECI_00_10",
+            "pcreci_00_10",
+            "PCRECI_00_10"
+          ]
+        },
+        {
+          "key": "creci_10_20",
+          "column": "creci_10_20",
+          "label": "Tasa crecimiento 2010–2020",
+          "type": "percent",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "CRECI_10_20",
+            "pcreci_10_20",
+            "PCRECI_10_20"
+          ]
+        }
+      ],
+      "presentation": {
+        "template": "ranking_with_rates_table",
+        "sort_by": "dist_porc",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "dist_porc"
+        ],
+        "title": "Distribución porcentual de población y tasa de crecimiento anual por municipios seleccionados 2020",
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2000, 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
+        "style": {
+          "colors": {
+            "claro": {
+              "barra": "#5b8def",
+              "barra_hl": "#0d8a8a"
+            },
+            "oscuro": {
+              "barra": "#5b8def",
+              "barra_hl": "#2dbdb5"
+            }
+          }
+        },
+        "table_metrics": [
+          "creci_00_10",
+          "creci_10_20"
+        ],
+        "table_title": "Tasa de crecimiento"
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Población y crecimiento",
+        "periodicidad": "Quinquenal",
+        "unidad_medida": "%",
+        "fuente": "INEGI. Censos de Población y Vivienda 2000, 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
+        "nota_general": "Esta información se actualiza cada cinco años mediante los Censos y Conteos de población y vivienda.",
+        "notas": [
+          {
+            "periodo": "2000",
+            "texto": "La información es censal y está referida al 14 de febrero del 2000."
+          },
+          {
+            "periodo": "2010",
+            "texto": "La información es censal y está referida al 12 de junio de 2010."
+          }
+        ],
+        "fecha_inicial": "1910",
+        "fecha_final": "2020",
+        "ultima_actualizacion": "21/10/2024"
+      },
+      "api": {
+        "path": "/api/indicators/socio_crecimiento",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal",
+        "legacy_paths": [
+          "/api/crecimiento_comparativa.php"
+        ]
+      },
+      "export": {
+        "filename_prefix": "crecimiento",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".crecimiento-viz",
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2000, 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
+        "csv_columns": [
+          "seccion",
+          "cve_mun",
+          "nom_mun",
+          "dist_porc",
+          "creci_00_10",
+          "creci_10_20"
+        ]
+      },
+      "legacy": {
+        "menu_flag": "crecimientoComparativa"
+      }
+    },
+    {
+      "id": "socio_edad_mediana",
+      "group_id": "socio",
+      "label": "Edad mediana",
+      "subtitle": "INEGI · Censo 2020",
+      "unit": "años",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "edad_mediana",
+          "column": "Edad mediana",
+          "label": "float",
+          "type": "tab_municipal",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "EDAD_MEDIANA"
+          ]
+        }
+      ],
+      "presentation": {
+        "template": "ranking_dual_bars",
+        "sort_by": "edad_mediana",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "edad_mediana"
+        ],
+        "title": "Edad mediana por municipio (años)",
+        "footer": "Nota: Esta medida divide la distribución por edades de una población determinada en dos grupos numéricamente iguales; la mitad de los casos quedan por abajo de la mediana y la otra mitad por encima. Para su cálculo se excluye a la población con edad no especificada.\nFuente: INEGI. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico. Población 4.",
+        "ranking": true,
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "series": [
+                "#6342ff"
+              ],
+              "serie1": "#6342ff"
+            },
+            "oscuro": {
+              "series": [
+                "#92c2ed"
+              ],
+              "serie1": "#92c2ed"
+            }
+          }
+        },
+        "root_class": "poblacion-viz",
+        "legend_labels": [
+          "Edad mediana"
+        ]
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Edad mediana",
+        "periodicidad": "Quinquenal",
+        "unidad_medida": "Promedio de años",
+        "fuente": "INEGI. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico. Población 4.",
+        "nota_general": "Esta información se actualiza cada cinco años mediante los Censos y Conteos de población y vivienda.",
+        "notas": [
+          {
+            "periodo": "",
+            "texto": "Esta medida divide la distribución por edades de una población determinada en dos grupos numéricamente iguales; la mitad de los casos quedan por abajo de la mediana y la otra mitad por encima. Para su cálculo se excluye a la población con edad no especificada."
+          }
+        ],
+        "fecha_inicial": "1910",
+        "fecha_final": "2020",
+        "ultima_actualizacion": "21/10/2024"
+      },
+      "api": {
+        "path": "/api/indicators/socio_edad_mediana",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal",
+        "legacy_paths": [
+          "/api/edad_mediana_comparativa.php"
+        ]
+      },
+      "export": {
+        "filename_prefix": "edad_mediana",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".edad-mediana-viz",
+        "footer": "Nota: Esta medida divide la distribución por edades de una población determinada en dos grupos numéricamente iguales; la mitad de los casos quedan por abajo de la mediana y la otra mitad por encima. Para su cálculo se excluye a la población con edad no especificada.\nFuente: INEGI. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico. Población 4.",
+        "csv_columns": [
+          "seccion",
+          "cve_mun",
+          "nom_mun",
+          "edad_mediana"
+        ]
+      },
+      "legacy": {
+        "menu_flag": "edadMedianaComparativa"
+      }
+    },
+    {
+      "id": "socio_nacimientos",
+      "group_id": "socio",
+      "label": "Nacimientos",
+      "subtitle": "Por entidad y municipio (INEGI 2024)",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal+tab_nacional",
+        "scope": "national_states_municipal"
+      },
+      "fields": [
+        {
+          "key": "naci_24",
+          "column": "naci_24",
+          "label": "Nacimientos 2024",
+          "type": "float",
+          "source_table": "tab_nacional",
+          "column_aliases": [
+            "NACI_24",
+            "naci24"
+          ]
+        },
+        {
+          "key": "por_naci24",
+          "column": "por_naci24",
+          "label": "% participación entidad",
+          "type": "percent",
+          "source_table": "tab_nacional",
+          "column_aliases": [
+            "POR_NACI24",
+            "por_naci_24"
+          ]
+        },
+        {
+          "key": "por_naci_2024_redo",
+          "column": "por_naci_2024_redo",
+          "label": "% municipal redistribuido",
+          "type": "percent",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "porc_naci_2024_redo",
+            "PORC_NACI_2024_REDO",
+            "por_naci_2024"
+          ]
+        }
+      ],
+      "presentation": {
+        "template": "entity_bars_municipal_table",
+        "sort_by": "por_naci_2024_redo",
+        "sections": [
+          "states",
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "title": "Nacimientos registrados por entidad federativa y municipios seleccionados 2024",
+        "footer": "Fuente: INEGI. Estadísticas de Natalidad 2024. Consulta interactiva de datos.",
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "barra": "#5b8def",
+              "barra_hl": "#0d8a8a"
+            },
+            "oscuro": {
+              "barra": "#5b8def",
+              "barra_hl": "#2dbdb5"
+            }
+          }
+        },
+        "state_metric": "naci_24"
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Nacimientos",
+        "periodicidad": "Anual",
+        "unidad_medida": "Nacimientos registrados",
+        "fuente": "INEGI. Estadísticas de Natalidad 2024. Consulta interactiva de datos.",
+        "nota_general": "",
+        "notas": [
+          {
+            "periodo": "",
+            "texto": "La información se presenta por lugar de residencia habitual de la madre."
+          }
+        ],
+        "fecha_inicial": "1994",
+        "fecha_final": "2024",
+        "ultima_actualizacion": "17/12/2025",
+        "show": {
+          "nota_general": false
+        }
+      },
+      "api": {
+        "path": "/api/indicators/socio_nacimientos",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_states",
+        "legacy_paths": [
+          "/api/nacimientos_vista.php"
+        ]
+      },
+      "export": {
+        "filename_prefix": "nacimientos",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".nacimientos-viz",
+        "footer": "Fuente: INEGI. Estadísticas de Natalidad 2024. Consulta interactiva de datos."
+      },
+      "legacy": {
+        "menu_flag": "nacimientosVista"
+      }
+    },
+    {
+      "id": "socio_defunciones",
+      "group_id": "socio",
+      "label": "Defunciones",
+      "subtitle": "Por entidad y municipio (INEGI 2024)",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal+tab_nacional",
+        "scope": "national_states_municipal"
+      },
+      "fields": [
+        {
+          "key": "defu",
+          "column": "defu",
+          "label": "Defunciones",
+          "type": "float",
+          "source_table": "tab_nacional",
+          "column_aliases": [
+            "DEFU",
+            "def_u"
+          ]
+        },
+        {
+          "key": "por_def_ent",
+          "column": "por_def_ent",
+          "label": "% participación entidad",
+          "type": "percent",
+          "source_table": "tab_nacional",
+          "column_aliases": [
+            "defu_por",
+            "por_def_24",
+            "por_def_2024"
+          ]
+        },
+        {
+          "key": "por_def_2024_redo",
+          "column": "por_def_2024_redo",
+          "label": "% municipal redistribuido",
+          "type": "percent",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "porc_def_2024_redo",
+            "por_def_2024"
+          ]
+        }
+      ],
+      "presentation": {
+        "template": "entity_bars_municipal_table",
+        "sort_by": "por_def_2024_redo",
+        "sections": [
+          "states",
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "title": "Defunciones por entidad federativa y municipios seleccionados 2024",
+        "footer": "Fuente: INEGI. Estadísticas de mortalidad 2024. Consulta interactiva de datos.",
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "barra": "#5b8def",
+              "barra_hl": "#0d8a8a"
+            },
+            "oscuro": {
+              "barra": "#5b8def",
+              "barra_hl": "#2dbdb5"
+            }
+          }
+        },
+        "state_metric": "defu"
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Defunciones",
+        "periodicidad": "Anual",
+        "unidad_medida": "Defunciones registradas",
+        "fuente": "INEGI. Estadísticas de mortalidad 2024. Consulta interactiva de datos.",
+        "nota_general": "La información se presenta por lugar de residencia habitual del fallecido.",
+        "notas": [],
+        "fecha_inicial": "1994",
+        "fecha_final": "2024",
+        "ultima_actualizacion": "10/11/2025",
+        "show": {
+          "notas": false
+        }
+      },
+      "api": {
+        "path": "/api/indicators/socio_defunciones",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_states",
+        "legacy_paths": [
+          "/api/defunciones_vista.php"
+        ]
+      },
+      "export": {
+        "filename_prefix": "defunciones",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".defunciones-viz",
+        "footer": "Fuente: INEGI. Estadísticas de mortalidad 2024. Consulta interactiva de datos."
+      },
+      "legacy": {
+        "menu_flag": "defuncionesVista"
+      }
+    },
+    {
+      "id": "socio_unidades_medicas",
+      "group_id": "socio",
+      "label": "Unidades médicas en servicio",
+      "subtitle": "CLUES Secretaría de Salud · Dic 2025",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "entity_row_only"
+      },
+      "fields": [
+        {
+          "key": "imss",
+          "column": "imss",
+          "label": "IMSS",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "issste",
+          "column": "issste",
+          "label": "ISSSTE",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "semar",
+          "column": "semar",
+          "label": "SEMAR",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "imb",
+          "column": "imb",
+          "label": "IMB",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "sesa",
+          "column": "sesa",
+          "label": "SESA",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "ssa",
+          "column": "ssa",
+          "label": "SSA",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "total",
+          "column": "total_unidades_medicas",
+          "label": "Total",
+          "type": "integer",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "total"
+          ]
+        }
+      ],
+      "presentation": {
+        "template": "multi_column_table",
+        "sort_by": "total",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "title": "Unidades médicas en servicio por municipio",
+        "footer": "Fuente: \"CLUES Secretaría de Salud- Diciembre 2025 (depurando bajas)\".",
+        "ranking_size": 5
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Unidades médicas en servicio",
+        "periodicidad": "Mensual",
+        "unidad_medida": "Establecimientos de salud",
+        "fuente": "\"CLUES Secretaría de Salud- Diciembre 2025 (depurando bajas)\".",
+        "nota_general": "El catálogo maestro unificado de CLUES comenzó su estructura de registro histórico y normativo formal a partir del año 2002.",
+        "notas": [],
+        "fecha_inicial": "2002",
+        "fecha_final": "2025",
+        "ultima_actualizacion": "31/12/2025",
+        "show": {
+          "notas": false
+        }
+      },
+      "api": {
+        "path": "/api/indicators/socio_unidades_medicas",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_entity_only",
+        "legacy_paths": [
+          "/api/unidades_medicas_vista.php"
+        ]
+      },
+      "export": {
+        "filename_prefix": "unidades_medicas",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".um-viz",
+        "footer": "Fuente: \"CLUES Secretaría de Salud- Diciembre 2025 (depurando bajas)\"."
+      },
+      "legacy": {
+        "menu_flag": "unidadesMedicasVista"
+      },
+      "computed_fields": [
+        {
+          "key": "total",
+          "description": "Suma de instituciones por fila (debe venir precalculada en total_unidades_medicas)",
+          "formula": "imss + issste + semar + imb + sesa + ssa",
+          "migrate_to_etl": true,
+          "etl_column_proposal": "total_unidades_medicas"
+        }
+      ]
+    },
+    {
+      "id": "socio_escolaridad",
+      "group_id": "socio",
+      "label": "Grado promedio de escolaridad",
+      "subtitle": "INEGI · Censo 2020",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal+tab_nacional",
+        "scope": "national_states_municipal"
+      },
+      "fields": [
+        {
+          "key": "graproes",
+          "column": "graproes",
+          "label": "Grado promedio de escolaridad",
+          "type": "float",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "GRAPROES",
+            "gra_proes"
+          ]
+        }
+      ],
+      "presentation": {
+        "template": "entity_bars_municipal_table",
+        "sort_by": "graproes",
+        "sections": [
+          "states",
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "title": "Grado promedio de escolaridad por entidad y municipios seleccionados",
+        "footer": "Fuente: INEGI. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico. Educación 14. Principales resultados por localidad (ITER).",
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "barra": "#5b8def",
+              "barra_hl": "#0d8a8a"
+            },
+            "oscuro": {
+              "barra": "#5b8def",
+              "barra_hl": "#2dbdb5"
+            }
+          }
+        },
+        "state_metric": "graproes"
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Grado promedio de escolaridad",
+        "periodicidad": "Quinquenal",
+        "unidad_medida": "Grado promedio de escolaridad",
+        "fuente": "INEGI. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico. Educación 14. Principales resultados por localidad (ITER).",
+        "nota_general": "Esta información se actualiza cada cinco años mediante los Censos y Conteos de población y vivienda.",
+        "notas": [],
+        "fecha_inicial": "1910",
+        "fecha_final": "2020",
+        "ultima_actualizacion": "21/10/2024",
+        "show": {
+          "notas": false
+        }
+      },
+      "api": {
+        "path": "/api/indicators/socio_escolaridad",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_states",
+        "handler": "escolaridad",
+        "legacy_paths": [
+          "/api/escolaridad_vista.php"
+        ]
+      },
+      "export": {
+        "filename_prefix": "escolaridad",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".escolaridad-viz",
+        "footer": "Fuente: INEGI. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico. Educación 14. Principales resultados por localidad (ITER)."
+      },
+      "legacy": {
+        "menu_flag": "escolaridadVista"
+      }
+    },
+    {
+      "id": "socio_analfabetismo",
+      "group_id": "socio",
+      "label": "Tasa de analfabetismo",
+      "subtitle": "INEGI · Censos 2010 y 2020",
+      "unit": "%",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal+tab_nacional",
+        "scope": "national_states_municipal"
+      },
+      "fields": [
+        {
+          "key": "tasa_an2010",
+          "column": "tasa_an2010",
+          "label": "Tasa analfabetismo 2010",
+          "type": "percent",
+          "source_table": "tab_nacional",
+          "column_aliases": [
+            "TASA_AN2010",
+            "tasa_an_2010"
+          ]
+        },
+        {
+          "key": "tasa_an2020",
+          "column": "tasa_an2020",
+          "label": "Tasa analfabetismo 2020",
+          "type": "percent",
+          "source_table": "tab_nacional",
+          "column_aliases": [
+            "TASA_AN2020",
+            "tasa_an_2020"
+          ]
+        },
+        {
+          "key": "tasa_an_red",
+          "column": "tasa_an_red",
+          "label": "Tasa municipal redistribuida",
+          "type": "percent",
+          "source_table": "tab_municipal",
+          "column_aliases": [
+            "TASA_AN_RED",
+            "tasa_an_redu"
+          ]
+        }
+      ],
+      "presentation": {
+        "template": "analfabetismo_composite",
+        "sort_by": "tasa_an_red",
+        "sections": [
+          "states",
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "title": "Tasa de analfabetismo de la población de 15 años y más por entidad federativay municipios seleccionados 2010 y 2020",
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Educación 4.",
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "barra": "#5b8def",
+              "barra_hl": "#0d8a8a"
+            },
+            "oscuro": {
+              "barra": "#5b8def",
+              "barra_hl": "#2dbdb5"
+            }
+          }
+        },
+        "table_title": "Tasa de analfabetismo por municipios\nseleccionados 2020",
+        "state_metric": "tasa_an2020",
+        "period_keys": [
+          "tasa_an2010",
+          "tasa_an2020"
+        ],
+        "section_labels": {
+          "top5": "Municipios con mayor tasa de analfabetismo",
+          "bottom5": "Municipios con menor tasa de analfabetismo"
+        }
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Tasa de analfabetismo",
+        "periodicidad": "Quinquenal",
+        "unidad_medida": "%",
+        "fuente": "INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Educación 4.",
+        "nota_general": "Esta información se actualiza cada cinco años mediante los Censos y Conteos de población y vivienda.",
+        "notas": [
+          {
+            "periodo": "2020",
+            "texto": "La información de la gráfica corresponde a datos del Censo de Población y Vivienda 2020."
+          }
+        ],
+        "fecha_inicial": "1910",
+        "fecha_final": "2020",
+        "ultima_actualizacion": "21/10/2024"
+      },
+      "api": {
+        "path": "/api/indicators/socio_analfabetismo",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_states",
+        "handler": "analfabetismo",
+        "legacy_paths": [
+          "/api/analfabetismo_vista.php"
+        ]
+      },
+      "export": {
+        "filename_prefix": "analfabetismo",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".analfabetismo-viz",
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Educación 4."
+      },
+      "legacy": {
+        "menu_flag": "analfabetismoVista"
+      }
+    },
+    {
+      "id": "viv_participacion_vivh",
+      "group_id": "viv",
+      "label": "Participación viviendas particulares habitadas",
+      "subtitle": "Participación % y tasas de crecimiento (INEGI)",
+      "unit": "%",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking_cve_001_085"
+      },
+      "fields": [
+        {
+          "key": "part_por_vivh",
+          "column": "part_por_vivh",
+          "column_aliases": [
+            "PART_POR_VIVH",
+            "partporvivh"
+          ],
+          "label": "Participación %",
+          "type": "percent",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "creci_00_10",
+          "column": "creci_00_10",
+          "label": "Tasa crecimiento 2000–2010",
+          "type": "percent",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "creci_10_20",
+          "column": "creci_10_20",
+          "label": "Tasa crecimiento 2010–2020",
+          "type": "percent",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_with_rates_table",
+        "sort_by": "part_por_vivh",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5",
+          "national",
+          "state"
+        ],
+        "bar_metrics": [
+          "part_por_vivh"
+        ],
+        "table_metrics": [
+          "creci_00_10",
+          "creci_10_20"
+        ],
+        "table_title": "Tasa de crecimiento",
+        "title": "Participación de viviendas particulares habitadas por municipios seleccionados",
+        "footer": "Fuente: INEGI. XII Censo General de Población y Vivienda 2000. Censos de Población y Vivienda 2010 y 2020.\nTabulados del Cuestionario Básico. Vivienda 4."
+      },
+      "api": {
+        "path": "/api/vistas/vivienda-participacion",
+        "legacy_paths": [
+          "/api/vivienda_participacion_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_national_state"
+      },
+      "export": {
+        "filename_prefix": "vivienda_participacion",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".vivienda-participacion-viz",
+        "footer": "Fuente: INEGI. XII Censo General de Población y Vivienda 2000. Censos de Población y Vivienda 2010 y 2020.\nTabulados del Cuestionario Básico. Vivienda 4."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Participación viviendas particulares habitadas",
+        "periodicidad": "",
+        "unidad_medida": "%",
+        "fuente": "INEGI. XII Censo General de Población y Vivienda 2000. Censos de Población y Vivienda 2010 y 2020. Tabulados del Cuestionario Básico. Vivienda 4.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "viviendaParticipacionVista"
+      }
+    },
+    {
+      "id": "viv_servicios_vivh",
+      "group_id": "viv",
+      "label": "Servicios en viviendas particulares habitadas",
+      "subtitle": "Electricidad, agua entubada y drenaje (INEGI 2020)",
+      "unit": "%",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "national_state_municipio"
+      },
+      "fields": [
+        {
+          "key": "por_redo_ener",
+          "column": "por_redo_ener",
+          "column_aliases": [
+            "POR_REDO_ENER"
+          ],
+          "label": "Electricidad",
+          "type": "percent",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "por_redo_agua",
+          "column": "por_redo_agua",
+          "column_aliases": [
+            "POR_REDO_AGUA"
+          ],
+          "label": "Agua entubada",
+          "type": "percent",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "por_redo_drenaje",
+          "column": "por_redo_drenaje",
+          "column_aliases": [
+            "POR_REDO_DRENAJE"
+          ],
+          "label": "Drenaje",
+          "type": "percent",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "chartjs_grouped_bars",
+        "sections": [
+          "national",
+          "state",
+          "municipio"
+        ],
+        "chart_metrics": [
+          "por_redo_ener",
+          "por_redo_agua",
+          "por_redo_drenaje"
+        ],
+        "title": "Porcentaje de viviendas particulares habitadas según disponibilidad de principales servicios 2020",
+        "footer": "Fuente: INEGI. Censo de Población y Vivienda 2020. Tabulados interactivos."
+      },
+      "api": {
+        "path": "/api/vistas/vivienda-servicios",
+        "legacy_paths": [
+          "/api/vivienda_servicios_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "national_state_municipio"
+      },
+      "export": {
+        "filename_prefix": "vivienda_servicios",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".vivienda-servicios-viz",
+        "footer": "Fuente: INEGI. Censo de Población y Vivienda 2020. Tabulados interactivos."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Servicios en viviendas particulares habitadas",
+        "periodicidad": "",
+        "unidad_medida": "%",
+        "fuente": "INEGI. Censo de Población y Vivienda 2020. Tabulados interactivos.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "viviendaServiciosVista"
+      }
+    },
+    {
+      "id": "eco_poblacion_ocupada",
+      "group_id": "eco",
+      "label": "Población ocupada",
+      "subtitle": "Por escolaridad y municipio (INEGI 2020)",
+      "unit": "personas",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal+tab_nacional",
+        "scope": "national_states_municipal"
+      },
+      "fields": [
+        {
+          "key": "pea_ocup",
+          "column": "pea_ocup",
+          "column_aliases": [
+            "PEA_OCUP",
+            "pea_ocupada"
+          ],
+          "label": "PEA ocupada (entidades)",
+          "type": "integer",
+          "source_table": "tab_nacional"
+        },
+        {
+          "key": "ocupada",
+          "column": "ocupada",
+          "column_aliases": [
+            "OCUPADA",
+            "pea_ocup"
+          ],
+          "label": "Población ocupada municipal",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "sin_escol",
+          "column": "sin_escol",
+          "label": "Sin escolaridad",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "primaria",
+          "column": "primaria",
+          "label": "Primaria",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "secund",
+          "column": "secund",
+          "label": "Secundaria",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "med_sup",
+          "column": "med_sup",
+          "label": "Media superior",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "superior",
+          "column": "superior",
+          "label": "Superior",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "no_esp",
+          "column": "no_esp",
+          "label": "No especificado",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "entity_bars_municipal_table",
+        "sort_by": "ocupada",
+        "sections": [
+          "states",
+          "top5",
+          "middle",
+          "bottom5",
+          "tabla_nacional",
+          "tabla_entidad"
+        ],
+        "state_metric": "pea_ocup",
+        "section_labels": {
+          "top5": "Municipios con mayor población ocupada",
+          "bottom5": "Municipios con menor población ocupada"
+        },
+        "title": "Población ocupada por entidad federativa según escolaridad y municipios seleccionados 2020",
+        "footer": "Fuente: INEGI. Censo de Población y Vivienda 2020. Tabulados del Cuestionario Básico. Características económicas 4.",
+        "style": {
+          "root_class": "nacimientos-viz ind-preset-entity-bars",
+          "split": {
+            "table_min": "360px",
+            "chart_max": "30%"
+          }
+        }
+      },
+      "api": {
+        "path": "/api/vistas/poblacion-ocupada",
+        "legacy_paths": [
+          "/api/poblacion_ocupada_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_states",
+        "handler": "poblacion_ocupada"
+      },
+      "export": {
+        "filename_prefix": "poblacion_ocupada",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".poblacion-ocupada-viz",
+        "footer": "Fuente: INEGI. Censo de Población y Vivienda 2020. Tabulados del Cuestionario Básico. Características económicas 4."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Población ocupada",
+        "periodicidad": "",
+        "unidad_medida": "Personas",
+        "fuente": "INEGI. Censo de Población y Vivienda 2020. Tabulados del Cuestionario Básico. Características económicas 4.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "poblacionOcupadaVista"
+      }
+    },
+    {
+      "id": "eco_caracteristicas_economicas",
+      "group_id": "eco",
+      "label": "Características económicas",
+      "subtitle": "UE, empleo y producción bruta (INEGI · Censos Económicos)",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "ue",
+          "column": "ue",
+          "column_aliases": [
+            "UE",
+            "unidades_economicas"
+          ],
+          "label": "Unidades económicas",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "pers_ocup",
+          "column": "pers_ocup",
+          "column_aliases": [
+            "PERS_OCUP",
+            "personal_ocupado"
+          ],
+          "label": "Personal ocupado",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "prod_brut",
+          "column": "prod_brut",
+          "column_aliases": [
+            "PROD_BRUT",
+            "prod_bruta"
+          ],
+          "label": "Producción bruta",
+          "type": "float",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "multi_column_table",
+        "sort_by": "prod_brut",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5",
+          "tabla_nacional",
+          "tabla_entidad"
+        ],
+        "title": "Características económicas por municipios seleccionados 2023",
+        "section_labels": {
+          "top5": "Municipios con mayor producción",
+          "bottom5": "Municipios con menor producción"
+        },
+        "footer": "Fuente: INEGI. Censos Económicos 2024. Consulta al Sistema Automatizado de Información Censal (SAIC). https://www.inegi.org.mx/app/saic/default.html."
+      },
+      "api": {
+        "path": "/api/vistas/caracteristicas-economicas",
+        "legacy_paths": [
+          "/api/caracteristicas_economicas_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_national_state"
+      },
+      "export": {
+        "filename_prefix": "caracteristicas_economicas",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".ceco-viz",
+        "footer": "Fuente: INEGI. Censos Económicos 2024. Consulta al Sistema Automatizado de Información Censal (SAIC). https://www.inegi.org.mx/app/saic/default.html."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Características económicas",
+        "periodicidad": "",
+        "unidad_medida": "",
+        "fuente": "INEGI. Censos Económicos 2024. Consulta al Sistema Automatizado de Información Censal (SAIC). https://www.inegi.org.mx/app/saic/default.html.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "caracteristicasEconomicasVista"
+      }
+    },
+    {
+      "id": "eco_unidades_economicas",
+      "group_id": "eco",
+      "label": "Unidades económicas",
+      "subtitle": "DENUE por municipio",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "ue_den",
+          "column": "ue_den",
+          "column_aliases": [
+            "UE_DEN"
+          ],
+          "label": "Unidades económicas DENUE",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_dual_bars",
+        "sort_by": "ue_den",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "ue_den"
+        ],
+        "legend_labels": [
+          "Unidades económicas (DENUE)"
+        ],
+        "title": "Unidades económicas por municipios seleccionados 2025",
+        "root_class": "poblacion-viz ue-economicas-viz",
+        "footer": "Fuente: INEGI. Directorio Estadístico Nacional de Unidades Económicas (DENUE) Interactivo, mayo 2025."
+      },
+      "api": {
+        "path": "/api/vistas/unidades-economicas",
+        "legacy_paths": [
+          "/api/unidades_economicas_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal"
+      },
+      "export": {
+        "filename_prefix": "unidades_economicas",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".uee-viz",
+        "footer": "Fuente: INEGI. Directorio Estadístico Nacional de Unidades Económicas (DENUE) Interactivo, mayo 2025."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Unidades económicas",
+        "periodicidad": "",
+        "unidad_medida": "",
+        "fuente": "INEGI. Directorio Estadístico Nacional de Unidades Económicas (DENUE) Interactivo, mayo 2025.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "unidadesEconomicasVista"
+      }
+    },
+    {
+      "id": "eco_superficie_agricultura",
+      "group_id": "eco",
+      "label": "Superficie con agricultura",
+      "subtitle": "AMCA 2016 · hectáreas",
+      "unit": "ha",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "sup_cieloabtot",
+          "column": "sup_cieloabtot",
+          "label": "Cielo abierto total",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "sup_sembtot",
+          "column": "sup_sembtot",
+          "label": "Sembrada total",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "sup_sembtemp",
+          "column": "sup_sembtemp",
+          "label": "Sembrada temporal",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "sup_sembrieg",
+          "column": "sup_sembrieg",
+          "label": "Sembrada riego",
+          "type": "float",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "multi_column_table",
+        "sort_by": "sup_sembrieg",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5",
+          "tabla_entidad"
+        ],
+        "title": "Superficie con agricultura por municipios seleccionados",
+        "footer": "Fuente: INEGI. Actualización del marco censal agropecuario 2016. Cuadro AMCA_2016_07."
+      },
+      "api": {
+        "path": "/api/vistas/superficie-agricultura",
+        "legacy_paths": [
+          "/api/superficie_agricultura_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_national_state"
+      },
+      "export": {
+        "filename_prefix": "superficie_agricultura",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".sgr-viz",
+        "footer": "Fuente: INEGI. Actualización del marco censal agropecuario 2016. Cuadro AMCA_2016_07."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Superficie con agricultura",
+        "periodicidad": "",
+        "unidad_medida": "Hectáreas",
+        "fuente": "INEGI. Actualización del marco censal agropecuario 2016. Cuadro AMCA_2016_07.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "superficieAgriculturaVista"
+      }
+    },
+    {
+      "id": "gov_inversion_publica",
+      "group_id": "gov",
+      "label": "Inversión pública",
+      "subtitle": "Miles de pesos · INEGI 2024",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "total_inv",
+          "column": "total_inv",
+          "label": "Total",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "gob_inv",
+          "column": "gob_inv",
+          "label": "Gobierno",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "desoc_inv",
+          "column": "desoc_inv",
+          "label": "Desarrollo social",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "desec_inv",
+          "column": "desec_inv",
+          "label": "Desarrollo económico",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "otras_inv",
+          "column": "otras_inv",
+          "label": "Otras",
+          "type": "float",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "multi_column_table",
+        "sort_by": "total_inv",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5",
+          "tabla_entidad"
+        ],
+        "title": "Inversión pública por municipios seleccionados",
+        "footer": "Fuente: INEGI. México en cifras, Tabulados de Integración, 2024. Cuadro 24.10."
+      },
+      "api": {
+        "path": "/api/vistas/inversion-publica",
+        "legacy_paths": [
+          "/api/inversion_publica_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_national_state"
+      },
+      "export": {
+        "filename_prefix": "inversion_publica",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".invpub-viz",
+        "footer": "Fuente: INEGI. México en cifras, Tabulados de Integración, 2024. Cuadro 24.10."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Inversión pública",
+        "periodicidad": "",
+        "unidad_medida": "",
+        "fuente": "INEGI. México en cifras, Tabulados de Integración, 2024. Cuadro 24.10.",
+        "nota_general": "",
+        "notas": [
+          {
+            "periodo": "",
+            "texto": "Este apartado se refiere a la inversión con cobertura estatal y no se muestra el desglose para cada municipio."
+          }
+        ],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "inversionPublicaVista"
+      }
+    },
+    {
+      "id": "gov_instituciones_admin_publica",
+      "group_id": "gov",
+      "label": "Instituciones administración pública municipal",
+      "subtitle": "CNGG 2022 · instituciones y personal",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "total_inst",
+          "column": "total_inst",
+          "label": "Total instituciones",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "inst_central",
+          "column": "inst_central",
+          "label": "Central",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "inst_parampal",
+          "column": "inst_parampal",
+          "column_aliases": [
+            "inst_paramuni",
+            "INST_PARAMUNI"
+          ],
+          "label": "Paramunicipal",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "personal",
+          "column": "personal",
+          "label": "Personal",
+          "type": "float",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "multi_column_table",
+        "sort_by": "total_inst",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5",
+          "tabla_nacional",
+          "tabla_entidad"
+        ],
+        "title": "Instituciones de la administración pública municipal",
+        "footer": "Fuente: INEGI. Censo Nacional de Gobiernos Municipales y Demarcaciones Territoriales de la Ciudad de México 2023. Datos abiertos."
+      },
+      "api": {
+        "path": "/api/vistas/instituciones-admin-publica",
+        "legacy_paths": [
+          "/api/instituciones_admin_publica_municipal_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_with_national_state"
+      },
+      "export": {
+        "filename_prefix": "instituciones_admin_publica",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".iapm-viz",
+        "footer": "Fuente: INEGI. Censo Nacional de Gobiernos Municipales y Demarcaciones Territoriales de la Ciudad de México 2023. Datos abiertos."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Instituciones administración pública municipal",
+        "periodicidad": "",
+        "unidad_medida": "",
+        "fuente": "INEGI. Censo Nacional de Gobiernos Municipales y Demarcaciones Territoriales de la Ciudad de México 2023. Datos abiertos.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "institucionesAdminPublicaMunicipalVista"
+      }
+    },
+    {
+      "id": "gov_habitantes_por_policia",
+      "group_id": "gov",
+      "label": "Habitantes por policía",
+      "subtitle": "CNGG 2022 · habitantes por policía preventiva",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "municipal_ranking"
+      },
+      "fields": [
+        {
+          "key": "habxpol",
+          "column": "habxpol",
+          "label": "Habitantes por policía",
+          "type": "float",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "pob_tot",
+          "column": "pob_tot",
+          "column_aliases": [
+            "pop_tot"
+          ],
+          "label": "Población total",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        },
+        {
+          "key": "pol_prev",
+          "column": "pol_prev",
+          "label": "Policías preventivos",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "computed_fields": [
+        {
+          "key": "habxpol_eff",
+          "description": "Fallback runtime si habxpol es NULL; ETL debe poblar habxpol siempre",
+          "formula": "pop_tot / pol_prev",
+          "migrate_to_etl": true,
+          "etl_column_proposal": "habxpol"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_with_rates_table",
+        "sort_by": "habxpol",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "habxpol"
+        ],
+        "table_metrics": [
+          "pob_tot",
+          "pol_prev"
+        ],
+        "table_title": "Población y policías",
+        "title": "Número de habitantes por policía en municipios seleccionados 2022",
+        "footer": "Fuente: INEGI. Censo Nacional de Gobiernos Municipales y Demarcaciones Territoriales de la Ciudad de México 2023. Datos Abiertos. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico."
+      },
+      "api": {
+        "path": "/api/vistas/habitantes-por-policia",
+        "legacy_paths": [
+          "/api/habitantes_por_policia_vista.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal"
+      },
+      "export": {
+        "filename_prefix": "habitantes_por_policia",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": ".habitantes-policia-viz",
+        "footer": "Fuente: INEGI. Censo Nacional de Gobiernos Municipales y Demarcaciones Territoriales de la Ciudad de México 2023. Datos Abiertos. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Habitantes por policía",
+        "periodicidad": "",
+        "unidad_medida": "",
+        "fuente": "INEGI. Censo Nacional de Gobiernos Municipales y Demarcaciones Territoriales de la Ciudad de México 2023. Datos Abiertos. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico.",
+        "nota_general": "",
+        "notas": [
+          {
+            "periodo": "2022",
+            "texto": "El número de habitantes por policía preventivo se obtuvo de dividir el total de la población del municipio entre el número de policías preventivos del municipio correspondiente al 31 de diciembre de 2022."
+          }
+        ],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "legacy": {
+        "menu_flag": "habitantesPorPoliciaVista"
+      }
+    },
+    {
+      "id": "geo_superficie_comparativa",
+      "group_id": "geo",
+      "label": "Superficie comparativa municipal",
+      "subtitle": "% del territorio estatal · c_mun",
+      "unit": "%",
+      "enabled": false,
+      "migration_status": "phase6",
+      "source": {
+        "primary_table": "atlas.c_mun",
+        "scope": "municipal_ranking",
+        "source_note": "Indicador preparado en catálogo; pestaña Datos Geográficos aún muestra solo texto."
+      },
+      "fields": [
+        {
+          "key": "porcsup",
+          "column": "porcsup",
+          "label": "% superficie estatal",
+          "type": "percent",
+          "source_table": "c_mun"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_dual_bars",
+        "sort_by": "porcsup",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "porcsup"
+        ],
+        "footer": "Fuente: atlas.12mun · porcentaje de superficie respecto al territorio del estado de Guerrero."
+      },
+      "api": {
+        "path": "/api/comparativas/superficie",
+        "legacy_paths": [
+          "/api/superficie_comparativa.php"
+        ],
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal"
+      },
+      "export": {
+        "filename_prefix": "superficie",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": "#geoSuperficieVizRoot",
+        "footer": "Fuente: atlas.12mun · porcentaje de superficie respecto al territorio del estado de Guerrero."
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Superficie comparativa municipal",
+        "periodicidad": "",
+        "unidad_medida": "%",
+        "fuente": "atlas.12mun · porcentaje de superficie respecto al territorio del estado de Guerrero.",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      }
+    }
+  ]
+}

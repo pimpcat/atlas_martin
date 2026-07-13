@@ -409,17 +409,17 @@
           </div>
         </div>
 
-        <!-- Modo Población: pantalla completa con la(s) gráfica(s), sin mapa ni tabla -->
-        <div id="dashboardPoblacion" class="dashboard-poblacion d-none" aria-hidden="true">
+        <!-- Shell único de indicadores tabulares (Fase 10, data-driven) -->
+        <div id="dashboardIndicator" class="dashboard-poblacion d-none" aria-hidden="true">
           <section class="card shadow-sm poblacion-card mb-0">
             <div class="card-header d-flex align-items-center gap-2 flex-wrap">
               <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Población</div>
-              <div class="small text-muted" id="poblacionMeta">—</div>
+              <div class="fw-semibold" id="indicatorShellTitle">Indicador</div>
+              <div class="small text-muted" id="indicatorShellMeta">—</div>
               <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
                 <button
                   type="button"
-                  id="btnPoblacionExportPng"
+                  id="btnIndicatorExportPng"
                   class="btn btn-sm btn-outline-light poblacion-action-btn"
                   title="Descargar la gráfica como imagen PNG"
                   aria-label="Descargar imagen PNG"
@@ -429,7 +429,7 @@
                 </button>
                 <button
                   type="button"
-                  id="btnPoblacionExportCsv"
+                  id="btnIndicatorExportCsv"
                   class="btn btn-sm btn-outline-light poblacion-action-btn"
                   title="Descargar los datos como archivo CSV"
                   aria-label="Descargar datos CSV"
@@ -437,558 +437,51 @@
                   <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
                   <span class="poblacion-action-label">CSV</span>
                 </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="poblacionFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Población y crecimiento: gráfica + tabla anexa, sin mapa ni tabla -->
-        <div id="dashboardCrecimiento" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Población y crecimiento</div>
-              <div class="small text-muted" id="crecimientoMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
                 <button
                   type="button"
-                  id="btnCrecimientoExportPng"
+                  id="btnIndicatorExportXlsx"
                   class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la gráfica como imagen PNG"
-                  aria-label="Descargar imagen PNG"
+                  title="Descargar los datos como archivo Excel"
+                  aria-label="Descargar datos Excel"
                 >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
+                  <span class="poblacion-action-ico" aria-hidden="true">▤</span>
+                  <span class="poblacion-action-label">Excel</span>
                 </button>
                 <button
                   type="button"
-                  id="btnCrecimientoExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
+                  id="btnIndicatorMetadata"
+                  class="btn btn-sm indicator-meta-btn"
+                  title="Ver metadatos del indicador"
+                  aria-label="Metadatos del indicador"
+                  aria-haspopup="dialog"
+                  aria-controls="indicatorMetadataPanel"
                 >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
+                  <span class="indicator-meta-btn-dot" aria-hidden="true"></span>
+                  <span class="indicator-meta-btn-label">Metadatos</span>
                 </button>
               </div>
             </div>
-            <div class="card-body">
-              <div id="crecimientoFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Participación viviendas particulares habitadas -->
-        <div id="dashboardViviendaParticipacion" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Participación viviendas particulares habitadas</div>
-              <div class="small text-muted" id="viviendaParticipacionMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnViviendaParticipacionExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la gráfica como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnViviendaParticipacionExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="viviendaParticipacionFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Servicios en viviendas particulares habitadas -->
-        <div id="dashboardViviendaServicios" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Servicios en viviendas particulares habitadas</div>
-              <div class="small text-muted" id="viviendaServiciosMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnViviendaServiciosExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la gráfica como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnViviendaServiciosExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body p-0 d-flex flex-column">
-              <div
-                id="viviendaServiciosPngRegion"
-                class="viv-serv-png-region d-flex flex-column flex-grow-1 min-h-0"
+            <div class="card-body position-relative">
+              <div id="indicatorFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
+              <aside
+                id="indicatorMetadataPanel"
+                class="indicator-meta-panel d-none"
+                role="dialog"
+                aria-modal="false"
+                aria-labelledby="indicatorMetadataTitle"
+                hidden
               >
-                <h2 class="poblacion-viz-title viv-serv-card-heading px-3 pt-3 pb-2 mb-0">
-                  Porcentaje de viviendas particulares habitadas según disponibilidad de principales servicios 2020
-                </h2>
-                <div id="viviendaServiciosFullVizRoot" class="poblacion-viz-root flex-grow-1 min-h-0 px-3 pb-3" aria-live="polite"></div>
-              </div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Nacimientos: entidades + tabla municipal -->
-        <div id="dashboardNacimientos" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Nacimientos</div>
-              <div class="small text-muted" id="nacimientosMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnNacimientosExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la gráfica como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnNacimientosExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="nacimientosFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Defunciones: misma estructura que Nacimientos -->
-        <div id="dashboardDefunciones" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Defunciones</div>
-              <div class="small text-muted" id="defuncionesMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnDefuncionesExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la gráfica como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnDefuncionesExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="defuncionesFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Unidades médicas: tabla (8 columnas) -->
-        <div id="dashboardUnidadesMedicas" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/table.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Unidades médicas en servicio</div>
-              <div class="small text-muted" id="unidadesMedicasMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnUnidadesMedicasExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la tabla como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnUnidadesMedicasExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="unidadesMedicasFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Grado promedio de escolaridad -->
-        <div id="dashboardEscolaridad" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Grado promedio de escolaridad</div>
-              <div class="small text-muted" id="escolaridadMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnEscolaridadExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnEscolaridadExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="escolaridadFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Población ocupada (Economía) -->
-        <div id="dashboardPoblacionOcupada" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Población ocupada</div>
-              <div class="small text-muted" id="poblacionOcupadaMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnPoblacionOcupadaExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnPoblacionOcupadaExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="poblacionOcupadaFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Características económicas (Economía) -->
-        <div id="dashboardCaracteristicasEconomicas" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Características económicas</div>
-              <div class="small text-muted" id="caracteristicasEconomicasMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnCaracteristicasEconomicasExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnCaracteristicasEconomicasExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="caracteristicasEconomicasFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Unidades económicas DENUE (Economía) -->
-        <div id="dashboardUnidadesEconomicas" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Unidades económicas</div>
-              <div class="small text-muted" id="unidadesEconomicasMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnUnidadesEconomicasExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la gráfica como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnUnidadesEconomicasExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="unidadesEconomicasFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Superficie con agricultura (Economía) -->
-        <div id="dashboardSuperficieAgricultura" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Superficie con agricultura</div>
-              <div class="small text-muted" id="superficieAgriculturaMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnSuperficieAgriculturaExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnSuperficieAgriculturaExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="superficieAgriculturaFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Inversión pública (Gobierno) -->
-        <div id="dashboardInversionPublica" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Inversión pública</div>
-              <div class="small text-muted" id="inversionPublicaMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnInversionPublicaExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnInversionPublicaExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="inversionPublicaFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Instituciones administración pública municipal (Gobierno) -->
-        <div id="dashboardInstitucionesAdminPublica" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Instituciones administración pública municipal</div>
-              <div class="small text-muted" id="institucionesAdminPublicaMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnInstitucionesAdminPublicaExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnInstitucionesAdminPublicaExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="institucionesAdminPublicaFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Habitantes por policía (Gobierno) -->
-        <div id="dashboardHabitantesPolicia" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Habitantes por policía</div>
-              <div class="small text-muted" id="habitantesPoliciaMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnHabitantesPoliciaExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnHabitantesPoliciaExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="habitantesPoliciaFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Tasa de analfabetismo -->
-        <div id="dashboardAnalfabetismo" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Tasa de analfabetismo</div>
-              <div class="small text-muted" id="analfabetismoMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnAnalfabetismoExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la vista como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnAnalfabetismoExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="analfabetismoFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
+                <div class="indicator-meta-panel-head">
+                  <h2 class="indicator-meta-panel-title" id="indicatorMetadataTitle">Metadatos</h2>
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-outline-light indicator-meta-close"
+                    id="btnIndicatorMetadataClose"
+                    aria-label="Cerrar metadatos"
+                  >×</button>
+                </div>
+                <div class="indicator-meta-panel-body" id="indicatorMetadataBody"></div>
+              </aside>
             </div>
           </section>
         </div>
@@ -1003,42 +496,6 @@
             </div>
             <div class="card-body p-0">
               <div id="sitiosInteresRoot" class="sitios-interes-root-wrap" aria-live="polite"></div>
-            </div>
-          </section>
-        </div>
-
-        <!-- Modo Edad mediana: misma estructura que Población -->
-        <div id="dashboardEdadMediana" class="dashboard-poblacion d-none" aria-hidden="true">
-          <section class="card shadow-sm poblacion-card mb-0">
-            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
-              <img src="./assets/icons/chart.svg" alt="" width="18" height="18" />
-              <div class="fw-semibold">Edad mediana</div>
-              <div class="small text-muted" id="edadMedianaMeta">—</div>
-              <div class="ms-auto d-flex align-items-center gap-2 poblacion-actions">
-                <button
-                  type="button"
-                  id="btnEdadMedianaExportPng"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar la gráfica como imagen PNG"
-                  aria-label="Descargar imagen PNG"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⬇</span>
-                  <span class="poblacion-action-label">PNG</span>
-                </button>
-                <button
-                  type="button"
-                  id="btnEdadMedianaExportCsv"
-                  class="btn btn-sm btn-outline-light poblacion-action-btn"
-                  title="Descargar los datos como archivo CSV"
-                  aria-label="Descargar datos CSV"
-                >
-                  <span class="poblacion-action-ico" aria-hidden="true">⤓</span>
-                  <span class="poblacion-action-label">CSV</span>
-                </button>
-              </div>
-            </div>
-            <div class="card-body">
-              <div id="edadMedianaFullVizRoot" class="poblacion-viz-root" aria-live="polite"></div>
             </div>
           </section>
         </div>

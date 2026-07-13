@@ -2,8 +2,8 @@
  * Orquestador principal del Atlas Gro (SPA en index.html).
  * Enlaza menú lateral, selección de municipio, mapa Leaflet y paneles por indicador.
  *
- * Dependencias principales: map.js, api.js, dashboard.js, geoContext.js, homeView.js,
- * visorLayers.js, invViv.js, módulos *Viz.js / *Export.js y theme.js.
+ * Dependencias principales: map.js, api.js, dashboard.js, indicatorShell.js,
+ * geoContext.js, homeView.js, visorLayers.js, invViv.js y theme.js.
  */
 import { createMenu, collapseAllMenuSections, clearActiveMenuItem } from "./menu.js";
 import { purgeOrphanModalBackdrops } from "./atlasModalCleanup.js";
@@ -30,142 +30,28 @@ import {
 } from "./map.js";
 import {
   getIndicatorData,
-  getMenuModel,
+  getMenuModelAsync,
   fetchMunicipios,
   ensureGeoContextoBulk,
   ensureExploradorBulk,
   prefetchMunicipioData,
-  fetchPoblacionComparativa,
-  fetchCrecimientoComparativa,
-  fetchEdadMedianaComparativa,
-  fetchNacimientosVista,
-  fetchDefuncionesVista,
-  fetchUnidadesMedicasVista,
-  fetchEscolaridadVista,
-  fetchAnalfabetismoVista,
-  fetchViviendaParticipacionVista,
-  fetchViviendaServiciosVista,
-  fetchPoblacionOcupadaVista,
-  fetchCaracteristicasEconomicasVista,
-  fetchUnidadesEconomicasVista,
-  fetchSuperficieAgriculturaVista,
-  fetchInversionPublicaVista,
-  fetchInstitucionesAdminPublicaMunicipalVista,
-  fetchHabitantesPorPoliciaVista,
 } from "./api.js";
+import {
+  attachIndicatorShellExport,
+  isCatalogTabularIndicator,
+  refreshCatalogIndicator,
+  setIndicatorShellLayout,
+  showCatalogIndicator,
+} from "./indicatorShell.js";
 import { renderMunicipiosSelect, setMunicipioSelectValue } from "./municipios.js";
 import { loadAndRenderHomePanels, loadHomeContext } from "./homeView.js";
 import { renderTable } from "./table.js";
 import { ensureChart, updateBarChart } from "./charts.js";
-import { renderPoblacionComparativa } from "./poblacionViz.js";
-import { renderEdadMedianaComparativa } from "./edadMedianaViz.js";
-import { renderCrecimientoComparativa } from "./crecimientoViz.js";
-import { renderNacimientosVista } from "./nacimientosViz.js";
-import { renderDefuncionesVista } from "./defuncionesViz.js";
-import { renderUnidadesMedicasVista } from "./unidadesMedicasViz.js";
-import { renderEscolaridadVista } from "./escolaridadViz.js";
-import { renderPoblacionOcupadaVista } from "./poblacionOcupadaViz.js";
-import { renderCaracteristicasEconomicasVista } from "./caracteristicasEconomicasViz.js";
-import { renderUnidadesEconomicasVista } from "./unidadesEconomicasViz.js";
-import { renderSuperficieAgriculturaVista } from "./superficieAgriculturaViz.js";
-import { renderInversionPublicaVista } from "./inversionPublicaViz.js";
-import { renderInstitucionesAdminPublicaVista } from "./institucionesAdminPublicaViz.js";
-import { renderHabitantesPoliciaVista } from "./habitantesPoliciaViz.js";
-import { renderAnalfabetismoVista } from "./analfabetismoViz.js";
-import { renderViviendaParticipacionVista } from "./viviendaParticipacionViz.js";
-import {
-  renderViviendaServiciosVista,
-  updateViviendaServiciosChartTheme,
-} from "./viviendaServiciosViz.js";
-import {
-  attachPoblacionExportButtons,
-  setLastPoblacionExport,
-} from "./poblacionExport.js";
-import {
-  attachCrecimientoExportButtons,
-  setLastCrecimientoExport,
-} from "./crecimientoExport.js";
-import {
-  attachEdadMedianaExportButtons,
-  setLastEdadMedianaExport,
-} from "./edadMedianaExport.js";
-import {
-  attachNacimientosExportButtons,
-  setLastNacimientosExport,
-} from "./nacimientosExport.js";
-import {
-  attachDefuncionesExportButtons,
-  setLastDefuncionesExport,
-} from "./defuncionesExport.js";
-import {
-  attachUnidadesMedicasExportButtons,
-  setLastUnidadesMedicasExport,
-} from "./unidadesMedicasExport.js";
-import {
-  attachEscolaridadExportButtons,
-  setLastEscolaridadExport,
-} from "./escolaridadExport.js";
-import {
-  attachPoblacionOcupadaExportButtons,
-  setLastPoblacionOcupadaExport,
-} from "./poblacionOcupadaExport.js";
-import {
-  attachCaracteristicasEconomicasExportButtons,
-  setLastCaracteristicasEconomicasExport,
-} from "./caracteristicasEconomicasExport.js";
-import {
-  attachUnidadesEconomicasExportButtons,
-  setLastUnidadesEconomicasExport,
-} from "./unidadesEconomicasExport.js";
-import {
-  attachSuperficieAgriculturaExportButtons,
-  setLastSuperficieAgriculturaExport,
-} from "./superficieAgriculturaExport.js";
-import {
-  attachInversionPublicaExportButtons,
-  setLastInversionPublicaExport,
-} from "./inversionPublicaExport.js";
-import {
-  attachInstitucionesAdminPublicaExportButtons,
-  setLastInstitucionesAdminPublicaExport,
-} from "./institucionesAdminPublicaExport.js";
-import {
-  attachHabitantesPoliciaExportButtons,
-  setLastHabitantesPoliciaExport,
-} from "./habitantesPoliciaExport.js";
-import {
-  attachAnalfabetismoExportButtons,
-  setLastAnalfabetismoExport,
-} from "./analfabetismoExport.js";
-import {
-  attachViviendaParticipacionExportButtons,
-  setLastViviendaParticipacionExport,
-} from "./viviendaParticipacionExport.js";
-import {
-  attachViviendaServiciosExportButtons,
-  setLastViviendaServiciosExport,
-} from "./viviendaServiciosExport.js";
+import { updateGroupedBarsChartTheme } from "./templates/chartjsGroupedBars.js";
 import {
   setGeoLayout,
   setVisorLayout,
   setInvVivLayout,
-  setPoblacionLayout,
-  setCrecimientoLayout,
-  setEdadMedianaLayout,
-  setNacimientosLayout,
-  setDefuncionesLayout,
-  setUnidadesMedicasLayout,
-  setEscolaridadLayout,
-  setAnalfabetismoLayout,
-  setViviendaParticipacionLayout,
-  setViviendaServiciosLayout,
-  setPoblacionOcupadaLayout,
-  setCaracteristicasEconomicasLayout,
-  setUnidadesEconomicasLayout,
-  setSuperficieAgriculturaLayout,
-  setInversionPublicaLayout,
-  setInstitucionesAdminPublicaLayout,
-  setHabitantesPoliciaLayout,
   setSitiosInteresLayout,
   setHomeLayout,
 } from "./dashboard.js";
@@ -329,163 +215,8 @@ function isGeoContextIndicator(indicator) {
   return indicator && indicator.geoContext === true;
 }
 
-function isPoblacionIndicator(indicator) {
-  return indicator && indicator.poblacionComparativa === true;
-}
-
-function isCrecimientoIndicator(indicator) {
-  return indicator && indicator.crecimientoComparativa === true;
-}
-
-function isEdadMedianaIndicator(indicator) {
-  return indicator && indicator.edadMedianaComparativa === true;
-}
-
-function isNacimientosIndicator(indicator) {
-  return indicator && indicator.nacimientosVista === true;
-}
-
-function isDefuncionesIndicator(indicator) {
-  return indicator && indicator.defuncionesVista === true;
-}
-
-function isUnidadesMedicasIndicator(indicator) {
-  return indicator && indicator.unidadesMedicasVista === true;
-}
-
-function isEscolaridadIndicator(indicator) {
-  return indicator && indicator.escolaridadVista === true;
-}
-
-function isAnalfabetismoIndicator(indicator) {
-  return indicator && indicator.analfabetismoVista === true;
-}
-
-function isViviendaParticipacionIndicator(indicator) {
-  return indicator && indicator.viviendaParticipacionVista === true;
-}
-
-function isViviendaServiciosIndicator(indicator) {
-  return indicator && indicator.viviendaServiciosVista === true;
-}
-
-function isPoblacionOcupadaIndicator(indicator) {
-  return indicator && indicator.poblacionOcupadaVista === true;
-}
-
-function isCaracteristicasEconomicasIndicator(indicator) {
-  return indicator && indicator.caracteristicasEconomicasVista === true;
-}
-
-function isUnidadesEconomicasIndicator(indicator) {
-  return indicator && indicator.unidadesEconomicasVista === true;
-}
-
-function isSuperficieAgriculturaIndicator(indicator) {
-  return indicator && indicator.superficieAgriculturaVista === true;
-}
-
-function isInversionPublicaIndicator(indicator) {
-  return indicator && indicator.inversionPublicaVista === true;
-}
-
-function isInstitucionesAdminPublicaMunicipalIndicator(indicator) {
-  return indicator && indicator.institucionesAdminPublicaMunicipalVista === true;
-}
-
-function isHabitantesPorPoliciaIndicator(indicator) {
-  return indicator && indicator.habitantesPorPoliciaVista === true;
-}
-
 function isSitiosInteresIndicator(indicator) {
   return indicator && indicator.sitiosInteres === true;
-}
-
-// --- Metadatos de cabecera por panel comparativo / vista ---
-
-function setPoblacionMeta(text) {
-  const el = document.getElementById("poblacionMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setCrecimientoMeta(text) {
-  const el = document.getElementById("crecimientoMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setEdadMedianaMeta(text) {
-  const el = document.getElementById("edadMedianaMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setNacimientosMeta(text) {
-  const el = document.getElementById("nacimientosMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setDefuncionesMeta(text) {
-  const el = document.getElementById("defuncionesMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setUnidadesMedicasMeta(text) {
-  const el = document.getElementById("unidadesMedicasMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setEscolaridadMeta(text) {
-  const el = document.getElementById("escolaridadMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setAnalfabetismoMeta(text) {
-  const el = document.getElementById("analfabetismoMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setViviendaParticipacionMeta(text) {
-  const el = document.getElementById("viviendaParticipacionMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setViviendaServiciosMeta(text) {
-  const el = document.getElementById("viviendaServiciosMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setPoblacionOcupadaMeta(text) {
-  const el = document.getElementById("poblacionOcupadaMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setCaracteristicasEconomicasMeta(text) {
-  const el = document.getElementById("caracteristicasEconomicasMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setUnidadesEconomicasMeta(text) {
-  const el = document.getElementById("unidadesEconomicasMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setSuperficieAgriculturaMeta(text) {
-  const el = document.getElementById("superficieAgriculturaMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setInversionPublicaMeta(text) {
-  const el = document.getElementById("inversionPublicaMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setInstitucionesAdminPublicaMeta(text) {
-  const el = document.getElementById("institucionesAdminPublicaMeta");
-  if (el) el.textContent = text || "—";
-}
-
-function setHabitantesPoliciaMeta(text) {
-  const el = document.getElementById("habitantesPoliciaMeta");
-  if (el) el.textContent = text || "—";
 }
 
 // --- Visor geográfico e inventario: panel de capas ---
@@ -686,6 +417,7 @@ async function goToHomeView() {
     state.activeIndicator = null;
     setActivePill("Explorador municipal");
     setHomeLayout(true);
+    setIndicatorShellLayout(false);
     setGeoLayout(false);
     setVisorLayout(false);
     setInvVivLayout(false);
@@ -793,32 +525,19 @@ async function applyMunicipioSelection(m) {
     refreshVisorGeocoder();
   }
 
-  if (
-    isPoblacionIndicator(state.activeIndicator) ||
-    isCrecimientoIndicator(state.activeIndicator) ||
-    isEdadMedianaIndicator(state.activeIndicator) ||
-    isNacimientosIndicator(state.activeIndicator) ||
-    isDefuncionesIndicator(state.activeIndicator) ||
-    isUnidadesMedicasIndicator(state.activeIndicator) ||
-    isEscolaridadIndicator(state.activeIndicator) ||
-    isAnalfabetismoIndicator(state.activeIndicator) ||
-    isViviendaParticipacionIndicator(state.activeIndicator) ||
-    isViviendaServiciosIndicator(state.activeIndicator) ||
-    isPoblacionOcupadaIndicator(state.activeIndicator) ||
-    isCaracteristicasEconomicasIndicator(state.activeIndicator) ||
-    isUnidadesEconomicasIndicator(state.activeIndicator) ||
-    isSuperficieAgriculturaIndicator(state.activeIndicator) ||
-    isInversionPublicaIndicator(state.activeIndicator) ||
-    isInstitucionesAdminPublicaMunicipalIndicator(state.activeIndicator) ||
-    isHabitantesPorPoliciaIndicator(state.activeIndicator)
-  ) {
-    await onIndicatorSelected(state.activeIndicator);
+  if (isCatalogTabularIndicator(state.activeIndicator)) {
+    // Ruta ligera: no rearmar shell ni teardowns de mapa/visor.
+    try {
+      await refreshCatalogIndicator(state.selectedMunicipio);
+    } catch (err) {
+      console.warn("[indicador] refresh municipio:", err);
+    }
   }
 }
 
 /**
  * Enrutador central al elegir un ítem del menú: activa layout en dashboard.js,
- * carga datos vía api.js y pinta el módulo *Viz.js correspondiente.
+ * carga datos vía api.js y pinta con indicatorShell / templates data-driven.
  */
 async function onIndicatorSelected(indicator) {
   exitHomeView();
@@ -848,26 +567,7 @@ async function onIndicatorSelected(indicator) {
 
   // --- Indicador: Datos geográficos (pestañas + mapa macro) ---
   if (isGeoContextIndicator(indicator)) {
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setVisorLayout(false);
-    setInvVivLayout(false);
+    setIndicatorShellLayout(false);
     setGeoLayout(true);
     setMarcoWmsVisible(true);
 
@@ -907,26 +607,7 @@ async function onIndicatorSelected(indicator) {
   // --- Indicador: Visor geográfico (capas WMS + panel lateral) ---
   if (isVisorIndicator(indicator)) {
     purgeOrphanModalBackdrops();
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setGeoLayout(false);
-    setInvVivLayout(false);
+    setIndicatorShellLayout(false);
     setVisorLayout(true);
     setMarcoWmsVisible(true);
     updateVisorMunicipioLabel();
@@ -960,26 +641,7 @@ async function onIndicatorSelected(indicator) {
 
   // --- Indicador: Inventario de viviendas (INV 2020, bbox + capas temáticas) ---
   if (isInvVivIndicator(indicator)) {
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setGeoLayout(false);
-    setVisorLayout(false);
+    setIndicatorShellLayout(false);
     setInvVivLayout(true);
     setLocsAtlasLayerActive(false, null);
     setMarcoWmsVisible(true);
@@ -1015,859 +677,35 @@ async function onIndicatorSelected(indicator) {
     return;
   }
 
-  // --- Indicadores sociodemográficos / económicos (vistas comparativas) ---
-
-  if (isPoblacionIndicator(indicator)) {
+  // --- Indicadores tabulares del catálogo (Fase 10: shell único) ---
+  if (isCatalogTabularIndicator(indicator)) {
     setVisorLayout(false);
     setGeoLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
+    setInvVivLayout(false);
     setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setPoblacionLayout(true);
+    setMarcoWmsVisible(false);
     setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("poblacionFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
+    setIndicatorShellLayout(true);
     try {
-      const payload = await fetchPoblacionComparativa(state.selectedMunicipio);
-      renderPoblacionComparativa(vizRoot, payload);
-      setLastPoblacionExport(payload, state.selectedMunicipio);
-      setPoblacionMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
+      await showCatalogIndicator(indicator, state.selectedMunicipio);
     } catch (e) {
       console.warn(e);
-      renderPoblacionComparativa(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastPoblacionExport(null, null);
-      setPoblacionMeta("Error al consultar atlas.tab_municipal");
+      const viz = document.getElementById("indicatorFullVizRoot");
+      if (viz) {
+        viz.innerHTML = "";
+        const err = document.createElement("div");
+        err.className = "poblacion-viz-error";
+        err.textContent = e && e.message ? String(e.message) : "Error al cargar indicador";
+        viz.append(err);
+      }
     }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isCrecimientoIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setCrecimientoLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("crecimientoFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchCrecimientoComparativa(state.selectedMunicipio);
-      renderCrecimientoComparativa(vizRoot, payload);
-      setLastCrecimientoExport(payload, state.selectedMunicipio);
-      setCrecimientoMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderCrecimientoComparativa(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastCrecimientoExport(null, null);
-      setCrecimientoMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isEdadMedianaIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setEdadMedianaLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("edadMedianaFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchEdadMedianaComparativa(state.selectedMunicipio);
-      renderEdadMedianaComparativa(vizRoot, payload);
-      setLastEdadMedianaExport(payload, state.selectedMunicipio);
-      setEdadMedianaMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderEdadMedianaComparativa(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastEdadMedianaExport(null, null);
-      setEdadMedianaMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isNacimientosIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setNacimientosLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("nacimientosFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchNacimientosVista(state.selectedMunicipio);
-      renderNacimientosVista(vizRoot, payload);
-      setLastNacimientosExport(payload, state.selectedMunicipio);
-      setNacimientosMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderNacimientosVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastNacimientosExport(null, null);
-      setNacimientosMeta("Error al consultar atlas.tab_nacional / tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isDefuncionesIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setDefuncionesLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("defuncionesFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchDefuncionesVista(state.selectedMunicipio);
-      renderDefuncionesVista(vizRoot, payload);
-      setLastDefuncionesExport(payload, state.selectedMunicipio);
-      setDefuncionesMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderDefuncionesVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastDefuncionesExport(null, null);
-      setDefuncionesMeta("Error al consultar atlas.tab_nacional / tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isUnidadesMedicasIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setUnidadesMedicasLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("unidadesMedicasFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchUnidadesMedicasVista(state.selectedMunicipio);
-      renderUnidadesMedicasVista(vizRoot, payload);
-      setLastUnidadesMedicasExport(payload, state.selectedMunicipio);
-      setUnidadesMedicasMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · CLUES 2025`
-          : "Sin municipio seleccionado · CLUES 2025"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderUnidadesMedicasVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastUnidadesMedicasExport(null, null);
-      setUnidadesMedicasMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isEscolaridadIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setEscolaridadLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("escolaridadFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchEscolaridadVista(state.selectedMunicipio);
-      renderEscolaridadVista(vizRoot, payload);
-      setLastEscolaridadExport(payload, state.selectedMunicipio);
-      setEscolaridadMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderEscolaridadVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastEscolaridadExport(null, null);
-      setEscolaridadMeta("Error al consultar atlas.tab_nacional / tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isPoblacionOcupadaIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setPoblacionOcupadaLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("poblacionOcupadaFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchPoblacionOcupadaVista(state.selectedMunicipio);
-      renderPoblacionOcupadaVista(vizRoot, payload);
-      setLastPoblacionOcupadaExport(payload, state.selectedMunicipio);
-      setPoblacionOcupadaMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderPoblacionOcupadaVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastPoblacionOcupadaExport(null, null);
-      setPoblacionOcupadaMeta("Error al consultar atlas.tab_nacional / tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isCaracteristicasEconomicasIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setCaracteristicasEconomicasLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("caracteristicasEconomicasFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchCaracteristicasEconomicasVista(state.selectedMunicipio);
-      renderCaracteristicasEconomicasVista(vizRoot, payload);
-      setLastCaracteristicasEconomicasExport(payload, state.selectedMunicipio);
-      setCaracteristicasEconomicasMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderCaracteristicasEconomicasVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastCaracteristicasEconomicasExport(null, null);
-      setCaracteristicasEconomicasMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isUnidadesEconomicasIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setUnidadesEconomicasLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("unidadesEconomicasFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchUnidadesEconomicasVista(state.selectedMunicipio);
-      renderUnidadesEconomicasVista(vizRoot, payload);
-      setLastUnidadesEconomicasExport(payload, state.selectedMunicipio);
-      setUnidadesEconomicasMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderUnidadesEconomicasVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastUnidadesEconomicasExport(null, null);
-      setUnidadesEconomicasMeta("Error al consultar atlas.tab_municipal (ue_den)");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isSuperficieAgriculturaIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setSuperficieAgriculturaLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("superficieAgriculturaFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchSuperficieAgriculturaVista(state.selectedMunicipio);
-      renderSuperficieAgriculturaVista(vizRoot, payload);
-      setLastSuperficieAgriculturaExport(payload, state.selectedMunicipio);
-      setSuperficieAgriculturaMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderSuperficieAgriculturaVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastSuperficieAgriculturaExport(null, null);
-      setSuperficieAgriculturaMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isInversionPublicaIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setInversionPublicaLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("inversionPublicaFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchInversionPublicaVista(state.selectedMunicipio);
-      renderInversionPublicaVista(vizRoot, payload);
-      setLastInversionPublicaExport(payload, state.selectedMunicipio);
-      setInversionPublicaMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderInversionPublicaVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastInversionPublicaExport(null, null);
-      setInversionPublicaMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isInstitucionesAdminPublicaMunicipalIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setInstitucionesAdminPublicaLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("institucionesAdminPublicaFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchInstitucionesAdminPublicaMunicipalVista(state.selectedMunicipio);
-      renderInstitucionesAdminPublicaVista(vizRoot, payload);
-      setLastInstitucionesAdminPublicaExport(payload, state.selectedMunicipio);
-      setInstitucionesAdminPublicaMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderInstitucionesAdminPublicaVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastInstitucionesAdminPublicaExport(null, null);
-      setInstitucionesAdminPublicaMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isHabitantesPorPoliciaIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setHabitantesPoliciaLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("habitantesPoliciaFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchHabitantesPorPoliciaVista(state.selectedMunicipio);
-      renderHabitantesPoliciaVista(vizRoot, payload);
-      setLastHabitantesPoliciaExport(payload, state.selectedMunicipio);
-      setHabitantesPoliciaMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderHabitantesPoliciaVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastHabitantesPoliciaExport(null, null);
-      setHabitantesPoliciaMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isViviendaParticipacionIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setViviendaParticipacionLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("viviendaParticipacionFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchViviendaParticipacionVista(state.selectedMunicipio);
-      renderViviendaParticipacionVista(vizRoot, payload);
-      setLastViviendaParticipacionExport(payload, state.selectedMunicipio);
-      setViviendaParticipacionMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderViviendaParticipacionVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastViviendaParticipacionExport(null, null);
-      setViviendaParticipacionMeta("Error al consultar atlas.tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  if (isViviendaServiciosIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setSitiosInteresLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setViviendaServiciosLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("viviendaServiciosFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchViviendaServiciosVista(state.selectedMunicipio);
-      renderViviendaServiciosVista(vizRoot, payload);
-      setLastViviendaServiciosExport(payload, state.selectedMunicipio);
-      setViviendaServiciosMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderViviendaServiciosVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastViviendaServiciosExport(null, null);
-      setViviendaServiciosMeta("Error al consultar atlas.tab_municipal");
-    }
-
     setActivePill(indicator.title);
     setTableMeta("—");
     return;
   }
 
   if (isSitiosInteresIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setAnalfabetismoLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
+    setIndicatorShellLayout(false);
     setSitiosInteresLayout(true);
     setLocsAtlasLayerActive(false, null);
     renderSitiosInteresView(document.getElementById("sitiosInteresRoot"));
@@ -1876,78 +714,10 @@ async function onIndicatorSelected(indicator) {
     return;
   }
 
-  if (isAnalfabetismoIndicator(indicator)) {
-    setVisorLayout(false);
-    setGeoLayout(false);
-    setPoblacionLayout(false);
-    setCrecimientoLayout(false);
-    setEdadMedianaLayout(false);
-    setNacimientosLayout(false);
-    setDefuncionesLayout(false);
-    setUnidadesMedicasLayout(false);
-    setEscolaridadLayout(false);
-    setViviendaParticipacionLayout(false);
-    setViviendaServiciosLayout(false);
-    setPoblacionOcupadaLayout(false);
-    setCaracteristicasEconomicasLayout(false);
-    setUnidadesEconomicasLayout(false);
-    setSuperficieAgriculturaLayout(false);
-    setInversionPublicaLayout(false);
-    setInstitucionesAdminPublicaLayout(false);
-    setHabitantesPoliciaLayout(false);
-    setSitiosInteresLayout(false);
-    setAnalfabetismoLayout(true);
-    setLocsAtlasLayerActive(false, null);
-
-    const vizRoot = document.getElementById("analfabetismoFullVizRoot");
-    if (vizRoot) {
-      vizRoot.innerHTML = '<div class="poblacion-viz-loading">Cargando datos…</div>';
-    }
-
-    try {
-      const payload = await fetchAnalfabetismoVista(state.selectedMunicipio);
-      renderAnalfabetismoVista(vizRoot, payload);
-      setLastAnalfabetismoExport(payload, state.selectedMunicipio);
-      setAnalfabetismoMeta(
-        state.selectedMunicipio
-          ? `Municipio seleccionado: ${state.selectedMunicipio.nomgeo || state.selectedMunicipio.cve_mun} · INEGI`
-          : "Sin municipio seleccionado · INEGI"
-      );
-    } catch (e) {
-      console.warn(e);
-      renderAnalfabetismoVista(vizRoot, {
-        ok: false,
-        message: e && e.message ? String(e.message) : "Error al cargar datos",
-      });
-      setLastAnalfabetismoExport(null, null);
-      setAnalfabetismoMeta("Error al consultar atlas.tab_nacional / tab_municipal");
-    }
-
-    setActivePill(indicator.title);
-    setTableMeta("—");
-    return;
-  }
-
-  setPoblacionLayout(false);
-  setCrecimientoLayout(false);
-  setEdadMedianaLayout(false);
-  setNacimientosLayout(false);
-  setDefuncionesLayout(false);
-  setUnidadesMedicasLayout(false);
-  setEscolaridadLayout(false);
-  setAnalfabetismoLayout(false);
-  setSitiosInteresLayout(false);
-  setViviendaParticipacionLayout(false);
-  setViviendaServiciosLayout(false);
-  setPoblacionOcupadaLayout(false);
-  setCaracteristicasEconomicasLayout(false);
-  setUnidadesEconomicasLayout(false);
-  setSuperficieAgriculturaLayout(false);
-  setInversionPublicaLayout(false);
-  setInstitucionesAdminPublicaLayout(false);
-  setHabitantesPoliciaLayout(false);
+  setIndicatorShellLayout(false);
   setVisorLayout(false);
   setGeoLayout(false);
+  setSitiosInteresLayout(false);
   setLocsAtlasLayerActive(false, null);
 
   // 1) Mapa: si hay municipio seleccionado, el foco lo lleva setMunicipioMapFocus (no recentrar al indicador).
@@ -2044,26 +814,10 @@ async function bootstrap() {
   attachVisorCatalogAdmin();
   window.addEventListener("atlasgro-themechange", () => {
     refreshMainBarChartColors();
-    updateViviendaServiciosChartTheme();
+    updateGroupedBarsChartTheme();
   });
   setupSidebarToggle();
-  attachPoblacionExportButtons();
-  attachCrecimientoExportButtons();
-  attachEdadMedianaExportButtons();
-  attachNacimientosExportButtons();
-  attachDefuncionesExportButtons();
-  attachUnidadesMedicasExportButtons();
-  attachEscolaridadExportButtons();
-  attachAnalfabetismoExportButtons();
-  attachViviendaParticipacionExportButtons();
-  attachViviendaServiciosExportButtons();
-  attachPoblacionOcupadaExportButtons();
-  attachCaracteristicasEconomicasExportButtons();
-  attachUnidadesEconomicasExportButtons();
-  attachSuperficieAgriculturaExportButtons();
-  attachInversionPublicaExportButtons();
-  attachInstitucionesAdminPublicaExportButtons();
-  attachHabitantesPoliciaExportButtons();
+  attachIndicatorShellExport();
 
   const munSelect = document.getElementById("selectMunicipio");
   const munStatus = document.getElementById("municipiosStatus");
@@ -2105,8 +859,8 @@ async function bootstrap() {
     }
   }
 
-  // Menú (modelo viene de api.js para mantener consistencia)
-  const model = getMenuModel();
+  // Menú: catálogo data-driven (Fase 1.5) con fallback estático en api.js
+  const model = await getMenuModelAsync();
   const menuRoot = document.getElementById("menuRoot");
 
   createMenu(menuRoot, model, {

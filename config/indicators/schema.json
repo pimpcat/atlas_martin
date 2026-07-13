@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://atlas-gro.local/config/indicators/schema.json",
+  "title": "Atlas GRO — Catálogo de indicadores del dashboard",
+  "description": "Esquema declarativo para pestañas temáticas (sociodemografía, vivienda, economía, gobierno). presentation.template debe existir en presentation_presets.json (Fase 7).",
+  "type": "object",
+  "required": ["version", "groups", "indicators"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Versión del catálogo; incrementar al cambiar contrato."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d{4}\\.\\d+$",
+      "description": "Versión del contrato de datos ETL (p. ej. 2026.1)."
+    },
+    "description": { "type": "string" },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/group" }
+    },
+    "indicators": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/indicator" }
+    },
+    "data_sources": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/data_source" }
+    }
+  },
+  "$defs": {
+    "group": {
+      "type": "object",
+      "required": ["id", "label"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "label": { "type": "string" },
+        "order": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "field": {
+      "type": "object",
+      "required": ["key", "column", "label", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "key": {
+          "type": "string",
+          "description": "Nombre en payload JSON de la API."
+        },
+        "column": {
+          "type": "string",
+          "description": "Nombre canónico en PostgreSQL (contrato ETL)."
+        },
+        "column_aliases": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Alias legacy aceptados por column_resolver (solo transición)."
+        },
+        "label": { "type": "string" },
+        "type": {
+          "enum": ["integer", "float", "percent", "currency", "text"]
+        },
+        "unit": { "type": "string" },
+        "source_table": {
+          "type": "string",
+          "enum": ["tab_municipal", "tab_nacional", "c_mun"]
+        },
+        "stored": {
+          "type": "boolean",
+          "default": true,
+          "description": "false = calculado en API hoy; debe migrarse a ETL."
+        }
+      }
+    },
+    "computed_field": {
+      "type": "object",
+      "required": ["key", "description", "migrate_to_etl"],
+      "properties": {
+        "key": { "type": "string" },
+        "description": { "type": "string" },
+        "formula": { "type": "string" },
+        "migrate_to_etl": { "type": "boolean" },
+        "etl_column_proposal": { "type": "string" }
+      }
+    },
+    "presentation": {
+      "type": "object",
+      "required": ["template"],
+      "additionalProperties": false,
+      "properties": {
+        "template": {
+          "type": "string",
+          "description": "Id de preset en presentation_presets.json."
+        },
+        "sort_by": { "type": "string" },
+        "sections": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "top5",
+              "middle",
+              "bottom5",
+              "states",
+              "national",
+              "state",
+              "entity",
+              "municipio",
+              "tabla_nacional",
+              "tabla_entidad"
+            ]
+          }
+        },
+        "bar_metrics": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys de fields[] para barras (ranking_dual_bars / ranking_with_rates_table)."
+        },
+        "chart_metrics": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Keys para Chart.js agrupado (chartjs_grouped_bars)."
+        },
+        "table_metrics": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Columnas auxiliares en tabla de tasas (ranking_with_rates_table)."
+        },
+        "table_columns": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Orden de columnas (multi_column_table)."
+        },
+        "legend_labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "series_labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "title": { "type": "string" },
+        "footer": { "type": "string" },
+        "notes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "root_class": {
+          "type": "string",
+          "description": "Clase CSS del contenedor raíz (debe incluir la clase que busca el export PNG)."
+        },
+        "state_metric": { "type": "string" },
+        "municipal_metric": { "type": "string" },
+        "period_keys": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "show_entity_share": { "type": "boolean" },
+        "show_national_state_summary": { "type": "boolean" },
+        "ranking": {
+          "type": "boolean",
+          "description": "Si false, solo muestra el municipio seleccionado (sin top/bottom)."
+        },
+        "ranking_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50,
+          "default": 5,
+          "description": "Cantidad N de municipios en el extremo superior e inferior del ranking."
+        }
+      }
+    },
+    "api_ref": {
+      "type": "object",
+      "required": ["path"],
+      "properties": {
+        "path": { "type": "string" },
+        "legacy_paths": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "params": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "response_profile": {
+          "enum": [
+            "ranking_municipal",
+            "ranking_with_states",
+            "ranking_with_national_state",
+            "national_state_municipio",
+            "ranking_entity_only"
+          ]
+        },
+        "handler": {
+          "type": "string",
+          "description": "Handler especial opcional (Fase 9) cuando el perfil genérico no basta (p. ej. analfabetismo)."
+        }
+      }
+    },
+    "metadata_nota": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "periodo": {
+          "type": "string",
+          "description": "Etiqueta temporal (año o rango), p. ej. 2010, 1995 -"
+        },
+        "texto": {
+          "type": "string",
+          "description": "Texto de la nota para ese periodo."
+        }
+      },
+      "required": ["texto"]
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Metadatos del indicador (botón Metadatos en el shell). Formato alineado a INEGI.",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Si false, el botón Metadatos se oculta."
+        },
+        "title": {
+          "type": "string",
+          "description": "Título del panel de metadatos (por defecto el label del indicador)."
+        },
+        "periodicidad": {
+          "type": "string",
+          "description": "Periodicidad de actualización (p. ej. Quinquenal, Anual)."
+        },
+        "unidad_medida": {
+          "type": "string",
+          "description": "Unidad de medida (p. ej. Personas, Porcentaje)."
+        },
+        "fuente": {
+          "type": "string",
+          "description": "Fuente oficial / citación."
+        },
+        "nota_general": {
+          "type": "string",
+          "description": "Nota general sobre el indicador o su actualización."
+        },
+        "notas": {
+          "type": "array",
+          "description": "Notas por periodo (año o rango → texto).",
+          "items": { "$ref": "#/$defs/metadata_nota" }
+        },
+        "fecha_inicial": {
+          "type": "string",
+          "description": "Año o fecha inicial de la serie (p. ej. 1910)."
+        },
+        "fecha_final": {
+          "type": "string",
+          "description": "Año o fecha final de la serie (p. ej. 2020)."
+        },
+        "ultima_actualizacion": {
+          "type": "string",
+          "description": "Fecha de última actualización (p. ej. 21/10/2024)."
+        },
+        "show": {
+          "type": "object",
+          "description": "Campos visibles en el panel Metadatos del Atlas. Omitido o true = visible; false = oculto.",
+          "additionalProperties": false,
+          "properties": {
+            "periodicidad": { "type": "boolean" },
+            "unidad_medida": { "type": "boolean" },
+            "fuente": { "type": "boolean" },
+            "nota_general": { "type": "boolean" },
+            "notas": { "type": "boolean" },
+            "fecha_inicial": { "type": "boolean" },
+            "fecha_final": { "type": "boolean" },
+            "ultima_actualizacion": { "type": "boolean" }
+          }
+        }
+      }
+    },
+    "export_ref": {
+      "type": "object",
+      "properties": {
+        "filename_prefix": { "type": "string" },
+        "formats": {
+          "type": "array",
+          "items": { "enum": ["png", "csv", "xlsx"] }
+        },
+        "target_selector": { "type": "string" },
+        "footer": { "type": "string" },
+        "csv_columns": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "legacy_ref": {
+      "type": "object",
+      "description": "Puente de menú: solo menu_flag (propiedad booleana en el modelo de menú). Sin módulos Viz/layout.",
+      "additionalProperties": false,
+      "properties": {
+        "menu_flag": { "type": "string" }
+      }
+    },
+    "indicator": {
+      "type": "object",
+      "required": ["id", "group_id", "label", "enabled", "source", "fields", "presentation", "api"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "group_id": { "type": "string" },
+        "label": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "unit": { "type": "string" },
+        "enabled": { "type": "boolean" },
+        "source": {
+          "type": "object",
+          "required": ["primary_table"],
+          "properties": {
+            "primary_table": {
+              "enum": [
+                "atlas.tab_municipal",
+                "atlas.tab_nacional",
+                "atlas.c_mun",
+                "atlas.tab_municipal+tab_nacional"
+              ]
+            },
+            "scope": {
+              "enum": [
+                "municipal_ranking",
+                "municipal_ranking_cve_001_085",
+                "national_states_municipal",
+                "national_state_municipio",
+                "entity_row_only"
+              ]
+            },
+            "source_note": { "type": "string" }
+          }
+        },
+        "fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/field" }
+        },
+        "computed_fields": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/computed_field" }
+        },
+        "presentation": { "$ref": "#/$defs/presentation" },
+        "api": { "$ref": "#/$defs/api_ref" },
+        "export": { "$ref": "#/$defs/export_ref" },
+        "metadata": { "$ref": "#/$defs/metadata" },
+        "legacy": { "$ref": "#/$defs/legacy_ref" },
+        "migration_status": {
+          "type": "string"
+        }
+      }
+    },
+    "data_source": {
+      "type": "object",
+      "properties": {
+        "schema": { "type": "string" },
+        "table": { "type": "string" },
+        "description": { "type": "string" },
+        "row_types": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    }
+  }
+}

@@ -2,7 +2,7 @@
  * Cliente HTTP del Atlas: catálogo del menú y consultas al API FastAPI.
  * Centraliza URLs y el parseo uniforme de respuestas { ok, rows, message }.
  *
- * Consumido por app.js, geoContext.js, homeView.js y los módulos *Viz.js.
+ * Consumido por app.js, geoContext.js, homeView.js e indicatorShell.
  */
 
 import { apiUrl } from "./atlasConfig.js";
@@ -251,6 +251,134 @@ export function getMenuModel() {
       ],
     },
   ];
+}
+
+// --- Menú data-driven (Fase 1.5): catálogo + secciones estáticas geo/sitios ---
+
+const MENU_VIEW_PARAM_DEFAULT =
+  "bGF0OjE3LjQ5MTA0LGxvbjotOTkuOTMzNzAsejo1LGw6YzEwMA==";
+const MENU_VIEW_PARAM_ZOOM6 =
+  "bGF0OjE3LjQ5MTA0LGxvbjotOTkuOTMzNzAsejo2LGw6YzEwMA==";
+
+/** Zoom del mapa al abrir indicador (solo algunos usan z:6). */
+const MENU_VIEW_PARAM_BY_ID = {
+  socio_poblacion: MENU_VIEW_PARAM_ZOOM6,
+  viv_participacion_vivh: MENU_VIEW_PARAM_ZOOM6,
+  viv_servicios_vivh: MENU_VIEW_PARAM_ZOOM6,
+};
+
+/** Temáticas del menú generadas desde catalog.json (excluye geo tabular y sitios). */
+const MENU_CATALOG_GROUP_IDS = ["socio", "viv", "eco", "gov"];
+
+/** Secciones fuera del catálogo de indicadores tabulares. */
+const MENU_SECTION_GEO = {
+  id: "geo",
+  title: "Geografía",
+  items: [
+    {
+      id: "geo_datos_geo",
+      title: "Datos Geográficos",
+      subtitle: "Ubicación, clima, relieve y más",
+      unit: "",
+      viewParam: MENU_VIEW_PARAM_DEFAULT,
+      geoContext: true,
+    },
+    {
+      id: "geo_visor",
+      title: "Visor Geográfico",
+      subtitle: "Mapa ampliado y capas",
+      unit: "",
+      viewParam: MENU_VIEW_PARAM_DEFAULT,
+      visor: true,
+    },
+    {
+      id: "geo_inv_viv",
+      title: "Inventario de Viviendas",
+      subtitle: "INV 2020 · Manzanas",
+      unit: "",
+      viewParam: MENU_VIEW_PARAM_DEFAULT,
+      invViv: true,
+    },
+  ],
+};
+
+const MENU_SECTION_SITIOS = {
+  id: "sitios_interes",
+  title: "Sitios de interés",
+  items: [
+    {
+      id: "sitios_acervo",
+      title: "Acervo estadístico y geográfico",
+      subtitle: "INEGI · portales y programas",
+      unit: "",
+      sitiosInteres: true,
+    },
+  ],
+};
+
+/**
+ * Convierte una entrada del catálogo en ítem de menú compatible con app.js.
+ * Preserva legacy.menu_flag como propiedad booleana (p. ej. poblacionComparativa).
+ */
+function catalogIndicatorToMenuItem(ind) {
+  const item = {
+    id: ind.id,
+    title: ind.label,
+    subtitle: ind.subtitle || "",
+    unit: ind.unit || "",
+    viewParam: MENU_VIEW_PARAM_BY_ID[ind.id] || MENU_VIEW_PARAM_DEFAULT,
+  };
+  const flag = ind.legacy?.menu_flag;
+  if (flag) item[flag] = true;
+  return item;
+}
+
+/**
+ * Arma el modelo del menú mezclando catálogo (socio/viv/eco/gov) con geo y sitios estáticos.
+ * @param {object} catalog — payload de catalog.json / GET /api/indicators/catalog
+ */
+export function buildMenuModelFromCatalog(catalog) {
+  const groupById = new Map((catalog?.groups || []).map((g) => [g.id, g]));
+  const indicatorsByGroup = new Map();
+
+  for (const ind of catalog?.indicators || []) {
+    if (ind.enabled === false) continue;
+    if (!ind.group_id || !MENU_CATALOG_GROUP_IDS.includes(ind.group_id)) continue;
+    if (!indicatorsByGroup.has(ind.group_id)) {
+      indicatorsByGroup.set(ind.group_id, []);
+    }
+    indicatorsByGroup.get(ind.group_id).push(ind);
+  }
+
+  const sections = [MENU_SECTION_GEO];
+
+  for (const gid of MENU_CATALOG_GROUP_IDS) {
+    const items = indicatorsByGroup.get(gid) || [];
+    if (!items.length) continue;
+    const group = groupById.get(gid) || { id: gid, label: gid };
+    sections.push({
+      id: gid,
+      title: group.label,
+      items: items.map(catalogIndicatorToMenuItem),
+    });
+  }
+
+  sections.push(MENU_SECTION_SITIOS);
+  return sections;
+}
+
+/**
+ * Modelo del menú desde catálogo (preferido). Si falla la carga, usa getMenuModel() estático.
+ */
+export async function getMenuModelAsync() {
+  try {
+    const { loadIndicatorsCatalog } = await import("./indicatorCatalog.js");
+    const catalog = await loadIndicatorsCatalog();
+    return buildMenuModelFromCatalog(catalog);
+  } catch (err) {
+    console.warn("[menu] Catálogo no disponible; menú estático legacy.", err);
+    return getMenuModel();
+  }
 }
 
 /** Parsea respuesta JSON de vistas ({ ok, top5, states, … }). */
