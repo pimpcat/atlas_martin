@@ -45,6 +45,7 @@ import {
 } from "./indicatorShell.js";
 import { renderMunicipiosSelect, setMunicipioSelectValue } from "./municipios.js";
 import { loadAndRenderHomePanels, loadHomeContext } from "./homeView.js";
+import { attachCartographyUi } from "./cartographyClient.js";
 import { renderTable } from "./table.js";
 import { ensureChart, updateBarChart } from "./charts.js";
 import { updateGroupedBarsChartTheme } from "./templates/chartjsGroupedBars.js";
@@ -845,6 +846,14 @@ async function bootstrap() {
 
       document.getElementById("btnInicio")?.addEventListener("click", () => {
         void goToHomeView();
+      });
+
+      void attachCartographyUi({
+        getCveMun: () =>
+          state.selectedMunicipio?.cve_mun != null
+            ? String(state.selectedMunicipio.cve_mun)
+            : null,
+        getNomgeo: () => state.selectedMunicipio?.nomgeo || null,
       });
     } catch (e) {
       munSelect.innerHTML = "";

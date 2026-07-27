@@ -1,0 +1,281 @@
+﻿<?xml version="1.0"?>
+<doc>
+<assembly>
+<name>
+GEPROCEN
+</name>
+</assembly>
+<members>
+<member name="T:GEPROCEN.My.ThisAddIn">
+<summary>
+A class for looking up declarative information in the associated configuration xml file (.esriaddinx).
+</summary>
+</member>
+<member name="T:GEPROCEN.My.ThisAddIn.IDs">
+<summary>
+A class for looking up Add-in id strings declared in the associated configuration xml file (.esriaddinx).
+</summary>
+</member>
+<member name="P:GEPROCEN.My.ThisAddIn.IDs.Geprocen">
+<summary>
+Returns 'INEGI_GEPROCEN_Geprocen', the id declared for Add-in Button class 'Geprocen'
+</summary>
+</member>
+<member name="M:GEPROCEN.My.Internal.AddInStartupObject.GetThis">
+ <summary>
+ Expose this instance of Add-in class externally
+ </summary>
+</member>
+<member name="T:GEPROCEN.My.Resources.Resources">
+<summary>
+  Clase de recurso fuertemente tipado, para buscar cadenas traducidas, etc.
+</summary>
+</member>
+<member name="P:GEPROCEN.My.Resources.Resources.ResourceManager">
+<summary>
+  Devuelve la instancia de ResourceManager almacenada en caché utilizada por esta clase.
+</summary>
+</member>
+<member name="P:GEPROCEN.My.Resources.Resources.Culture">
+<summary>
+  Reemplaza la propiedad CurrentUICulture del subproceso actual para todas las
+  búsquedas de recursos mediante esta clase de recurso fuertemente tipado.
+</summary>
+</member>
+<member name="P:GEPROCEN.My.Resources.Resources.GEPROCEN1">
+<summary>
+  Busca un recurso adaptado de tipo System.Drawing.Bitmap.
+</summary>
+</member>
+<member name="P:GEPROCEN.My.Resources.Resources.icons8_hdd_26__2_">
+<summary>
+  Busca un recurso adaptado de tipo System.Drawing.Bitmap.
+</summary>
+</member>
+<member name="P:GEPROCEN.My.Resources.Resources.icons8_search_24">
+<summary>
+  Busca un recurso adaptado de tipo System.Drawing.Bitmap.
+</summary>
+</member>
+<member name="P:GEPROCEN.My.Resources.Resources.Logo_INEGI_vertical_b">
+<summary>
+  Busca un recurso adaptado de tipo System.Drawing.Bitmap.
+</summary>
+</member>
+<member name="P:GEPROCEN.My.Resources.Resources.Symbols_Warning_icon">
+<summary>
+  Busca un recurso adaptado de tipo System.Drawing.Bitmap.
+</summary>
+</member>
+<member name="M:GEPROCEN.Codigo.CadenaExpresion(System.String)">
+ <summary>
+ Función que regresa la expresión que define la etiqueta para una capa.
+ </summary>
+ <param name="nombrecapa">Variable string que contiene el nombre de la capa a etiquetar</param>
+ <returns>Una cadena de caracteres</returns>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Codigo.AplicaConfMaplex(ESRI.ArcGIS.Carto.IMap)">
+ <summary>
+ Método que aplica la configuración del etiquetado Maplex que se encuentra en los archivos XML en la carpeta Siproca_Config, en los archivos locales.
+ Se aplica la configuración a todas las capas del objeto IMap que el método recibe en su parámetro.
+ </summary>
+ <param name="mapa">Objeto tipo IMap al cual se le aplicarán las configuraciónes Maplex</param>
+ <remarks></remarks>
+</member>
+<member name="T:GEPROCEN.conexion">
+ <summary>
+ Clase que contiene los métodos y funciones que gestionan conexiones a la base de datos.
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.conexion.DescargarArchivos(System.String,System.String,System.String)">
+ <summary>
+ Método que por medio de una consulta dada, descarga de la base de datos un archivo almacenado en un campo dado de alguna tabla, lo almacena en una ruta dada.
+ </summary>
+ <param name="query">Variable String que contiene la sentencia que debe indicar que tabla y que campo se deben de descargar.</param>
+ <param name="ruta">Variable Strin que contiene la dirección (folder) en el equipo donde se guardara el archivo, además incluye el nombre y extensión del archivo.</param>
+ <param name="nomcampo">Variable String que contiene el campo en el cual esta almacenado el archivo.</param>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.conexion.IsFileOpen(System.String)">
+ <summary>
+ Función booleana que verifica si un archivo está abierto.
+ </summary>
+ <param name="filePath">Variable String que contiene la ruta completa (con del archivo que </param>
+ <returns>True cuando el archivo está abierto.</returns>
+ <remarks>Valor por defecto False</remarks>
+</member>
+<member name="M:GEPROCEN.conexion.ObtieneStringBD(System.String,System.String)">
+ <summary>
+ Función que obtiene un valor tipo String almacenado en un campo dado en la base de datos.
+ </summary>
+ <param name="sql">Variable String que contiene la consulta para obtener el valor de la BD.</param>
+ <param name="campo">Variable String que contiene el nombre del campo del que se obtendrá el valor.</param>
+ <returns>Un String con un valor extraido de BD.</returns>
+ <remarks>Valor por defecto "".</remarks>
+</member>
+<member name="M:GEPROCEN.conexion.CuentaRegistrosBD(System.String)">
+ <summary>
+ Función que realiza un conteo de registros de una tabla dada.
+ </summary>
+ <param name="tabla">Variable tipo String que contiene el nombre de la tabla a la que se hará el conteo de registros.</param>
+ <returns>Un Integer con el número de los registros contabilizados.</returns>
+ <remarks>Valor por defecto Nothing.</remarks>
+</member>
+<member name="M:GEPROCEN.conexion.CompruebaConexionBD">
+ <summary>
+ Función Booleana para validar la conexión a la base de datos.
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.Cuenta(System.Object)">
+ <summary>
+ Método que devuelve el número de elementos seleccionados en un checklist.
+ </summary>
+ <param name="obj">Elemento del cual se realizará el conteo.</param>
+ <returns></returns>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.EstableceDataSourceGDB(System.String,System.String,ESRI.ArcGIS.ArcMapUI.IMxDocument,System.String,System.String)">
+ <summary>
+ Método público que cambia el Datasource de una capa, conectándose a una GDB.
+ </summary>
+ <param name="nombre_capa">El nombre con el que se encuentra la capa en la Tabla de Contenido donde se va a reemplazar el datasource.</param>
+ <param name="nombre_mapa">El nombre del mapa donde se encuentra la capa a la que se va a reemplazar el datasource.</param>
+ <param name="mxDocument">Una interfaz IMxDocument.</param>
+ <param name="strDatasource">String que contiene la ruta de la gdb del nuevo datasource con todo y extensión.</param> (ruta de la gdb)
+ <param name="strFeatureClassName"> String que contiene el nombre del Feature Class del nuevo datasource</param> 
+ <remarks>El método no cambia el nombre de la capa en la Tabla de Contenido.</remarks>
+</member>
+<member name="M:GEPROCEN.Forma.AchuraManzanas">
+ <summary>
+ Método que achura manzanas con base a lo mostrado en la lista de Manzanas.
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.AgregaWMTS(System.String,System.String,System.String,System.String,System.String,System.Boolean)">
+ <summary>
+ Método que agrega capa de servicio de imagen.
+ </summary>
+ <param name="Nombre">String que contiene el nombre de la capa a crear.</param>
+ <param name="URL">String con la URL del servicio.</param>
+ <param name="Usuario">String que contiene el nombre de usuario.</param>
+ <param name="Pasword">String que contiene la contraseña.</param>
+ <param name="NomLayer">String que contiene el nombre del servicio de imagen que será cargado.</param>
+ <param name="Visible">Variable que indica si la capa creada será visble.</param>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ExisteCapaCarreteras">
+ <summary>
+ Función que verifica la existencia de la capa CARRETERAS_L en el archivo MXD abierto.
+ </summary>
+ <returns>True si la capa solicitada existe en la plantilla</returns>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.AbrePlantilla">
+ <summary>
+ Método que abre un documento .mxd
+ </summary>
+ <remarks>Valida que el documento actual sea diferente al documento a abrir para evitar cargar nuevamente el documento.</remarks>
+</member>
+<member name="M:GEPROCEN.Forma.AplicaRepresentacion(System.String,System.String)">
+ <summary>
+ Método que aplica la habilitación de una representación en una capa.
+ </summary>
+ <param name="nomcapa">Nombre de la capa a la que se aplicará la representación.</param>
+ <param name="nomrep">Nombre de la representación que se aplicará</param>
+</member>
+<member name="M:GEPROCEN.Forma.GeneraTxt(System.String,System.String,System.Boolean)">
+ <summary>
+ Método que crea un archivo .txt con base a la información recibida despues de un proceso.
+ </summary>
+ <param name="Nombre">String con nombre y ruta del archivo txt que se generará.</param>
+ <param name="Cadena">String con la información que se almacenará en el archivo generado.</param>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoCarta50">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 5 (Proc. Lotes).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoLotes">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 5 (Proc. Lotes).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoCroq">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 1 (Croquis Municipal).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoCondensados">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 0 (Condensado Estatal).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoUrb">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 2 (Urbano).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoUC">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 7 (MMESAGRO).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoAC">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña de (A. Control).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoRural">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 4 (Rural).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.OcultaTodo">
+ <summary>
+ Método que oculta y reestablece propiedades de algunos elementos gráficos.
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.VerificaCapasComp">
+ <summary>
+ Función que verifica la existencia de las capas complementarias en GEPROCEN.gdb y de la GEPROCEN.gdb.
+ </summary>
+ <returns>True si las capas solicitadas existen en la GDB</returns>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ExisteFeatureclass(System.String,System.String,System.String)">
+ <summary>
+ Función booleana que busca una FeatureClass en un DataSet determinado, dentro de una GDB.
+ </summary>
+ <param name="featclass">String con nombre del FeatureClass a buscar.</param>
+ <param name="dir">String con la ruta de la GDB.</param>
+ <param name="DataSet">String con nombre del DataSet donde se ha de buscar la FeatureClass.</param>
+ <returns></returns>
+ <remarks></remarks>
+</member>
+<member name="M:GEPROCEN.Forma.ContenidoMan">
+ <summary>
+ Método que crea la interfaz gráfica de la pestaña 3 (Act. Mamzanas).
+ </summary>
+ <remarks></remarks>
+</member>
+<member name="F:GEPROCEN.VariablesGlobales.puntos_arribo">
+ <summary>
+ Variable String que almacena el nombre del feature class de la mdb GEPROCEN que contiene las claves económicas tipo punto.
+ </summary>
+ <remarks>Variable global cuyo valor es establecido en el código duro de la clase VariablesGlobales.vb.</remarks>
+</member>
+</members>
+</doc>
