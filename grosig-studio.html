@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GroSIG Studio — Home administrativo</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+  <style>
+    .grosig-hub-card { transition: border-color .15s ease, box-shadow .15s ease; }
+    .grosig-hub-card:hover { border-color: rgba(var(--accent-rgb, 13,110,253), .45); box-shadow: 0 .25rem .75rem rgba(0,0,0,.08); }
+    .grosig-hub-card .card-body { min-height: 7.5rem; }
+    .grosig-status-pill { font-size: .75rem; }
+  </style>
+</head>
+<body class="visor-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell">
+    <section id="grosigLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card" style="max-width:28rem;margin:2rem auto">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">GroSIG Studio</h1>
+          <p class="small text-muted mb-3">
+            Home administrativo del framework. Un solo inicio de sesión para todos los Studios.
+          </p>
+          <form id="grosigLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="grosigUser">Usuario</label>
+              <input id="grosigUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="grosigPass">Contraseña</label>
+              <input id="grosigPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="grosigLoginError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="grosigLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="grosigDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h4 mb-0">GroSIG Studio</h1>
+          <p class="small text-muted mb-0" id="grosigWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="grosigLogoutBtn">Cerrar sesión</button>
+      </div>
+      <div id="grosigStudioNav" class="mb-3"></div>
+
+      <div class="card shadow-sm visor-studio-card mb-3">
+        <div class="card-body py-3">
+          <div class="fw-semibold small mb-2">Estado del stack</div>
+          <div class="d-flex flex-wrap gap-2" id="grosigHealthPills">
+            <span class="badge text-bg-secondary grosig-status-pill">Comprobando…</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="row g-3" id="grosigCards">
+        <div class="col-md-6 col-xl-4">
+          <a href="./visor-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Visor Studio</div>
+                <p class="small text-muted mb-0">Publicación de capas, simbología, usuarios admin.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./geography-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Geography Studio</div>
+                <p class="small text-muted mb-0">Pestañas de Datos Geográficos (tabla, campo, capas).</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./indicators-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Indicators Studio</div>
+                <p class="small text-muted mb-0">Catálogo de indicadores del menú del Atlas.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./theme-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Theme Studio</div>
+                <p class="small text-muted mb-0">Colores de tema claro / oscuro.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./data-refresh-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Data Refresh Studio</div>
+                <p class="small text-muted mb-0">ETL asistido: actualizar capas espaciales (SHP/ZIP).</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./backup-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Backup Studio</div>
+                <p class="small text-muted mb-0">ZIP local: dumps atlas/cartografía + config (MBTiles opcional).</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./index.html?visor=1" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Cartografía</div>
+                <p class="small text-muted mb-0">Abre el Visor; use el panel Cartografía si el motor está activo (1.x).</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./index.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Atlas</div>
+                <p class="small text-muted mb-0">Portal de consulta pública.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+        <div class="col-md-6 col-xl-4">
+          <a href="./visor-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Usuarios</div>
+                <p class="small text-muted mb-0">Gestión de cuentas en Visor Studio → Usuarios.</p>
+              </div>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/grosigStudioApp.js"></script>
+</body>
+</html>

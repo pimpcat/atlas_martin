@@ -25,6 +25,8 @@ let _mapRef = null;
 let _pickActive = false;
 let _panelOpen = false;
 let _pickedFeature = null;
+let _pickAoiFeature = null;
+let _pickAoiGen = 0;
 let _clickHandler = null;
 let _applying = false;
 let _closeListener = null;
@@ -122,6 +124,77 @@ function isPointGeometry(feature) {
 function isPolygonGeometry(feature) {
   const t = feature?.geometry?.type;
   return t === "Polygon" || t === "MultiPolygon";
+}
+
+function notifyPickAoiChanged(feature) {
+  window.dispatchEvent(
+    new CustomEvent("atlas:visor-pick-aoi-changed", {
+      detail: { feature: feature || null },
+    }),
+  );
+  window.dispatchEvent(
+    new CustomEvent("atlas:visor-polygon-closed", {
+      detail: { feature: feature || null, source: "pick-aoi" },
+    }),
+  );
+}
+
+function clearPickAoi(notify = true) {
+  _pickAoiFeature = null;
+  _pickAoiGen += 1;
+  if (notify) notifyPickAoiChanged(null);
+}
+
+/**
+ * Polígono/multipolígono seleccionado listo para análisis espacial (sin buffer).
+ * Geometría completa PostGIS cuando hay layer_id + gid.
+ */
+export function getActivePickAoiFeature() {
+  return _pickAoiFeature;
+}
+
+async function resolvePickAoiFromFeature(feature) {
+  if (!feature || !isPolygonGeometry(feature)) {
+    clearPickAoi(true);
+    return null;
+  }
+  const gen = ++_pickAoiGen;
+  const apiLayer = feature._apiLayerId || resolveVisorApiLayerId(feature._layerId);
+  const gid = feature._sourceGid || pickVisorFeatureGid(feature.properties);
+  let aoi = {
+    type: "Feature",
+    properties: {
+      ...(feature.properties || {}),
+      atlasAnalysisSource: "pick",
+    },
+    geometry: feature.geometry,
+  };
+  if (apiLayer && gid) {
+    try {
+      const { feature: full } = await fetchVisorFeatureGeometry({
+        layer_id: apiLayer,
+        gid,
+      });
+      if (gen !== _pickAoiGen) return null;
+      aoi = {
+        type: "Feature",
+        properties: {
+          ...(full.properties || {}),
+          ...(feature.properties || {}),
+          atlasAnalysisSource: "pick",
+          gid,
+        },
+        geometry: full.geometry,
+      };
+    } catch (err) {
+      console.warn("[visorFeaturePickBuffer] AOI PostGIS:", err);
+      // Usa geometría del tile como respaldo
+    }
+  }
+  if (gen !== _pickAoiGen) return null;
+  _pickAoiFeature = aoi;
+  notifyPickAoiChanged(aoi);
+  return aoi;
 }
 
 function pickHighlightHint(feature) {
@@ -526,6 +599,7 @@ function clearPickSelection(options = {}) {
   const map = _mapRef || getLeafletMap();
   _pickedFeature = null;
   _highlightFetchGen += 1;
+  clearPickAoi(true);
   clearPickHighlight(map);
   clearVisorBuffer();
   setStatus("");
@@ -628,8 +702,10 @@ function syncPickPanelUi() {
   if (hint) {
     hint.textContent = _pickActive
       ? _pickedFeature
-        ? `Seleccionado: ${describePicked(_pickedFeature, _pickedFeature._layerId)} · ${pickHighlightHint(_pickedFeature)}.`
-        : "Haz clic sobre una manzana, cuerpo de agua, vía u otra capa activa del visor."
+        ? isPolygonGeometry(_pickedFeature)
+          ? `Seleccionado: ${describePicked(_pickedFeature, _pickedFeature._layerId)} · listo para análisis espacial (sin buffer) o genera buffer.`
+          : `Seleccionado: ${describePicked(_pickedFeature, _pickedFeature._layerId)} · ${pickHighlightHint(_pickedFeature)}. Para análisis espacial genera un buffer.`
+        : "Haz clic sobre una colonia, manzana u otra capa activa del visor."
       : "Activa la selección con el botón del puntero.";
   }
   if (applyBtn) applyBtn.disabled = !_pickedFeature || _applying;
@@ -656,11 +732,17 @@ function setPickPanelOpen(open) {
   }
   syncVisorToolsExtrasVisibility();
   if (!_panelOpen) {
+    // Al cerrar la herramienta: sin selección activa → sin AOI de análisis.
     setPickModeActive(false);
     _pickedFeature = null;
     clearPickHighlight(_mapRef || getLeafletMap());
+    clearPickAoi(true);
   } else {
+    // Sesión limpia: el botón de análisis solo aparece tras seleccionar un polígono.
     setPickModeActive(true);
+    _pickedFeature = null;
+    clearPickHighlight(_mapRef || getLeafletMap());
+    clearPickAoi(true);
     syncPickPanelUi();
     warmPickHighlightLayers(_mapRef || getLeafletMap());
   }
@@ -715,6 +797,7 @@ function onMapClick(ev) {
   const best = pickBestFeature(hits);
   if (!best) {
     _pickedFeature = null;
+    clearPickAoi(true);
     setStatus("No hay ningún elemento seleccionable en ese punto.", true);
     syncPickPanelUi();
     return;
@@ -729,6 +812,19 @@ function onMapClick(ev) {
   setStatus("");
   syncPickPanelUi();
   void refreshPickHighlight(_pickedFeature, _pickedFeature?._layerId);
+  void resolvePickAoiFromFeature(_pickedFeature).then((aoi) => {
+    if (!aoi && _pickedFeature && !isPolygonGeometry(_pickedFeature)) {
+      setStatus(
+        "Elemento seleccionado. Para análisis espacial en puntos/líneas genera un buffer; en polígonos (colonia, manzana…) ya puedes iniciar el análisis.",
+        false,
+      );
+    } else if (aoi) {
+      setStatus(
+        "Polígono listo para análisis espacial (sin buffer). Usa «Iniciar Análisis Espacial» o genera buffer si necesitas un área de influencia.",
+        false,
+      );
+    }
+  });
 }
 
 function bindMapClick(map) {
@@ -883,9 +979,9 @@ function mountPickPanel(map) {
   const el = document.createElement("div");
   el.className = "visor-pick-buffer-panel visor-buffer-panel";
   el.innerHTML = `
-    <div class="visor-buffer-panel__title">Buffer sobre elemento del mapa</div>
+    <div class="visor-buffer-panel__title">Selección / buffer en el mapa</div>
     <p class="visor-buffer-panel__hint visor-pick-buffer-panel__hint">
-      Haz clic sobre una capa activa del visor (manzana, cuerpo de agua, vía…).
+      Haz clic sobre una colonia, manzana u otra capa activa. Los polígonos permiten análisis espacial sin buffer.
     </p>
     <div class="visor-buffer-panel__row">
       <label class="visually-hidden" for="visorPickBufferDistance">Distancia en metros</label>
@@ -1019,6 +1115,7 @@ export function teardownVisorFeaturePickBuffer() {
   _panelEl?.remove();
   _panelEl = null;
   _pickedFeature = null;
+  clearPickAoi(false);
   _pickActive = false;
   _panelOpen = false;
   _mapRef = null;

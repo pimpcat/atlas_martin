@@ -13,6 +13,7 @@ const API_CAPAS_URL = apiUrl("/api/analisis/capas");
 const API_CAPAS_INTERSECT_URL = apiUrl("/api/analisis/capas-intersectantes");
 const API_COLUMNAS_URL = (tabla) => apiUrl(`/api/capas/${encodeURIComponent(tabla)}/columnas`);
 const API_ANALISIS_URL = apiUrl("/api/analisis/dinamico");
+const API_EXPORT_URL = apiUrl("/api/analisis/export");
 
 async function parseJsonResponse(res) {
   const data = await res.json().catch(() => ({}));
@@ -75,4 +76,39 @@ export async function ejecutarAnalisisDinamico(payload) {
     body: JSON.stringify(payload),
   });
   return parseJsonResponse(res);
+}
+
+/**
+ * Descarga Excel generado en backend (openpyxl) a partir del resultado del modal.
+ * @param {object} resultado
+ */
+export async function downloadAnalisisExcel(resultado) {
+  const res = await fetch(API_EXPORT_URL, {
+    method: "POST",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify({ resultado }),
+  });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    const detail = data.detail ?? data;
+    const msg =
+      (typeof detail === "object" && detail?.message) ||
+      data.message ||
+      res.statusText ||
+      "No se pudo exportar.";
+    throw new Error(String(msg));
+  }
+  const blob = await res.blob();
+  const cd = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/i.exec(cd);
+  const filename = m?.[1] || `analisis_espacial_${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }

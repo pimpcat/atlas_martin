@@ -25,9 +25,9 @@ Guía del módulo de **análisis espacial** en el Visor geográfico: dibujar un 
 
 ## Flujo en el visor (usuario final)
 
-1. Abrir **Visor geográfico** y activar la herramienta de dibujo de polígono.
-2. Dibujar y cerrar un polígono en el mapa.
-3. Pulsar el botón **Análisis espacial** (aparece cuando hay polígono válido).
+1. Abrir **Visor geográfico** y activar la herramienta de dibujo de polígono **o** seleccionar un polígono del mapa (colonia, manzana…).
+2. Si dibujaste, cierra el polígono; si seleccionaste un polígono, no hace falta buffer.
+3. Pulsar el botón **Análisis espacial** (aparece cuando hay área válida).
 4. En el modal:
    - Elegir **capa a analizar** (agrupada: censales, salud, DENUE, capas configuradas, etc.).
    - Si la capa es de **agregación**, marcar indicadores numéricos.
@@ -44,6 +44,20 @@ En tablas grandes **sin índice GIST** en `the_geom`, la consulta puede tardar v
 - Un solo clic a la vez (`_analysisRunning` evita consultas duplicadas)
 
 Si parece que «no pasa nada», compruebe el panel de carga y considere crear el índice espacial (ver [Índices PostgreSQL](#índices-postgresql-rendimiento-y-wizard)).
+
+### Cómo se define el área de análisis
+
+El botón **Iniciar Análisis Espacial** aparece cuando hay un polígono válido, en este orden de prioridad:
+
+1. **Buffer** generado (dibujo o selección + metros)
+2. **Elemento poligonal seleccionado** (colonia, manzana, región…) — geometría completa desde PostGIS, **sin** buffer
+3. **Polígono dibujado** a mano en el mapa
+
+Puntos y líneas siguen requiriendo buffer (no son un área cerrada).
+
+### Exportar Excel
+
+La exportación usa **openpyxl en el backend** (`POST /api/analisis/export`), el mismo enfoque que indicadores y consulta tabular. Ya no depende de SheetJS en el navegador.
 
 ---
 
@@ -170,6 +184,7 @@ Rutas públicas del visor (sin JWT; el visor las consume con `spatialAnalysisApi
 | POST | `/api/analisis/capas-intersectantes` | Capas INV/ITER con registros dentro del polígono |
 | GET | `/api/capas/{tabla}/columnas` | Columnas numéricas para agregación |
 | POST | `/api/analisis/dinamico` | Ejecuta intersección + conteo/agregación |
+| POST | `/api/analisis/export` | Excel (openpyxl) del resultado del modal |
 
 ### Cuerpo `POST /api/analisis/dinamico`
 
@@ -260,6 +275,8 @@ Orden recomendado al publicar una capa nueva con análisis:
 | `app_api/routers/visor_admin.py` | Endpoints admin de índices |
 | `htdocs/atlas_gro/js/visorSpatialAnalysis.js` | Modal, picker, consulta, export Excel |
 | `htdocs/atlas_gro/js/spatialAnalysisApi.js` | Cliente HTTP del análisis |
+| `htdocs/atlas_gro/js/visorFeaturePickBuffer.js` | Selección de elemento → AOI sin buffer / buffer |
+| `app_api/spatial_analysis_export.py` | XLSX openpyxl del resultado |
 | `htdocs/atlas_gro/js/visorCatalogAdmin.js` | Wizard: toggle análisis + panel índices |
 
 ---

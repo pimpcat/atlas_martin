@@ -1136,10 +1136,12 @@ html[data-theme="oscuro"] .home-stat--rez-muy-alto {
   cursor: pointer;
 }
 
-/* Solo Inicio: ocultar +/- sin quitar el control (así reaparece al salir). */
-.atlas-map--home-lock .leaflet-control-zoom {
+/* Solo Explorador municipal: sin zoom (+/−) ni reencuadre; reaparecen al salir. */
+.atlas-map--home-lock .leaflet-control-zoom,
+.atlas-map--home-lock .maplibregl-ctrl-top-right,
+.atlas-map--home-lock .atlas-refocus-ctrl {
   display: none !important;
-  pointer-events: none;
+  pointer-events: none !important;
 }
 
 .map-frame .leaflet-control-zoom {

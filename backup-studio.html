@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Backup Studio — GroSIG</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell">
+    <section id="bkLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card" style="max-width:28rem;margin:2rem auto">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Backup Studio</h1>
+          <p class="small text-muted mb-3">
+            Respaldo local: dumps PostgreSQL + configuración (MBTiles opcional).
+          </p>
+          <form id="bkLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="bkUser">Usuario</label>
+              <input id="bkUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="bkPass">Contraseña</label>
+              <input id="bkPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="bkLoginError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="bkLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="bkDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h4 mb-0">Backup Studio</h1>
+          <p class="small text-muted mb-0">ZIP descargable en el host · no sustituye DR offsite</p>
+        </div>
+        <button type="button" class="btn btn-outline-secondary btn-sm" id="bkLogoutBtn">Salir</button>
+      </div>
+      <div id="bkStudioNav" class="mb-3"></div>
+
+      <div class="row g-3">
+        <div class="col-lg-5">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Crear respaldo</div>
+            <div class="card-body">
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="bkAtlas" checked />
+                <label class="form-check-label" for="bkAtlas">Base <code>atlas</code> (pg_dump)</label>
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="bkCarto" checked />
+                <label class="form-check-label" for="bkCarto">Base <code>GroSIG_Cartography</code></label>
+              </div>
+              <div class="form-check mb-2">
+                <input class="form-check-input" type="checkbox" id="bkConfig" checked />
+                <label class="form-check-label" for="bkConfig">Configuración (catálogos + martin.yaml sanitizado)</label>
+              </div>
+              <div class="form-check mb-3">
+                <input class="form-check-input" type="checkbox" id="bkMbtiles" />
+                <label class="form-check-label" for="bkMbtiles">
+                  MBTiles (opcional, async; puede ser muy grande)
+                </label>
+              </div>
+              <p class="small text-muted" id="bkMetaHint">—</p>
+              <button type="button" class="btn btn-primary btn-sm" id="bkCreateBtn">Crear respaldo</button>
+              <div id="bkCreateMsg" class="small mt-2"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-7">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+              <span>Respaldos recientes</span>
+              <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="bkRefreshBtn">Actualizar</button>
+            </div>
+            <div class="card-body p-2" id="bkList" style="max-height:60vh;overflow:auto">
+              <p class="small text-muted mb-0">—</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/backupStudioApp.js"></script>
+</body>
+</html>

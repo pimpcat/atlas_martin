@@ -54,8 +54,10 @@ ogr2ogr -f PostgreSQL "PG:host=localhost dbname=atlas user=..." mi_capa.shp \
 
 ### 2. Publicar en Martin
 
-- Con **auto_publish** en `martin.yaml` suele bastar.
+- Con **auto_publish** en `martin.yaml` (esquema `atlas`) y `reload_interval: 30s`, las tablas nuevas se descubren **sin reiniciar** el contenedor.
+- Visor Studio espera ese discovery al subir un SHP (`POST …/upload/shp` y `POST …/wait-martin`).
 - Si la tabla es grande o usa muchos atributos, añada bloque explícito con las columnas que usará identify, export y buscador.
+- Reinicie Martin solo si cambia `martin.yaml` o fuentes MBTiles.
 
 ### 3. Editar el catálogo
 
@@ -148,12 +150,13 @@ Active formatos en `capabilities.export` y configure atributos en `data`:
 
 No hace falta `export_columns` salvo modo `columns`. Guía completa: [VISOR_EXPORT.md](./VISOR_EXPORT.md).
 
-### 6. Probar y reiniciar
+### 6. Probar
 
 | Acción | Cuándo |
 |--------|--------|
 | Recargar visor (Ctrl+F5) | Siempre tras editar catálogo o JS |
 | `docker restart fastapi_backend` | Tras cambios en API o si el buscador no refleja el catálogo |
+| Esperar discovery Martin (~30 s) / Reintentar detección | Tras importar tabla nueva en PostGIS (no hace falta `restart martin`) |
 
 **Checklist rápido:** municipio seleccionado → activar capa → se ve en mapa → clic identify → export KML/SHP → (si aplica) buscador.
 

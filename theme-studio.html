@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Theme Studio — GroSIG</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+  <style>
+    .theme-studio-preview {
+      border-radius: 0.5rem;
+      padding: 1rem 1.25rem;
+      min-height: 7rem;
+      border: 1px solid rgba(0, 0, 0, 0.12);
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+    .theme-studio-token-row .form-control-color {
+      width: 2.5rem;
+      height: 2rem;
+      padding: 0.15rem;
+    }
+    .theme-studio-group + .theme-studio-group {
+      margin-top: 1rem;
+    }
+  </style>
+</head>
+<body class="visor-studio-page theme-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell">
+    <section id="themeStudioLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card" style="max-width:28rem;margin:2rem auto">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Theme Studio</h1>
+          <p class="small text-muted mb-3">
+            Identidad de color (temas claro / oscuro). Misma sesión admin que Visor Studio.
+          </p>
+          <form id="themeStudioLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="themeStudioUser">Usuario</label>
+              <input id="themeStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="themeStudioPass">Contraseña</label>
+              <input id="themeStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="themeStudioLoginError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="themeStudioLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="themeStudioDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h5 mb-0">Theme Studio</h1>
+          <p class="small text-muted mb-0" id="themeStudioWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="themeStudioLogoutBtn">Cerrar sesión</button>
+      </div>
+      <div id="themeStudioNav" class="mb-3"></div>
+
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-header fw-semibold">Tema a editar</div>
+            <div class="card-body d-grid gap-2">
+              <div class="btn-group" role="group" aria-label="Tema">
+                <button type="button" class="btn btn-sm btn-outline-primary active" id="themeStudioTabClaro" data-theme-tab="claro">Claro</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="themeStudioTabOscuro" data-theme-tab="oscuro">Oscuro</button>
+              </div>
+              <div>
+                <label class="form-label small mb-1" for="themeStudioDefault">Tema por defecto (nuevos visitantes)</label>
+                <select id="themeStudioDefault" class="form-select form-select-sm">
+                  <option value="claro">Claro</option>
+                  <option value="oscuro">Oscuro</option>
+                </select>
+              </div>
+              <div id="themeStudioPreview" class="theme-studio-preview" aria-live="polite">
+                <div class="fw-semibold" id="themeStudioPreviewTitle">Vista previa</div>
+                <p class="small mb-0" id="themeStudioPreviewMuted">Texto secundario de ejemplo</p>
+                <button type="button" class="btn btn-sm mt-2" id="themeStudioPreviewBtn">Botón acento</button>
+              </div>
+            </div>
+          </div>
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-body d-grid gap-2">
+              <button type="button" class="btn btn-primary btn-sm" id="themeStudioSaveBtn">Guardar catálogo</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="themeStudioReloadBtn">Recargar desde servidor</button>
+              <button type="button" class="btn btn-outline-warning btn-sm" id="themeStudioRestoreBtn">Restaurar defaults</button>
+              <div id="themeStudioStatus" class="small d-none" role="status"></div>
+              <p class="small text-muted mb-0">
+                Al guardar se crea respaldo <code>catalog.json.bak</code> en
+                <code>config/theme/</code>. El portal aplica los colores vía API.
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold" id="themeStudioEditorTitle">Colores — tema claro</div>
+            <div class="card-body" id="themeStudioEditor" style="max-height:70vh;overflow:auto"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/themeStudioApp.js"></script>
+</body>
+</html>

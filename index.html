@@ -359,8 +359,7 @@
               <section class="card shadow-sm h-100 geo-map-section mb-0">
                 <div class="card-header d-flex align-items-center gap-2">
                   <img src="./assets/icons/marker.svg" alt="" width="18" height="18" />
-                  <div class="fw-semibold">Mapa</div>
-                  <div class="ms-auto small text-muted">Municipio seleccionado</div>
+                  <div class="fw-semibold" id="geoMapTitle">—</div>
                 </div>
                 <div class="card-body p-0">
                   <div id="mapMountGeo" class="geo-map-frame-wrap">
@@ -375,7 +374,6 @@
                 <div class="card-header">
                   <div class="d-flex align-items-center gap-2">
                     <div class="fw-semibold">Datos Geográficos</div>
-                    <div class="ms-auto small text-muted" id="geoTabsMeta">—</div>
                   </div>
                   <ul class="nav nav-tabs mt-2 geo-tabs-nav" id="geoTabs" role="tablist"></ul>
                 </div>
@@ -603,8 +601,6 @@
   <script src="./assets/mapbox-gl-draw.js"></script>
   <script src="./assets/mapbox-gl-draw-geodesic.js"></script>
   <script src="./assets/turf.min.js"></script>
-
-  <script src="./assets/xlsx.full.min.js"></script>
 
   <!-- Bootstrap JS (local; modales propios no lo requieren, pero queda disponible) -->
   <script src="./assets/bootstrap.js"></script>

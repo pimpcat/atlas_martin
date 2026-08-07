@@ -14,7 +14,12 @@ import {
   fetchCapasIntersectantes,
   fetchColumnasCapa,
   ejecutarAnalisisDinamico,
+  downloadAnalisisExcel,
 } from "./spatialAnalysisApi.js";
+import {
+  getActivePickAoiFeature,
+  isVisorFeaturePickBusy,
+} from "./visorFeaturePickBuffer.js";
 import { purgeOrphanModalBackdrops } from "./atlasModalCleanup.js";
 
 const NO_INTERSECT_MSG =
@@ -661,13 +666,22 @@ function ensureTriggerButton(map) {
 function getAnalysisTargetFeature() {
   const buffered = getActiveBufferFeature();
   if (buffered) return buffered;
+  const picked = getActivePickAoiFeature();
+  if (picked) return picked;
+  // Con la herramienta de selección abierta: solo elemento seleccionado (o buffer).
+  // Evita mostrar el botón solo por abrir el puntero o por un polígono dibujado previo.
+  if (isVisorFeaturePickBusy()) return null;
   return normalizePolygonForAnalysis(getLastDrawnPolygonFeature());
 }
 
 function syncTriggerVisibility() {
   const feat = getAnalysisTargetFeature();
   const modalOpen = Boolean(_modalEl?.classList.contains("show"));
-  if (_triggerBtn) _triggerBtn.hidden = !feat || modalOpen;
+  const show = Boolean(feat) && !modalOpen;
+  if (_triggerBtn) {
+    _triggerBtn.hidden = !show;
+    _triggerBtn.disabled = !show;
+  }
   syncVisorToolsExtrasVisibility();
 }
 
@@ -789,8 +803,20 @@ function renderPolyInfo() {
     if (host) host.textContent = "";
     return;
   }
+  const props = feat.properties || {};
+  const pickLabel =
+    props.atlasAnalysisSource === "pick"
+      ? props.nomgeo ||
+        props.nombre ||
+        props.name ||
+        props.NOMGEO ||
+        props.colonia ||
+        null
+      : null;
   const s = polygonSummary(feat);
   const lines = [];
+  if (pickLabel) lines.push(`Área: elemento seleccionado (${pickLabel})`);
+  else if (props.atlasAnalysisSource === "pick") lines.push("Área: elemento seleccionado del mapa");
   if (s?.areaLabel) lines.push(`Área aproximada: ${s.areaLabel}`);
   if (s?.vertices) lines.push(`Vértices (anillo exterior): ${s.vertices}`);
   host.textContent = lines.join(" · ");
@@ -1087,12 +1113,6 @@ function formatValor(campo) {
   return campo.valor.toLocaleString("es-MX", { maximumFractionDigits: 0 });
 }
 
-function formatValorExcel(campo) {
-  if (campo.valor == null) return "";
-  if (typeof campo.valor !== "number") return campo.valor;
-  return campo.valor;
-}
-
 function formatDetailCell(value, field) {
   if (value == null || value === "") return "—";
   if (field === "num") {
@@ -1180,15 +1200,6 @@ function wireDetailToggleButtons(root) {
       }
     });
   });
-}
-
-function appendDetailExcelRows(sheetRows, title, columns, rows) {
-  if (!columns?.length || !rows?.length) return;
-  sheetRows.push([title], columns.map((c) => c.label || c.field));
-  for (const row of rows) {
-    sheetRows.push(columns.map((c) => row[c.field] ?? ""));
-  }
-  sheetRows.push([]);
 }
 
 function formatConsultaCompletada(data) {
@@ -1457,83 +1468,22 @@ async function onRunAnalysis() {
   }
 }
 
-function onExportExcel() {
-  if (!_ultimoResultado || typeof XLSX === "undefined") {
-    setStatus("No hay resultados o falta la librería XLSX.");
+async function onExportExcel() {
+  if (!_ultimoResultado) {
+    setStatus("No hay resultados para exportar.");
     return;
   }
-  const data = _ultimoResultado;
-  const pol = data.poligono || {};
-
-  if (data.modo === "conteo_multi" && Array.isArray(data.filas)) {
-    const sheetRows = [
-      ["Análisis espacial — Atlas Gro"],
-      [],
-      ["Área del polígono (m²)", pol.area_m2 != null ? formatAreaM2(pol.area_m2) : ""],
-      ["Vértices", pol.vertices ?? ""],
-      [],
-      ["Establecimiento", "Total de elementos"],
-      ...data.filas.map((f) => [f.etiqueta || f.id || "", f.total ?? 0]),
-      [],
-    ];
-    for (const fila of data.filas) {
-      appendDetailExcelRows(sheetRows, `Detalle — ${fila.etiqueta || ""}`, fila.columns, fila.rows);
-    }
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
-    ws["!cols"] = [{ wch: 56 }, { wch: 18 }, { wch: 28 }, { wch: 20 }, { wch: 16 }, { wch: 24 }, { wch: 24 }];
-    XLSX.utils.book_append_sheet(wb, ws, "Resultados");
-    const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `analisis_espacial_denue_${stamp}.xlsx`);
-    return;
+  const btn = _modalEl?.querySelector("#visorSpatialExportBtn");
+  if (btn) btn.disabled = true;
+  try {
+    setStatus("Generando Excel…", "info");
+    await downloadAnalisisExcel(_ultimoResultado);
+    setStatus("Excel descargado.", "success");
+  } catch (err) {
+    setStatus(err.message || "No se pudo exportar el Excel.", true);
+  } finally {
+    if (btn) btn.disabled = false;
   }
-
-  if (data.modo === "conteo") {
-    const n = data.registros_intersectados ?? 0;
-    const sheetRows = [
-      ["Análisis espacial — Atlas Gro"],
-      [],
-      ["Área del polígono (m²)", pol.area_m2 != null ? formatAreaM2(pol.area_m2) : ""],
-      ["Vértices", pol.vertices ?? ""],
-      [],
-      ["Capa", "Total de elementos"],
-      [data.capa_etiqueta || data.tabla || "", n],
-      [],
-    ];
-    appendDetailExcelRows(
-      sheetRows,
-      `Detalle — ${data.capa_etiqueta || ""}`,
-      data.columns,
-      data.rows,
-    );
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet(sheetRows);
-    ws["!cols"] = [{ wch: 56 }, { wch: 18 }];
-    XLSX.utils.book_append_sheet(wb, ws, "Resultados");
-    const stamp = new Date().toISOString().slice(0, 10);
-    XLSX.writeFile(wb, `analisis_espacial_${data.capa_id || data.tabla}_${stamp}.xlsx`);
-    return;
-  }
-
-  const camposOrdenados = sortCamposResultado(data.campos);
-
-  const sheetRows = [
-    ["Análisis espacial — Atlas Gro"],
-    [],
-    ["Área del polígono (m²)", pol.area_m2 != null ? formatAreaM2(pol.area_m2) : ""],
-    ["Vértices", pol.vertices ?? ""],
-    ["Capa", data.capa_etiqueta || data.tabla || ""],
-    [],
-    ["Indicador", "Valor"],
-    ...camposOrdenados.map((c) => [c.etiqueta || c.columna, formatValorExcel(c)]),
-  ];
-
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(sheetRows);
-  ws["!cols"] = [{ wch: 72 }, { wch: 18 }];
-  XLSX.utils.book_append_sheet(wb, ws, "Resultados");
-  const stamp = new Date().toISOString().slice(0, 10);
-  XLSX.writeFile(wb, `analisis_espacial_${data.tabla}_${stamp}.xlsx`);
 }
 
 async function openSpatialModal() {
@@ -1589,6 +1539,7 @@ export function attachVisorSpatialAnalysis(options = {}) {
   if (!_polygonHandler) {
     _polygonHandler = onPolygonEvent;
     window.addEventListener("atlas:visor-polygon-closed", _polygonHandler);
+    window.addEventListener("atlas:visor-pick-aoi-changed", _polygonHandler);
   }
   whenAtlasMapReady(() => {
     requestAnimationFrame(() => tryAttach(0));
@@ -1598,6 +1549,7 @@ export function attachVisorSpatialAnalysis(options = {}) {
 export function teardownVisorSpatialAnalysis() {
   if (_polygonHandler) {
     window.removeEventListener("atlas:visor-polygon-closed", _polygonHandler);
+    window.removeEventListener("atlas:visor-pick-aoi-changed", _polygonHandler);
     _polygonHandler = null;
   }
   _triggerBtn?.remove();

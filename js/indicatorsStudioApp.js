@@ -12,6 +12,7 @@ import {
 } from "./visorAdminAuth.js";
 import { resetIndicatorsCatalogCache } from "./indicatorCatalog.js";
 import { resetPresentationPresetsCache } from "./presentationPresets.js";
+import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -123,6 +124,7 @@ function showDashboard() {
   $("indStudioWelcome").textContent = u?.username
     ? `Sesión: ${u.username}`
     : "Sesión admin activa";
+  mountStudioNav($("indStudioNav"), { active: "indicators" });
 }
 
 async function loadMetaAndCatalog() {
@@ -1364,6 +1366,8 @@ async function main() {
       showErr($("indStudioError"), e.message || String(e));
     }
   } else {
+    const footer = $("indStudioLoginFooter");
+    if (footer) footer.innerHTML = studioLoginFooterHtml("indicators");
     showLogin();
   }
 }

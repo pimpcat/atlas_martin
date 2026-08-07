@@ -17,9 +17,9 @@ En la misma página `visor-studio.html` puede **gestionar usuarios** y cambiar c
 
 ## Requisitos previos de una capa nueva
 
-1. Tabla en PostGIS esquema `atlas` (convención `c_*`).
+1. Tabla en PostGIS esquema `atlas` (convención `c_*`) **con geometría** (`the_geom` / `geom` / `geometry_columns`). Tablas sin geometría (p. ej. catálogos auxiliares) no aparecen en el wizard.
 2. Campos mínimos: `gid`, `the_geom` (SRID 3857). Para capas **municipales**, incluir `cve_mun` (o `cvegeo`). Las capas **estatales** (sin `cve_mun`) deben publicarse con alcance **Estatal** (`mun_filter: false`).
-3. Martin reiniciado y tabla visible en tiles (`auto_publish` o `martin.yaml`).
+3. Tabla visible en tiles Martin (`auto_publish` del esquema `atlas` + `reload_interval`). **No** hace falta reiniciar Martin al importar un SHP nuevo: el discovery automático la lista en ≤ ~30 s. En el wizard: **en Martin** = ya hay tiles; **pendiente Martin** = en PostGIS, discovery aún no la listó (~30 s).
 4. La tabla **no** debe estar ya registrada en `catalog.json`.
 
 ## Puesta en marcha (una vez)
@@ -81,7 +81,9 @@ Abrir `visor-studio.html`, entrar, ir al Visor geográfico y comprobar el botón
 - Botón **engranaje** junto al **+** en la barra del panel Capas.
 - Pestaña **Capas:** solo capas publicadas desde Visor Studio (`layer_publications`).
 - **Editar:** cambia etiqueta, grupo, estilo, alcance territorial, columnas identify/export.
-- **Quitar:** despublica del catálogo (no borra la tabla en PostGIS). La tabla vuelve a aparecer en el asistente **+** (paso Tabla) para republicarla en otro grupo o con otra simbología.
+- **Despublicar:** quita la capa del `catalog.json` / panel del visor. **No** borra la tabla en PostGIS; vuelve a aparecer en el asistente **+** (paso Tabla) para republicarla.
+- **Borrar tabla:** despublica **y** ejecuta `DROP TABLE` en PostGIS (con confirmación doble). Martin deja de listarla en ≤ `reload_interval` (~30 s). Las tablas del **núcleo del Atlas** (`c_mun`, `c_denue`, etc.) están protegidas.
+- En el paso **Tabla** del asistente **+**, también puede **Eliminar tabla seleccionada de PostGIS** si ya está despublicada (huérfana).
 
 Las capas del catálogo original (colonias, DENUE, etc.) **no** aparecen en el gestor.
 
@@ -104,7 +106,7 @@ Tras crear o eliminar un grupo, el panel **Capas** del visor se actualiza sin re
 - **Análisis espacial:** active para incluir la capa en la herramienta de polígono del visor. Elija **conteo** (puntos) o **agregación** (suma/promedio de columnas numéricas), tabla detalle opcional y textos de UI. Detalle en **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)**.
 - **Exportación:** columnas en KML/SHP; si no marca ninguna, se exportan todas.
 
-Tras guardar basta **Ctrl+F5** en el visor. Martin usa `auto_publish` del esquema `atlas` (todas las columnas en el MVT); **no** hace falta reiniciar Martin al editar identify, etiquetas o estilo. Solo reinicie Martin si publica una **tabla nueva** en PostGIS y aún no aparece en tiles (`docker compose restart martin`, una vez).
+Tras guardar basta **Ctrl+F5** en el visor. Martin usa `auto_publish` del esquema `atlas` (todas las columnas en el MVT) y `reload_interval: 30s` para descubrir tablas nuevas **sin reiniciar** el contenedor. **No** hace falta reiniciar Martin al editar identify, etiquetas, estilo, ni al importar un SHP nuevo. Solo reinicie Martin si cambia `martin.yaml` o fuentes MBTiles.
 
 El popup usa el mismo CSS que el resto del visor: título en negrita (`atlas-loc-tip__title`), etiquetas de campo en negrita (`atlas-loc-tip__lbl`).
 
@@ -130,9 +132,9 @@ Implementado en Visor Studio (asistente paso **Estilo**):
 - **Presets por atributo** (`point_by_attribute`, `line_by_attribute`, `polygon_by_attribute`): campo MVT + clases valor/color/leyenda.
 - **Zoom mínimo de capa** (pestaña Básico del paso Estilo): escribe `style.minzoom` en el catálogo; debajo de ese zoom la geometría no se dibuja y el mapa muestra el aviso «Acerca el mapa a zoom N+ para ver …» (igual que **Manzanas**). Distinto de `labels.minzoom` (solo letreritos).
 - **Vista previa** en canvas (sin MapLibre) al editar color o clases.
-- **Aviso Martin** al elegir tabla nueva (`GET /api/visor/admin/tables/{tabla}/status`): si la tabla no está en tiles, recuerda `docker compose restart martin`.
+- **Aviso Martin** al elegir tabla nueva (`GET /api/visor/admin/tables/{tabla}/status`): si aún no está en tiles, ofrece **Reintentar detección** (`POST …/wait-martin`). El discovery es automático (`reload_interval`); no pide reiniciar el contenedor.
 - **Plantillas DENUE** para tabla `c_denue`: códigos SCIAN, icono sugerido y popup con plantilla `denue`.
-- **Subir shapefile** (paso 1, pestaña «Subir shapefile»): `.shp` o `.zip` → tabla `c_*` en PostGIS (`ogr2ogr`).
+- **Subir shapefile** (paso 1, pestaña «Subir shapefile»): `.shp` o `.zip` → tabla `c_*` en PostGIS (`ogr2ogr`). El API espera a que Martin liste la tabla antes de devolver el resultado.
 - **Icono SVG custom** (paso Estilo, preset «Punto con icono»): registra clave + `.svg` en `icons.json`. El asistente advierte si el SVG tiene trazo fino, viewBox desfavorable o formato Potrace.
 - **Clusters** (paso **Mapa**, solo puntos): casilla «Agrupar puntos» + preset (`standard`, `compact`, `wide`, `sparse`); escribe `style.cluster` en el catálogo. Ver **[VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md)**.
 
@@ -150,7 +152,7 @@ Iconos incluidos (entre otros): `locs-punto-pin`, `clues-health`, `denue-*`, `ag
 
 Reutilizar: copie un `.svg` de esa carpeta, edítelo (viewBox 32×32, trazo grueso) y súbalo con otra clave, o selecciónelo en el desplegable si ya está en `icons.json`.
 
-Tras importar SHP o tabla nueva: `docker compose restart martin`. Tras icono custom: **Ctrl+F5** en el visor.
+Tras importar SHP o tabla nueva: el API/wizard espera el discovery de Martin (`reload_interval`); use **Reintentar detección** si hace falta. Solo reinicie Martin si cambió `martin.yaml` o MBTiles. Tras icono custom: **Ctrl+F5** en el visor.
 
 En el paso **Estilo**, con preset **por atributo**: al elegir el campo se consultan valores únicos en PostGIS; use **Autoclasificar** para generar clases valor/color/leyenda (editable después).
 
@@ -169,8 +171,9 @@ Ver **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)** (sección índi
 
 | Método | Ruta | Descripción |
 |--------|------|-------------|
-| GET | `/api/visor/admin/tables/{tabla}/status` | ¿Tabla en Martin? aviso reinicio |
-| POST | `/api/visor/admin/upload/shp` | Importar shapefile a PostGIS |
+| GET | `/api/visor/admin/tables/{tabla}/status` | ¿Tabla en Martin? / pendiente discovery |
+| POST | `/api/visor/admin/tables/{tabla}/wait-martin` | Esperar discovery de Martin (sin restart) |
+| POST | `/api/visor/admin/upload/shp` | Importar shapefile a PostGIS (+ wait Martin) |
 | POST | `/api/visor/admin/upload/icon` | Registrar icono SVG |
 | GET | `/api/visor/admin/tables/{tabla}/columns/{columna}/distinct` | Valores únicos (autoclasificar) |
 | GET | `/api/visor/admin/tables/{tabla}/indexes` | Índices existentes en PostGIS |
@@ -200,7 +203,8 @@ Tras publicar o editar: **Ctrl+F5** en el visor. Martin **no** requiere reinicio
 | GET | `/api/visor/admin/layers` | Admin — listar gestionables |
 | GET | `/api/visor/admin/layers/{id}` | Admin — detalle |
 | PUT | `/api/visor/admin/layers/{id}` | Admin — actualizar |
-| DELETE | `/api/visor/admin/layers/{id}` | Admin — despublicar |
+| DELETE | `/api/visor/admin/layers/{id}` | Admin — despublicar (`?drop_table=true` también borra PostGIS) |
+| DELETE | `/api/visor/admin/tables/{tabla}` | Admin — borrar tabla huérfana (no publicada en catálogo) |
 | POST | `/api/visor/admin/layers` | Admin — publicar |
 | GET | `/api/visor/admin/audit` | Admin — registro de actividad (`limit`, `offset`, `action`, `layer_id`, `table`) |
 | POST | `/api/visor/admin/upload/shp` | Admin — importar shapefile |
@@ -225,6 +229,7 @@ Las acciones administrativas quedan en `atlas_admin.catalog_audit` (usuario, acc
 | `create_layer` | Publicó capa en el catálogo |
 | `update_layer` | Editó capa publicada |
 | `delete_layer` | Despublicó capa |
+| `drop_table` | Eliminó tabla PostGIS |
 | `import_shp` | Importó shapefile a PostGIS |
 | `create_indexes` | Creó índices PostgreSQL en una tabla |
 | `create_admin_user` | Creó usuario admin |

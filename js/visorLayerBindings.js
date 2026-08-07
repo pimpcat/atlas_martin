@@ -13,6 +13,8 @@ import {
   getHidroCuerposVisorLayerActive,
   setCurvasNivelVisorLayerActive,
   getCurvasNivelVisorLayerActive,
+  setClimaLayerActive,
+  getClimaLayerActive,
 } from "./map.js";
 
 /** @typedef {{ getActive: () => boolean, setActive: (active: boolean, cve?: string|null) => void, overlayKey?: string }} VisorLayerBinding */
@@ -39,6 +41,11 @@ const SPECIAL_LAYER_BINDINGS = {
     overlayKey: "curnivel",
     getActive: getCurvasNivelVisorLayerActive,
     setActive: setCurvasNivelVisorLayerActive,
+  },
+  clima: {
+    overlayKey: "clima",
+    getActive: getClimaLayerActive,
+    setActive: setClimaLayerActive,
   },
 };
 
@@ -71,6 +78,7 @@ export function maplibrePrimaryIdForCatalogLayer(entry) {
   if (entry.id === "hidro_corrientes") return "ly-hidro";
   if (entry.id === "hidro_cuerpos") return "ly-hcuerpos";
   if (entry.id === "curvas_nivel") return "ly-curnivel";
+  if (entry.id === "clima") return "ly-clima";
   if (entry.overlay_key) return `ly-${entry.overlay_key}`;
   return `ly-${entry.id}`;
 }

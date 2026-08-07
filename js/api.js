@@ -16,7 +16,8 @@ const API_MUNICIPIO_EXTENT_URL = apiUrl("/api/municipio/extent");
 const API_COLONIAS_LABELS_URL = apiUrl("/api/visor/colonias-labels");
 const API_LOCS_ATLAS_LABELS_URL = apiUrl("/api/visor/locs-atlas-labels");
 const API_POLYGON_LABELS_URL = apiUrl("/api/visor/polygon-labels");
-const API_GEO_CONTEXTO_URL = apiUrl("/api/geo/contexto");
+const API_GEO_CONTEXTO_URL = apiUrl("/api/geography-context/contexto");
+const API_GEO_CONTEXTO_LEGACY_URL = apiUrl("/api/geo/contexto");
 const API_SUPERFICIE_COMPARATIVA_URL = apiUrl("/api/comparativas/superficie");
 const API_POBLACION_URL = apiUrl("/api/comparativas/poblacion");
 const API_CRECIMIENTO_URL = apiUrl("/api/comparativas/crecimiento");
@@ -271,6 +272,25 @@ const MENU_VIEW_PARAM_BY_ID = {
 const MENU_CATALOG_GROUP_IDS = ["socio", "viv", "eco", "gov"];
 
 /** Secciones fuera del catálogo de indicadores tabulares. */
+const MENU_GEO_STATIC_ITEMS = [
+  {
+    id: "geo_visor",
+    title: "Visor Geográfico",
+    subtitle: "Mapa ampliado y capas",
+    unit: "",
+    viewParam: MENU_VIEW_PARAM_DEFAULT,
+    visor: true,
+  },
+  {
+    id: "geo_inv_viv",
+    title: "Inventario de Viviendas",
+    subtitle: "INV 2020 · Manzanas",
+    unit: "",
+    viewParam: MENU_VIEW_PARAM_DEFAULT,
+    invViv: true,
+  },
+];
+
 const MENU_SECTION_GEO = {
   id: "geo",
   title: "Geografía",
@@ -283,22 +303,7 @@ const MENU_SECTION_GEO = {
       viewParam: MENU_VIEW_PARAM_DEFAULT,
       geoContext: true,
     },
-    {
-      id: "geo_visor",
-      title: "Visor Geográfico",
-      subtitle: "Mapa ampliado y capas",
-      unit: "",
-      viewParam: MENU_VIEW_PARAM_DEFAULT,
-      visor: true,
-    },
-    {
-      id: "geo_inv_viv",
-      title: "Inventario de Viviendas",
-      subtitle: "INV 2020 · Manzanas",
-      unit: "",
-      viewParam: MENU_VIEW_PARAM_DEFAULT,
-      invViv: true,
-    },
+    ...MENU_GEO_STATIC_ITEMS,
   ],
 };
 
@@ -334,10 +339,11 @@ function catalogIndicatorToMenuItem(ind) {
 }
 
 /**
- * Arma el modelo del menú mezclando catálogo (socio/viv/eco/gov) con geo y sitios estáticos.
+ * Arma el modelo del menú mezclando catálogo (socio/viv/eco/gov) con geo y sitios.
  * @param {object} catalog — payload de catalog.json / GET /api/indicators/catalog
+ * @param {{ geographyCatalog?: object|null, geographyEnabled?: boolean }} [opts]
  */
-export function buildMenuModelFromCatalog(catalog) {
+export function buildMenuModelFromCatalog(catalog, opts = {}) {
   const groupById = new Map((catalog?.groups || []).map((g) => [g.id, g]));
   const indicatorsByGroup = new Map();
 
@@ -350,7 +356,39 @@ export function buildMenuModelFromCatalog(catalog) {
     indicatorsByGroup.get(ind.group_id).push(ind);
   }
 
-  const sections = [MENU_SECTION_GEO];
+  const geoItems = [];
+  const geographyEnabled = opts.geographyEnabled !== false;
+  const geoCat = opts.geographyCatalog || null;
+  if (geographyEnabled && geoCat) {
+    const menu = geoCat.menu || {};
+    geoItems.push({
+      id: menu.id || "geo_datos_geo",
+      title: menu.label || "Datos Geográficos",
+      subtitle: menu.subtitle || "Ubicación, clima, relieve y más",
+      unit: "",
+      viewParam: MENU_VIEW_PARAM_DEFAULT,
+      geoContext: true,
+    });
+  } else if (geographyEnabled && !geoCat) {
+    // Fallback estático si el health pasó pero el catálogo aún no carga
+    geoItems.push({
+      id: "geo_datos_geo",
+      title: "Datos Geográficos",
+      subtitle: "Ubicación, clima, relieve y más",
+      unit: "",
+      viewParam: MENU_VIEW_PARAM_DEFAULT,
+      geoContext: true,
+    });
+  }
+  geoItems.push(...MENU_GEO_STATIC_ITEMS);
+
+  const geoSection = {
+    id: (geoCat?.menu?.section_id) || "geo",
+    title: (geoCat?.menu?.section_label) || "Geografía",
+    items: geoItems,
+  };
+
+  const sections = [geoSection];
 
   for (const gid of MENU_CATALOG_GROUP_IDS) {
     const items = indicatorsByGroup.get(gid) || [];
@@ -369,15 +407,45 @@ export function buildMenuModelFromCatalog(catalog) {
 
 /**
  * Modelo del menú desde catálogo (preferido). Si falla la carga, usa getMenuModel() estático.
+ * Geography Context: solo incluye Datos Geográficos si el health probe OK.
  */
 export async function getMenuModelAsync() {
+  let geographyEnabled = false;
+  let geographyCatalog = null;
+  try {
+    const {
+      probeGeographyContext,
+      fetchGeographyCatalog,
+    } = await import("./geographyContextClient.js");
+    geographyEnabled = await probeGeographyContext();
+    if (geographyEnabled) {
+      try {
+        geographyCatalog = await fetchGeographyCatalog();
+      } catch (err) {
+        console.warn("[menu] Geography catalog no disponible:", err);
+      }
+    }
+  } catch (err) {
+    console.warn("[menu] Geography Context probe falló:", err);
+  }
+
   try {
     const { loadIndicatorsCatalog } = await import("./indicatorCatalog.js");
     const catalog = await loadIndicatorsCatalog();
-    return buildMenuModelFromCatalog(catalog);
+    return buildMenuModelFromCatalog(catalog, { geographyEnabled, geographyCatalog });
   } catch (err) {
     console.warn("[menu] Catálogo no disponible; menú estático legacy.", err);
-    return getMenuModel();
+    const model = getMenuModel();
+    if (!geographyEnabled) {
+      return model.map((section) => {
+        if (section.id !== "geo") return section;
+        return {
+          ...section,
+          items: (section.items || []).filter((it) => !it.geoContext),
+        };
+      });
+    }
+    return model;
   }
 }
 
@@ -630,13 +698,17 @@ export function getGeoContextoCached(cve_mun) {
   return _geoContextoCache.has(cve) ? _geoContextoCache.get(cve) : undefined;
 }
 
-/** Precarga todos los textos de c_contexto (85 municipios) en una sola petición. */
+/** Precarga textos de Geography Context (o legacy) en una sola petición. */
 export async function ensureGeoContextoBulk() {
   if (_geoContextoCache.size > 0) return _geoContextoCache;
   if (!_geoContextoBulkPromise) {
     _geoContextoBulkPromise = (async () => {
-      const url = new URL(`${API_GEO_CONTEXTO_URL}/all`, window.location.href);
-      const res = await fetch(url.toString(), { cache: "no-store" });
+      let url = new URL(`${API_GEO_CONTEXTO_URL}/all`, window.location.href);
+      let res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) {
+        url = new URL(`${API_GEO_CONTEXTO_LEGACY_URL}/all`, window.location.href);
+        res = await fetch(url.toString(), { cache: "no-store" });
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       if (!json || !json.ok) {
@@ -656,8 +728,8 @@ export async function ensureGeoContextoBulk() {
 }
 
 /**
- * Devuelve el registro de atlas.c_contexto para un municipio.
- * @param {string} cve_mun - clave 001..085 (se envía como texto; el backend hace TRIM).
+ * Textos de ficha geográfica por municipio (claves = id de pestaña del catálogo).
+ * @param {string} cve_mun - clave 001..085
  */
 export async function fetchGeoContexto(cve_mun) {
   const cve = normCveMun3(cve_mun);
@@ -668,9 +740,14 @@ export async function fetchGeoContexto(cve_mun) {
   } catch {
     /* fallback a consulta individual */
   }
-  const url = new URL(API_GEO_CONTEXTO_URL, window.location.href);
+  let url = new URL(API_GEO_CONTEXTO_URL, window.location.href);
   url.searchParams.set("cve_mun", cve);
-  const res = await fetch(url.toString(), { cache: "no-store" });
+  let res = await fetch(url.toString(), { cache: "no-store" });
+  if (!res.ok) {
+    url = new URL(API_GEO_CONTEXTO_LEGACY_URL, window.location.href);
+    url.searchParams.set("cve_mun", cve);
+    res = await fetch(url.toString(), { cache: "no-store" });
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
   if (!json || !json.ok) {

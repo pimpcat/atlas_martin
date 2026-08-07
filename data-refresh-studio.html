@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Data Refresh Studio — GroSIG</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page indicators-studio-page">
+  <div id="drBusyOverlay" class="dr-busy-overlay" hidden aria-live="polite" aria-busy="true">
+    <div class="dr-busy-card" role="dialog" aria-modal="true" aria-labelledby="drBusyTitle">
+      <p class="dr-busy-card__title" id="drBusyTitle">Procesando actualización</p>
+      <p class="dr-busy-card__label" id="drBusyLabel">Preparando…</p>
+      <div class="dr-busy-card__bar" aria-hidden="true">
+        <div class="dr-busy-card__bar-fill" id="drBusyBar"></div>
+      </div>
+      <div class="dr-busy-card__pct" id="drBusyPct">0%</div>
+    </div>
+  </div>
+
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell">
+    <section id="drLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card" style="max-width:28rem;margin:2rem auto">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Data Refresh Studio</h1>
+          <p class="small text-muted mb-3">
+            Actualización asistida de capas espaciales (SHP/ZIP → staging → diff → swap).
+          </p>
+          <form id="drLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="drUser">Usuario</label>
+              <input id="drUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="drPass">Contraseña</label>
+              <input id="drPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="drLoginError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="drLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="drDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h5 mb-0">Data Refresh Studio</h1>
+          <p class="small text-muted mb-0" id="drWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="drLogoutBtn">Cerrar sesión</button>
+      </div>
+      <div id="drStudioNav" class="mb-3"></div>
+
+      <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Modo Data Refresh">
+        <button type="button" class="btn btn-primary" id="drModeSpatial" data-mode="spatial">Capas espaciales</button>
+        <button type="button" class="btn btn-outline-secondary" id="drModeIndicators" data-mode="indicators">Indicadores (tabular)</button>
+      </div>
+
+      <div class="row g-3">
+        <div class="col-lg-5">
+          <div id="drIndScopeTabs" class="btn-group btn-group-sm mb-2 d-none" role="group" aria-label="Ámbito indicadores">
+            <button type="button" class="btn btn-primary" id="drScopeEstatal" data-scope="estatal">Estatal</button>
+            <button type="button" class="btn btn-outline-secondary" id="drScopeNacional" data-scope="nacional">Nacional</button>
+          </div>
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-header fw-semibold">1. Nueva actualización</div>
+            <div class="card-body d-grid gap-3">
+              <div id="drSpatialFields">
+                <div class="mb-3">
+                  <label class="form-label small" for="drTarget">Tabla destino (producción)</label>
+                  <select id="drTarget" class="form-select form-select-sm"></select>
+                  <div class="form-text">MVP: capas espaciales. Núcleo marco/ruteo bloqueado.</div>
+                </div>
+                <div>
+                  <label class="form-label small" for="drFile">Archivo SHP o ZIP</label>
+                  <input id="drFile" type="file" class="form-control form-control-sm" accept=".zip,.shp" />
+                </div>
+              </div>
+              <div id="drIndicatorFields" class="d-none dr-ind-fields">
+                <div class="dr-ind-field">
+                  <label class="form-label small" for="drTemplate">Plantilla / indicador</label>
+                  <select id="drTemplate" class="form-select form-select-sm"></select>
+                  <p class="dr-ind-hint form-text mb-0" id="drTemplateHint">
+                    Elija un indicador para ver las columnas del molde.
+                  </p>
+                  <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="drMoldBtn" disabled>
+                    Descargar molde Excel
+                  </button>
+                </div>
+                <div class="dr-ind-field">
+                  <label class="form-label small" for="drIndFile">Archivo Excel o CSV (rellenado)</label>
+                  <input id="drIndFile" type="file" class="form-control form-control-sm" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
+                  <p class="form-text mb-0">Use el molde Excel (claves <code>001</code>…), complete valores y súbalo. También acepta CSV (<code>,</code> o <code>;</code>).</p>
+                </div>
+                <details class="dr-ind-dev">
+                  <summary class="small">Prueba (dev) — dataset sintético con seed</summary>
+                  <div class="dr-ind-dev__body">
+                    <p class="form-text mb-2">
+                      Genera un Excel con valores actuales de BD y N celdas perturbadas (±jitter).
+                      Misma <code>seed</code> = mismos cambios. No escribe en producción.
+                    </p>
+                    <div class="row g-2 align-items-end">
+                      <div class="col-4">
+                        <label class="form-label small mb-0" for="drSynthSeed">Seed</label>
+                        <input id="drSynthSeed" type="number" class="form-control form-control-sm" value="1234" min="0" />
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small mb-0" for="drSynthChanges">Cambios</label>
+                        <input id="drSynthChanges" type="number" class="form-control form-control-sm" value="40" min="1" max="5000" />
+                      </div>
+                      <div class="col-4">
+                        <label class="form-label small mb-0" for="drSynthJitter">Jitter %</label>
+                        <input id="drSynthJitter" type="number" class="form-control form-control-sm" value="8" min="1" max="50" step="1" />
+                      </div>
+                    </div>
+                    <button type="button" class="btn btn-outline-secondary btn-sm mt-2" id="drSynthBtn" disabled>
+                      Generar Excel de prueba
+                    </button>
+                  </div>
+                </details>
+              </div>
+              <button type="button" class="btn btn-primary btn-sm" id="drUploadBtn">Subir y comparar</button>
+              <div id="drUploadMsg" class="small"></div>
+            </div>
+          </div>
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+              <span>Historial</span>
+              <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="drHistoryRefresh">Actualizar</button>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive" style="max-height:32vh;overflow:auto">
+                <table class="table table-sm table-hover mb-0 small dr-history-table" id="drHistoryTable">
+                  <thead class="sticky-top">
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Usuario</th>
+                      <th>Tabla</th>
+                      <th>Tipo</th>
+                      <th>Resumen</th>
+                      <th>Duración</th>
+                      <th>Estado</th>
+                    </tr>
+                  </thead>
+                  <tbody id="drJobsList">
+                    <tr><td colspan="7" class="text-muted px-2">—</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+          <div class="card shadow-sm visor-studio-card mt-3">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+              <span>Versiones (rollback)</span>
+              <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="drVersionsRefresh">Actualizar</button>
+            </div>
+            <div class="card-body p-2" id="drVersionsList" style="max-height:22vh;overflow:auto">
+              <p class="small text-muted mb-0">Últimas 3 copias por tabla tras un apply exitoso.</p>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-7">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">2. Vista previa / aplicar</div>
+            <div class="card-body">
+              <div id="drJobEmpty" class="text-muted small">Suba un dataset para ver el informe de diferencias.</div>
+              <div id="drJobPanel" class="d-none">
+                <p class="small mb-2">
+                  Job <code id="drJobId"></code> ·
+                  Estado: <span id="drJobStatus" class="fw-semibold"></span>
+                </p>
+                <div id="drJobSummary" class="dr-report mb-3"></div>
+                <details class="mb-3">
+                  <summary class="small text-muted" style="cursor:pointer">Detalle técnico (JSON)</summary>
+                  <pre id="drJobReport" class="small border rounded p-2 mt-2 mb-0" style="max-height:28vh;overflow:auto;white-space:pre-wrap"></pre>
+                </details>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-success btn-sm" id="drApplyBtn">Aplicar a producción</button>
+                  <button type="button" class="btn btn-outline-danger btn-sm" id="drCancelBtn">Cancelar job</button>
+                </div>
+                <div id="drApplyMsg" class="small mt-2"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/dataRefreshStudioApp.js"></script>
+</body>
+</html>

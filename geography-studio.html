@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Geography Studio — GroSIG</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page indicators-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell indicators-studio-shell">
+    <section id="geoStudioLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Geography Studio</h1>
+          <p class="small text-muted mb-3">
+            Configuración de pestañas de Datos Geográficos (GroSIG Geography Context).
+            Misma sesión admin que Visor Studio.
+          </p>
+          <form id="geoStudioLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="geoStudioUser">Usuario</label>
+              <input id="geoStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="geoStudioPass">Contraseña</label>
+              <input id="geoStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="geoStudioError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="geoStudioLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="geoStudioDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h5 mb-0">Geography Studio</h1>
+          <p class="small text-muted mb-0" id="geoStudioWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="geoStudioLogoutBtn">Cerrar sesión</button>
+      </div>
+      <div id="geoStudioNav" class="mb-3"></div>
+
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <span class="fw-semibold">Pestañas</span>
+              <button type="button" class="btn btn-sm btn-primary" id="geoStudioNewBtn">+ Nueva</button>
+            </div>
+            <div class="card-body p-2" id="geoStudioList" style="max-height:70vh;overflow:auto"></div>
+          </div>
+        </div>
+        <div class="col-lg-8">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body p-3">
+              <div class="fw-semibold small mb-2">Menú y layout</div>
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <label class="form-label small">Título del ítem</label>
+                  <input id="geoMenuLabel" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small">Subtítulo</label>
+                  <input id="geoMenuSubtitle" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small">Sección del menú</label>
+                  <input id="geoMenuSection" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-4">
+                  <div class="form-check mt-4">
+                    <input class="form-check-input" type="checkbox" id="geoLayoutMacro" checked />
+                    <label class="form-check-label small" for="geoLayoutMacro">Mini-mapa estatal</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-body p-3 p-md-4">
+              <div id="geoStudioFormEmpty" class="text-muted small">Seleccione una pestaña o cree una nueva.</div>
+              <form id="geoStudioForm" class="d-none d-grid gap-3">
+                <div class="border rounded p-3">
+                  <div class="fw-semibold small mb-2">Identidad</div>
+                  <div class="row g-2">
+                    <div class="col-md-4">
+                      <label class="form-label small">Identificador</label>
+                      <input id="fTabId" class="form-control form-control-sm" required pattern="[a-z][a-z0-9_]*" />
+                      <div class="form-text">Solo minúsculas, números y _.</div>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small">Etiqueta</label>
+                      <input id="fTabLabel" class="form-control form-control-sm" required />
+                    </div>
+                    <div class="col-md-2">
+                      <label class="form-label small">Orden</label>
+                      <input id="fTabOrder" type="number" class="form-control form-control-sm" value="10" />
+                    </div>
+                    <div class="col-md-2">
+                      <label class="form-label small">Visible</label>
+                      <select id="fTabEnabled" class="form-select form-select-sm">
+                        <option value="true">Sí</option>
+                        <option value="false">No</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="border rounded p-3">
+                  <div class="fw-semibold small mb-2">Texto (tabla y campo)</div>
+                  <div class="row g-2">
+                    <div class="col-md-5">
+                      <label class="form-label small">Tabla</label>
+                      <select id="fTextTable" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-md-5">
+                      <label class="form-label small">Campo</label>
+                      <select id="fTextField" class="form-select form-select-sm"></select>
+                    </div>
+                    <div class="col-md-2">
+                      <label class="form-label small">Clave mun.</label>
+                      <input id="fTextKey" class="form-control form-control-sm" value="cve_mun" />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="border rounded p-3">
+                  <div class="fw-semibold small mb-2">Capas del Visor al activar la pestaña</div>
+                  <p class="small text-muted mb-2">
+                    Solo capas publicadas en Visor Catalog. Las marcadas como
+                    <span class="badge text-bg-secondary">Núcleo</span> no se editan en Visor Studio, pero sí se pueden seleccionar aquí.
+                  </p>
+                  <div id="fLayersBox" class="border rounded p-2" style="max-height:28vh;overflow:auto"></div>
+                  <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="fShowLegend" />
+                    <label class="form-check-label small" for="fShowLegend">Mostrar leyenda / simbología</label>
+                  </div>
+                </div>
+
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <button type="submit" class="btn btn-primary btn-sm">Guardar pestaña en borrador</button>
+                  <button type="button" class="btn btn-outline-danger btn-sm" id="geoStudioDeleteBtn">Eliminar pestaña</button>
+                  <span id="geoStudioFormMsg" class="small text-muted"></span>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="d-flex flex-wrap gap-2 mt-3">
+            <button type="button" class="btn btn-success" id="geoStudioPublishBtn">Publicar catálogo</button>
+            <span id="geoStudioPublishMsg" class="small align-self-center"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/geographyStudioApp.js"></script>
+</body>
+</html>

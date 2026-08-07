@@ -8,6 +8,7 @@
 > Handoff planos / PLR / PLU / multipágina: [`CONTEXT_PLANO_LOCALIDAD_PLU.md`](./CONTEXT_PLANO_LOCALIDAD_PLU.md)  
 > Doc operativa completa: [`CARTOGRAPHY_ENGINE.md`](./CARTOGRAPHY_ENGINE.md)  
 > Installer / respaldos del stack: [`docs/STACK_INSTALLER_Y_RESPALDOS.md`](../../../docs/STACK_INSTALLER_Y_RESPALDOS.md)  
+> Theme Studio (colores claro/oscuro data-driven): [`THEME_STUDIO.md`](./THEME_STUDIO.md)  
 > Engine al corte: **1.12.49** (22 jul 2026, noche)
 
 ---

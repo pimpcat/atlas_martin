@@ -46,6 +46,8 @@ import {
 import { renderMunicipiosSelect, setMunicipioSelectValue } from "./municipios.js";
 import { loadAndRenderHomePanels, loadHomeContext } from "./homeView.js";
 import { attachCartographyUi } from "./cartographyClient.js";
+import { resolveVisorLayerBinding } from "./visorLayerBindings.js";
+import { getVisorLayerEntry } from "./visorCatalog.js";
 import { renderTable } from "./table.js";
 import { ensureChart, updateBarChart } from "./charts.js";
 import { updateGroupedBarsChartTheme } from "./templates/chartjsGroupedBars.js";
@@ -336,15 +338,58 @@ function getMapFocusProfile() {
   return "default";
 }
 
+const GEO_CORE_LAYER_IDS = new Set([
+  "uso_suelo",
+  "clima",
+  "hidro_corrientes",
+  "hidro_cuerpos",
+  "curvas_nivel",
+]);
+/** Capas Visor extras activadas por Geography Context (no núcleo). */
+let _geoExtraLayerIds = new Set();
+
+function syncGeoExtraVisorLayers(layerIds, cve, inGeo) {
+  const wanted = new Set();
+  if (inGeo && Array.isArray(layerIds)) {
+    for (const raw of layerIds) {
+      const id = String(raw || "").trim().toLowerCase();
+      if (id && !GEO_CORE_LAYER_IDS.has(id)) wanted.add(id);
+    }
+  }
+  for (const id of _geoExtraLayerIds) {
+    if (wanted.has(id)) continue;
+    const entry = getVisorLayerEntry(id) || {};
+    const binding = resolveVisorLayerBinding(id, entry);
+    try {
+      binding?.setActive(false, cve);
+    } catch {
+      /* noop */
+    }
+  }
+  for (const id of wanted) {
+    const entry = getVisorLayerEntry(id) || {};
+    const binding = resolveVisorLayerBinding(id, entry);
+    try {
+      binding?.setActive(true, cve);
+    } catch {
+      /* noop */
+    }
+  }
+  _geoExtraLayerIds = wanted;
+}
+
 function syncGeoMapOverlayLayers() {
-  const tab = state.geoCtx?.getActiveTabId?.() ?? "";
+  const tabId = state.geoCtx?.getActiveTabId?.() ?? "";
+  const tab = state.geoCtx?.getActiveTab?.() ?? null;
   const cve =
     state.selectedMunicipio && state.selectedMunicipio.cve_mun != null
       ? state.selectedMunicipio.cve_mun
       : null;
   const inGeo = isGeoContextIndicator(state.activeIndicator) && Boolean(cve);
-  syncGeoThematicLayers(tab, cve, inGeo);
-  syncGeoMapLegend(tab, inGeo);
+  const layerIds = Array.isArray(tab?.layers) ? tab.layers : null;
+  syncGeoThematicLayers(tabId, cve, inGeo, layerIds);
+  syncGeoExtraVisorLayers(layerIds, cve, inGeo);
+  syncGeoMapLegend(tabId, inGeo, tab);
 }
 
 /** Enfoque municipal tras estabilizar layout del dashboard (un solo fly). */
@@ -563,6 +608,7 @@ async function onIndicatorSelected(indicator) {
 
   if (!isGeoContextIndicator(indicator)) {
     clearGeoThematicLayers();
+    syncGeoExtraVisorLayers([], null, false);
     teardownGeoMapLegend();
   }
 
@@ -577,7 +623,7 @@ async function onIndicatorSelected(indicator) {
     // Panel de pestañas
     const tabsEl = document.getElementById("geoTabs");
     const contentEl = document.getElementById("geoTabContent");
-    const metaEl = document.getElementById("geoTabsMeta");
+    const metaEl = document.getElementById("geoMapTitle");
     if (tabsEl && contentEl) {
       state.geoCtx = createGeoContextController({
         tabsEl,

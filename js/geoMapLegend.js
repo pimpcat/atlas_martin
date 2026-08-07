@@ -3,13 +3,11 @@
  */
 import { getLeafletMap, whenAtlasMapReady } from "./map.js";
 import { buildLegendPanelHtmlForDefs } from "./visorMapLegend.js";
+import { getVisorLayerEntry } from "./visorCatalog.js";
 
 const LEGEND_ATTRIB_GAP_PX = 10;
 
-/** Pestañas de Datos geográficos que muestran capas en el mapa. */
-const GEO_LEGEND_TABS = new Set(["relieve", "clima", "hidrografia", "uso_suelo"]);
-
-/** Capas y títulos de leyenda por pestaña (alineado con syncGeoThematicLayers en map.js). */
+/** Fallback: capas por id de pestaña (seed). */
 const GEO_TAB_LAYER_DEFS = {
   relieve: [{ id: "curvas_nivel", label: "Relieve" }],
   clima: [{ id: "clima", label: "Clima" }],
@@ -19,6 +17,17 @@ const GEO_TAB_LAYER_DEFS = {
   ],
   uso_suelo: [{ id: "uso_suelo", label: "Uso de suelo" }],
 };
+
+function layerDefsFromTab(tabId, tab) {
+  if (tab && Array.isArray(tab.layers) && tab.layers.length) {
+    return tab.layers.map((lid) => {
+      const id = String(lid || "").trim();
+      const entry = getVisorLayerEntry(id);
+      return { id, label: entry?.label || id };
+    }).filter((d) => d.id);
+  }
+  return GEO_TAB_LAYER_DEFS[tabId] || [];
+}
 
 let _legendRoot = null;
 let _legendOpen = false;
@@ -138,24 +147,27 @@ function ensureLegendControl(map) {
   return wrap;
 }
 
-function layerDefsForTab(tabId) {
-  return GEO_TAB_LAYER_DEFS[tabId] || [];
+function layerDefsForTab(tabId, tab) {
+  return layerDefsFromTab(tabId, tab);
 }
 
 /** Muestra u oculta la simbología según la pestaña activa de Datos geográficos. */
-export function syncGeoMapLegend(activeTab, inGeo) {
+export function syncGeoMapLegend(activeTab, inGeo, tab) {
   const run = () => {
     const map = getLeafletMap();
     if (!map) return;
 
-    const show =
-      Boolean(inGeo) && GEO_LEGEND_TABS.has(String(activeTab || "").trim());
+    const showLegend =
+      tab != null
+        ? Boolean(tab.show_legend) && Array.isArray(tab.layers) && tab.layers.length > 0
+        : Boolean(GEO_TAB_LAYER_DEFS[String(activeTab || "").trim()]);
+    const show = Boolean(inGeo) && showLegend;
     if (!show) {
       removeLegendControl();
       return;
     }
 
-    const layerDefs = layerDefsForTab(activeTab);
+    const layerDefs = layerDefsForTab(activeTab, tab);
     const panelHtml = buildLegendPanelHtmlForDefs(layerDefs);
     if (!panelHtml) {
       removeLegendControl();

@@ -14,6 +14,7 @@ import {
   resetAdminUserPassword,
   verifyAdminSession,
 } from "./visorAdminAuth.js";
+import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
 
 document.documentElement.setAttribute("data-theme", readStoredTheme());
 
@@ -69,6 +70,7 @@ function showDashboard(user) {
     const name = user?.display_name || user?.username || "Administrador";
     welcomeEl.textContent = `Sesión: ${name}`;
   }
+  mountStudioNav(document.getElementById("visorStudioNav"), { active: "visor" });
 }
 
 function setStudioTab(tab) {
@@ -252,6 +254,8 @@ async function boot() {
       return;
     }
   }
+  const footer = document.getElementById("visorStudioLoginFooter");
+  if (footer) footer.innerHTML = studioLoginFooterHtml("visor");
   showLogin();
 }
 

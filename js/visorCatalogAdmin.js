@@ -13,6 +13,59 @@ let _modalEl = null;
 let _meta = null;
 let _attached = false;
 let _wizardBusy = false;
+let _wizardBusyDepth = 0;
+
+function setWizardBusy(on, message = "Procesando…") {
+  const modal = ensureModal();
+  const panel = modal.querySelector(".visor-admin-modal__panel");
+  if (!panel) return;
+  let overlay = panel.querySelector(".visor-admin-busy");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.className = "visor-admin-busy";
+    overlay.setAttribute("role", "status");
+    overlay.setAttribute("aria-live", "polite");
+    overlay.hidden = true;
+    overlay.innerHTML = `
+      <div class="visor-admin-busy__box">
+        <div class="visor-admin-busy__spinner" aria-hidden="true"></div>
+        <p class="visor-admin-busy__title">Espere un momento</p>
+        <p class="visor-admin-busy__msg"></p>
+      </div>`;
+    panel.appendChild(overlay);
+  }
+  const msgEl = overlay.querySelector(".visor-admin-busy__msg");
+  if (on) {
+    _wizardBusyDepth += 1;
+    _wizardBusy = true;
+    if (msgEl) msgEl.textContent = message;
+    overlay.hidden = false;
+    panel.classList.add("visor-admin-modal__panel--busy");
+    modal.querySelectorAll(".card-footer button, .btn-close").forEach((btn) => {
+      btn.disabled = true;
+    });
+  } else {
+    _wizardBusyDepth = Math.max(0, _wizardBusyDepth - 1);
+    if (_wizardBusyDepth > 0) {
+      if (msgEl && message) msgEl.textContent = message;
+      return;
+    }
+    _wizardBusy = false;
+    overlay.hidden = true;
+    panel.classList.remove("visor-admin-modal__panel--busy");
+    modal.querySelectorAll(".card-footer button, .btn-close").forEach((btn) => {
+      btn.disabled = false;
+    });
+    // Restaurar estado del botón Atrás en el paso actual
+    const btnPrev = modal.querySelector('[data-act="prev"]');
+    if (btnPrev) btnPrev.classList.toggle("invisible", wizard.step === 0);
+  }
+}
+
+function updateWizardBusyMessage(message) {
+  const msgEl = document.querySelector("#visorCatalogAdminModal .visor-admin-busy__msg");
+  if (msgEl && message) msgEl.textContent = message;
+}
 let _modalFooterMode = "wizard";
 
 const PUBLISH_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
@@ -140,7 +193,16 @@ function bindWizardStepNavOnce() {
   });
 }
 
-function closeModal() {
+function closeModal({ force = false } = {}) {
+  if (_wizardBusy && !force) return;
+  if (force) {
+    _wizardBusy = false;
+    _wizardBusyDepth = 0;
+    const panel = _modalEl?.querySelector(".visor-admin-modal__panel");
+    const overlay = panel?.querySelector(".visor-admin-busy");
+    if (overlay) overlay.hidden = true;
+    panel?.classList.remove("visor-admin-modal__panel--busy");
+  }
   _modalEl?.classList.add("d-none");
   purgeOrphanModalBackdrops();
 }
@@ -176,6 +238,7 @@ const wizard = {
   denue_use_template: true,
   denue_preset_key: "",
   martin_needs_restart: false,
+  pending_martin: false,
   table_source: "martin",
   shp_uploaded: false,
   export_kml: true,
@@ -274,12 +337,13 @@ function wizardMaxStep() {
   return Math.max(0, wizardSteps().length - 1);
 }
 
+/** Ya no se omite al navegar: el paso es opcional de contenido, no de visita. */
 function isMapStepSkipped() {
-  return !wizard.labels_enabled && !wizard.search_enabled;
+  return false;
 }
 
-function isStepSkipped(stepDef) {
-  return stepDef?.id === WIZARD_STEP.MAP && isMapStepSkipped();
+function isStepSkipped(_stepDef) {
+  return false;
 }
 
 function findWizardStepIndex(stepId) {
@@ -289,16 +353,13 @@ function findWizardStepIndex(stepId) {
 /** @param {number} fromIndex @param {number} delta */
 function adjacentWizardStep(fromIndex, delta) {
   const steps = wizardSteps();
-  let i = fromIndex + delta;
-  while (i >= 0 && i < steps.length) {
-    if (!isStepSkipped(steps[i])) return i;
-    i += delta;
-  }
+  const i = fromIndex + delta;
+  if (i >= 0 && i < steps.length) return i;
   return fromIndex;
 }
 
 function isLastNavigableStep() {
-  return adjacentWizardStep(wizard.step, 1) === wizard.step;
+  return wizard.step >= wizardMaxStep();
 }
 
 function canNavigateToStep(targetIndex) {
@@ -330,6 +391,7 @@ function validateWizardStep(stepId) {
 }
 
 async function goToWizardStep(targetIndex) {
+  if (_wizardBusy) return;
   const steps = wizardSteps();
   if (targetIndex < 0 || targetIndex >= steps.length) return;
   if (targetIndex === wizard.step) return;
@@ -365,14 +427,11 @@ async function advanceWizardStep() {
       window.alert(err);
       return;
     }
-    _wizardBusy = true;
-    const btnNext = ensureModal().querySelector('[data-act="next"]');
-    if (btnNext) btnNext.disabled = true;
+    setWizardBusy(true, wizard.mode === "edit" ? "Guardando capa…" : "Publicando capa…");
     try {
       await saveLayer();
     } finally {
-      _wizardBusy = false;
-      if (btnNext) btnNext.disabled = false;
+      setWizardBusy(false);
     }
     return;
   }
@@ -389,6 +448,7 @@ async function advanceWizardStep() {
 }
 
 async function retreatWizardStep() {
+  if (_wizardBusy) return;
   if (wizard.step <= 0) return;
   readStepFields();
   wizard.step = adjacentWizardStep(wizard.step, -1);
@@ -404,22 +464,22 @@ function renderWizardStepNav() {
     <ol class="visor-admin-step-nav__list mb-0">
       ${steps
         .map((s, i) => {
-          const skipped = isStepSkipped(s);
+          const optional = s.id === WIZARD_STEP.MAP;
           const locked = !canNavigateToStep(i) && i !== cur;
           const cls = [
             "visor-admin-step-nav__item",
             i === cur ? "is-current" : "",
             i < cur ? "is-done" : "",
-            skipped ? "is-skipped" : "",
+            optional ? "is-optional" : "",
             locked ? "is-locked" : "",
           ]
             .filter(Boolean)
             .join(" ");
           return `
         <li class="${cls}">
-          <button type="button" class="visor-admin-step-nav__btn" data-wizard-step="${i}" ${locked ? "disabled" : ""} aria-current="${i === cur ? "step" : "false"}" title="${skipped ? "Opcional (sin etiquetas ni buscador)" : escapeHtml(s.title)}">
+          <button type="button" class="visor-admin-step-nav__btn" data-wizard-step="${i}" ${locked ? "disabled" : ""} aria-current="${i === cur ? "step" : "false"}" title="${optional ? "Opcional: puede dejar etiquetas y búsqueda desactivadas" : escapeHtml(s.title)}">
             <span class="visor-admin-step-nav__num" aria-hidden="true">${i + 1}</span>
-            <span class="visor-admin-step-nav__label">${escapeHtml(s.title)}${skipped ? '<span class="visor-admin-step-nav__opt"> (opc.)</span>' : ""}</span>
+            <span class="visor-admin-step-nav__label">${escapeHtml(s.title)}${optional ? '<span class="visor-admin-step-nav__opt"> (opc.)</span>' : ""}</span>
           </button>
         </li>`;
         })
@@ -470,6 +530,7 @@ function resetWizardForCreate() {
   wizard.denue_use_template = true;
   wizard.denue_preset_key = "";
   wizard.martin_needs_restart = false;
+  wizard.pending_martin = false;
   wizard.export_kml = true;
   wizard.export_shp = true;
   wizard.export_kml_name_field = "";
@@ -1024,21 +1085,235 @@ async function fetchTablePublishStatus(table) {
   }
 }
 
+function applyMartinFlagsFromStatus(status) {
+  wizard.pending_martin =
+    Boolean(status?.pending_martin) ||
+    (status && status.in_martin === false && !status.needs_martin_restart);
+  wizard.martin_needs_restart = Boolean(status?.needs_martin_restart);
+  if (status?.in_martin) {
+    wizard.pending_martin = false;
+    wizard.martin_needs_restart = false;
+  }
+}
+
+/** Mensajes del API/legacy → lenguaje neutro para usuarios finales (sin nombres de infra). */
+function friendlyUserMessage(msg, fallback = "") {
+  let s = String(msg || "").trim();
+  if (!s) return fallback;
+  if (/reinicie\s+martin/i.test(s)) {
+    return "Datos importados; preparando la capa para el mapa…";
+  }
+  if (/visible en martin/i.test(s)) {
+    return "Capa lista para el mapa. Puede continuar.";
+  }
+  if (/martin no responde/i.test(s)) {
+    return "El servicio de mapa no está disponible. Espere unos segundos y reintente.";
+  }
+  if (/aún no listó|no listó la tabla|esperando martin|discovery/i.test(s) && /martin|postgis/i.test(s)) {
+    return "La capa aún se está preparando para el mapa (~30 s). Puede reintentar.";
+  }
+  if (/importado.*martin/i.test(s) || /visible en martin/i.test(s)) {
+    return "Archivo importado y listo para el mapa. Puede publicar la capa.";
+  }
+  s = s
+    .replace(/\bMartin\b/gi, "el mapa")
+    .replace(/\bPostGIS\b/gi, "la base de datos")
+    .replace(/\btiles\b/gi, "el mapa")
+    .replace(/\bdiscovery(?:\s+automático)?\b/gi, "preparación automática")
+    .replace(/\breload_interval\b/gi, "ciclo automático");
+  return s || fallback;
+}
+
 function renderMartinStatusBanner(container, status) {
   if (!container) return;
-  if (!status?.needs_martin_restart) {
+  applyMartinFlagsFromStatus(status);
+  if (status?.in_martin) {
     container.innerHTML = "";
     container.classList.add("d-none");
-    wizard.martin_needs_restart = false;
     return;
   }
-  wizard.martin_needs_restart = true;
   container.classList.remove("d-none");
+  if (status?.needs_martin_restart) {
+    container.innerHTML = `
+      <div class="alert alert-warning py-2 px-2 small mb-2 visor-admin-martin-banner">
+        El servicio de mapa no está disponible. Espere unos segundos y pulse
+        <button type="button" class="btn btn-sm btn-outline-warning ms-1" data-act="retry-martin">Comprobar de nuevo</button>
+      </div>`;
+    return;
+  }
   container.innerHTML = `
-    <div class="alert alert-warning py-2 px-2 small mb-2 visor-admin-martin-banner">
-      <strong>Martin:</strong> esta tabla aún no aparece en tiles. Tras publicar, reinicie Martin una vez:
-      <code>docker compose restart martin</code>
+    <div class="alert alert-info py-2 px-2 small mb-2 visor-admin-martin-banner">
+      La capa aún se está preparando para el mapa (automático, ~30&nbsp;s).
+      <button type="button" class="btn btn-sm btn-outline-primary ms-1" data-act="retry-martin">Comprobar de nuevo</button>
     </div>`;
+}
+
+async function waitMartinDetection(table, { statusEl, timeoutS } = {}) {
+  const name = String(table || "").trim();
+  if (!name) return null;
+  if (statusEl) statusEl.textContent = "Preparando la capa para el mapa…";
+  updateWizardBusyMessage("Preparando la capa para el mapa…");
+  const q = timeoutS != null ? `?timeout_s=${encodeURIComponent(String(timeoutS))}` : "";
+  const { res, data } = await adminFetch(
+    `/api/visor/admin/tables/${encodeURIComponent(name)}/wait-martin${q}`,
+    { method: "POST" },
+  );
+  if (res?.ok && data?.in_martin) {
+    applyMartinFlagsFromStatus(data);
+    return data;
+  }
+  // Endpoint ausente, timeout del wait, o mapa aún sin la tabla → poll status.
+  if (statusEl) {
+    statusEl.textContent = "Comprobando disponibilidad en el mapa…";
+  }
+  updateWizardBusyMessage("Comprobando disponibilidad en el mapa…");
+  const deadline = Date.now() + (Number(timeoutS) > 0 ? Number(timeoutS) * 1000 : 100000);
+  while (Date.now() < deadline) {
+    const status = await fetchTablePublishStatus(name);
+    if (status?.in_martin) {
+      applyMartinFlagsFromStatus(status);
+      return { ...status, message: "Capa lista para el mapa.", ok: true };
+    }
+    const left = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    if (statusEl) {
+      statusEl.textContent = `Aún preparando el mapa… reintentando (${left}s)`;
+    }
+    updateWizardBusyMessage(`Preparando la capa para el mapa… ${left}s`);
+    await new Promise((r) => setTimeout(r, 3000));
+  }
+  if (statusEl) {
+    statusEl.textContent = friendlyUserMessage(
+      (res?.ok && data?.message) || apiErrorMessage(data, ""),
+      "La capa aún no está lista en el mapa.",
+    );
+  }
+  return data || { in_martin: false, pending_martin: true, message: "Tiempo de espera agotado al preparar el mapa" };
+}
+
+function markShpMartinReady(okBox, statusEl, table, geometry, message) {
+  applyMartinFlagsFromStatus({ in_martin: true });
+  if (okBox) {
+    okBox.classList.remove("d-none");
+    okBox.innerHTML = `Capa lista para el mapa: <strong>${escapeHtml(table)}</strong> · geometría ${escapeHtml(geometry)}. Pulse <strong>Siguiente</strong>.`;
+  }
+  if (statusEl) {
+    statusEl.textContent = friendlyUserMessage(message, "Capa lista para el mapa. Puede continuar.");
+    statusEl.classList.remove("text-danger");
+    statusEl.classList.add("text-success");
+  }
+}
+
+function bindShpMartinRetry(okBox, statusEl, table, geometry) {
+  const btn = okBox?.querySelector("#visorAdminShpRetryMartin");
+  btn?.addEventListener("click", () => {
+    void (async () => {
+      btn.disabled = true;
+      setWizardBusy(true, "Comprobando si la capa ya está lista en el mapa…");
+      try {
+        const wait = await waitMartinDetection(table, { statusEl, timeoutS: 100 });
+        if (wait?.in_martin) {
+          markShpMartinReady(okBox, statusEl, table, geometry, wait.message);
+        } else if (statusEl) {
+          statusEl.textContent = friendlyUserMessage(wait?.message, "La capa aún no está lista en el mapa.");
+          statusEl.classList.remove("text-success");
+        }
+      } finally {
+        setWizardBusy(false);
+        btn.disabled = false;
+      }
+    })();
+  });
+}
+
+async function ensureMartinAfterShpUpload(body, data) {
+  const statusEl = body?.querySelector("#visorAdminShpStatus");
+  const okBox = body?.querySelector("#visorAdminShpOk");
+  const table = wizard.table;
+  const geometry = wizard.geometry;
+  if (data?.in_martin) {
+    markShpMartinReady(okBox, statusEl, table, geometry, data.message);
+    return true;
+  }
+  if (okBox) {
+    okBox.classList.remove("d-none");
+    okBox.innerHTML = `
+      Datos importados: <strong>${escapeHtml(table)}</strong> · geometría ${escapeHtml(geometry)}.
+      <div class="mt-1">Preparando la capa para el mapa…
+        <button type="button" class="btn btn-sm btn-outline-primary" id="visorAdminShpRetryMartin">Comprobar de nuevo</button>
+      </div>`;
+    bindShpMartinRetry(okBox, statusEl, table, geometry);
+  }
+  // Auto-poll en cliente (cubre API antigua o wait que expiró antes del reload).
+  if (statusEl) {
+    statusEl.textContent = "Importado. Preparando la capa para el mapa…";
+    statusEl.classList.remove("text-danger");
+    statusEl.classList.add("text-success");
+  }
+  const wait = await waitMartinDetection(table, { statusEl, timeoutS: 100 });
+  if (wait?.in_martin) {
+    markShpMartinReady(okBox, statusEl, table, geometry, wait.message);
+    return true;
+  }
+  if (okBox) {
+    okBox.innerHTML = `
+      Datos importados: <strong>${escapeHtml(table)}</strong> · geometría ${escapeHtml(geometry)}.
+      <div class="mt-1">Aún no está lista en el mapa.
+        <button type="button" class="btn btn-sm btn-outline-primary" id="visorAdminShpRetryMartin">Comprobar de nuevo</button>
+      </div>`;
+    bindShpMartinRetry(okBox, statusEl, table, geometry);
+  }
+  return false;
+}
+
+async function uploadShpFromWizard(body) {
+  const fileEl = body?.querySelector("#visorAdminShpFile");
+  const statusEl = body?.querySelector("#visorAdminShpStatus");
+  const tableHint = body?.querySelector("#visorAdminShpTable")?.value?.trim() || "";
+  const file = fileEl?.files?.[0];
+  if (!file) {
+    if (statusEl) statusEl.textContent = "Seleccione un archivo .shp o .zip";
+    return;
+  }
+  if (statusEl) statusEl.textContent = "Importando y preparando la capa para el mapa…";
+  const uploadBtn = body?.querySelector("#visorAdminShpUploadBtn");
+  if (uploadBtn) uploadBtn.disabled = true;
+  setWizardBusy(true, "Importando shapefile…");
+  try {
+    const form = new FormData();
+    form.append("file", file);
+    if (tableHint) form.append("table_name", tableHint);
+    const { res, data } = await adminFetch("/api/visor/admin/upload/shp", { method: "POST", body: form });
+    if (!res?.ok) {
+      let msg = friendlyUserMessage(apiErrorMessage(data, ""), "No se pudo importar el shapefile");
+      if (res?.status === 413) {
+        msg = "Archivo demasiado grande para el servidor (máx. 80 MB). Contacte al administrador si el archivo es más pequeño.";
+      }
+      if (statusEl) {
+        statusEl.textContent = msg;
+        statusEl.classList.add("text-danger");
+        statusEl.classList.remove("text-success");
+      }
+      return;
+    }
+    wizard.table = data.table || "";
+    wizard.geometry = data.geometry || "point";
+    wizard.table_columns = (data.columns || []).map((c) => String(c.name || "")).filter(Boolean);
+    wizard.shp_uploaded = true;
+    wizard.table_source = "shp";
+    applyMartinFlagsFromStatus(data);
+    const waited = data.waited_ms != null ? ` · espera ${Math.round(Number(data.waited_ms) / 1000)}s` : "";
+    if (statusEl) {
+      const apiMsg = friendlyUserMessage(data.message, "Importado; preparando el mapa…");
+      statusEl.innerHTML = `Importado: <code>${escapeHtml(wizard.table)}</code> (${data.feature_count ?? "?"} elementos)${escapeHtml(waited)}. ${escapeHtml(apiMsg)}`;
+      statusEl.classList.remove("text-danger");
+      statusEl.classList.add("text-success");
+    }
+    updateWizardBusyMessage("Preparando la capa para el mapa (puede tardar ~30 s)…");
+    await ensureMartinAfterShpUpload(body, data);
+  } finally {
+    setWizardBusy(false);
+    if (uploadBtn) uploadBtn.disabled = false;
+  }
 }
 
 function refreshStylePreview(container) {
@@ -1078,19 +1353,19 @@ function apiErrorMessage(data, fallback) {
 }
 
 async function fetchAdminTables(retries = 2) {
-  let lastError = "No se pudo listar tablas de Martin";
+  let lastError = "No se pudo listar las tablas disponibles";
   for (let attempt = 0; attempt <= retries; attempt += 1) {
     const { res, data, networkError } = await adminFetch("/api/visor/admin/tables");
     if (networkError || !res) {
-      lastError = "No se pudo contactar al API. Verifique que el contenedor api_backend esté activo.";
+      lastError = "No se pudo contactar al servidor. Espere un momento e intente de nuevo.";
     } else if (res.ok) {
-      return data?.tables || [];
+      return { tables: data?.tables || [], meta: data?.meta || null };
     } else {
-      lastError = apiErrorMessage(data, lastError);
+      lastError = friendlyUserMessage(apiErrorMessage(data, ""), lastError);
       const errCode = data?.detail?.error || "";
       if (res.status === 503 || errCode === "MARTIN_UNAVAILABLE") {
         lastError =
-          "Martin aún no responde. Espere unos segundos y pulse Reintentar (no requiere municipio seleccionado).";
+          "El servicio de mapa no está disponible. Espere unos segundos y pulse Reintentar.";
       }
     }
     if (attempt < retries) {
@@ -1100,48 +1375,6 @@ async function fetchAdminTables(retries = 2) {
   const err = new Error(lastError);
   err.retryable = true;
   throw err;
-}
-
-async function uploadShpFromWizard(body) {
-  const fileEl = body?.querySelector("#visorAdminShpFile");
-  const statusEl = body?.querySelector("#visorAdminShpStatus");
-  const tableHint = body?.querySelector("#visorAdminShpTable")?.value?.trim() || "";
-  const file = fileEl?.files?.[0];
-  if (!file) {
-    if (statusEl) statusEl.textContent = "Seleccione un archivo .shp o .zip";
-    return;
-  }
-  if (statusEl) statusEl.textContent = "Importando…";
-  const form = new FormData();
-  form.append("file", file);
-  if (tableHint) form.append("table_name", tableHint);
-  const { res, data } = await adminFetch("/api/visor/admin/upload/shp", { method: "POST", body: form });
-  if (!res?.ok) {
-    let msg = apiErrorMessage(data, "No se pudo importar el shapefile");
-    if (res.status === 413) {
-      msg =
-        "Archivo demasiado grande para el servidor (máx. 80 MB). " +
-        "Si el archivo es pequeño, reinicie nginx: docker compose restart nginx_proxy";
-    }
-    if (statusEl) statusEl.textContent = msg;
-    return;
-  }
-  wizard.table = data.table || "";
-  wizard.geometry = data.geometry || "point";
-  wizard.table_columns = (data.columns || []).map((c) => String(c.name || "")).filter(Boolean);
-  wizard.shp_uploaded = true;
-  wizard.table_source = "shp";
-  wizard.martin_needs_restart = true;
-  if (statusEl) {
-    statusEl.innerHTML = `Importado: <code>${escapeHtml(wizard.table)}</code> (${data.feature_count ?? "?"} features). ${escapeHtml(data.message || "")}`;
-    statusEl.classList.remove("text-danger");
-    statusEl.classList.add("text-success");
-  }
-  const okBox = body?.querySelector("#visorAdminShpOk");
-  if (okBox) {
-    okBox.classList.remove("d-none");
-    okBox.innerHTML = `Tabla lista: <strong>${escapeHtml(wizard.table)}</strong> · geometría ${escapeHtml(wizard.geometry)}. Pulse <strong>Siguiente</strong>.`;
-  }
 }
 
 async function analyzeSvgFileForMap(file) {
@@ -1243,12 +1476,12 @@ async function uploadIconFromStyleStep(body) {
 async function renderStepTables(body) {
   body.innerHTML = `
     <ul class="nav nav-tabs nav-tabs-sm mb-2 visor-admin-table-tabs" role="tablist">
-      <li class="nav-item"><button type="button" class="nav-link ${wizard.table_source !== "shp" ? "active" : ""}" data-tab="martin">Tablas en Martin</button></li>
+      <li class="nav-item"><button type="button" class="nav-link ${wizard.table_source !== "shp" ? "active" : ""}" data-tab="martin">Tablas existentes</button></li>
       <li class="nav-item"><button type="button" class="nav-link ${wizard.table_source === "shp" ? "active" : ""}" data-tab="shp">Subir shapefile</button></li>
     </ul>
     <div id="visorAdminTableTabMartin" class="${wizard.table_source === "shp" ? "d-none" : ""}"></div>
     <div id="visorAdminTableTabShp" class="${wizard.table_source === "shp" ? "" : "d-none"}">
-      <p class="small text-muted">Importa <strong>.shp</strong> o <strong>.zip</strong> (con .shp, .dbf, .shx). Se crea tabla <code>c_*</code> en PostGIS (EPSG:3857).</p>
+      <p class="small text-muted">Importa <strong>.shp</strong> o <strong>.zip</strong> (con .shp, .dbf, .shx). Se crea una tabla <code>c_*</code> en la base de datos.</p>
       <div class="mb-2">
         <label class="form-label small mb-1" for="visorAdminShpTable">Nombre de tabla (opcional)</label>
         <input type="text" class="form-control form-control-sm" id="visorAdminShpTable" placeholder="c_mi_capa" value="${escapeHtml(wizard.table && wizard.shp_uploaded ? wizard.table : "")}" />
@@ -1257,10 +1490,10 @@ async function renderStepTables(body) {
         <label class="form-label small mb-1" for="visorAdminShpFile">Archivo</label>
         <input type="file" class="form-control form-control-sm" id="visorAdminShpFile" accept=".shp,.zip,application/zip,application/x-shapefile" />
       </div>
-      <button type="button" class="btn btn-sm btn-primary" id="visorAdminShpUploadBtn">Importar a PostGIS</button>
+      <button type="button" class="btn btn-sm btn-primary" id="visorAdminShpUploadBtn">Importar</button>
       <div id="visorAdminShpStatus" class="small mt-2 text-muted"></div>
       <div id="visorAdminShpOk" class="alert alert-success py-2 px-2 small mt-2 ${wizard.shp_uploaded ? "" : "d-none"}">${wizard.shp_uploaded ? `Tabla lista: <strong>${escapeHtml(wizard.table)}</strong>` : ""}</div>
-      <div class="alert alert-warning py-2 px-2 small mt-2">Tras importar: <code>docker compose restart martin</code> antes de publicar.</div>
+      <p class="small text-muted mt-2 mb-0">Tras importar, la capa se prepara sola para el mapa (~30&nbsp;s). No hace falta reiniciar servicios.</p>
     </div>`;
 
   body.querySelectorAll(".visor-admin-table-tabs [data-tab]").forEach((btn) => {
@@ -1277,32 +1510,56 @@ async function renderStepTables(body) {
   if (!martinPane) return;
 
   let tables = [];
+  let tablesMeta = null;
   try {
-    tables = await fetchAdminTables();
+    const packed = await fetchAdminTables();
+    tables = packed.tables || [];
+    tablesMeta = packed.meta || null;
   } catch (err) {
     martinPane.innerHTML = `
-      <p class="small text-danger mb-2">${escapeHtml(err?.message || "No se pudo listar tablas de Martin")}</p>
-      <p class="small text-muted mb-2">Puede usar la pestaña <strong>Subir shapefile</strong> o reintentar cuando Martin responda.</p>
+      <p class="small text-danger mb-2">${escapeHtml(friendlyUserMessage(err?.message, "No se pudo listar las tablas disponibles"))}</p>
+      <p class="small text-muted mb-2">Puede usar la pestaña <strong>Subir shapefile</strong> o reintentar en unos segundos.</p>
       <button type="button" class="btn btn-sm btn-outline-primary" data-act="retry-tables">Reintentar</button>`;
     martinPane.querySelector('[data-act="retry-tables"]')?.addEventListener("click", () => void renderStepTables(body));
     return;
   }
   if (!tables.length) {
-    martinPane.innerHTML =
-      '<p class="small text-muted mb-0">No hay tablas nuevas en Martin. Use <strong>Subir shapefile</strong> o cargue datos a PostGIS y reinicie Martin.</p>';
+    const metaBits = tablesMeta
+      ? ` En base de datos: ${tablesMeta.postgis_c_star ?? "—"} · ya en catálogo: ${tablesMeta.in_catalog ?? "—"}.`
+      : "";
+    martinPane.innerHTML = `
+      <p class="small text-muted mb-2">No hay tablas nuevas disponibles para publicar.${escapeHtml(metaBits)}</p>
+      <p class="small text-muted mb-2">Solo aparecen tablas <code>c_*</code> con geometría que aún <strong>no</strong> estén en el catálogo del visor. Use <strong>Subir shapefile</strong> para importar una nueva.</p>
+      <button type="button" class="btn btn-sm btn-outline-primary" data-act="retry-tables">Reintentar</button>`;
+    martinPane.querySelector('[data-act="retry-tables"]')?.addEventListener("click", () => void renderStepTables(body));
     return;
   }
+  const metaLine = tablesMeta
+    ? `<p class="small text-muted mb-1">Disponibles: <strong>${tables.length}</strong> · con geometría: ${tablesMeta.postgis_c_star ?? "—"} · ya en catálogo: ${tablesMeta.in_catalog ?? "—"}</p>`
+    : "";
   martinPane.innerHTML = `
-    <p class="small text-muted">Seleccione la tabla publicada en Martin (o en PostGIS) que aún no está en el catálogo del visor.</p>
+    <p class="small text-muted mb-1">Seleccione una tabla <code>c_*</code> <strong>con geometría</strong> que aún no esté en el catálogo del visor.</p>
+    ${metaLine}
+    <p class="small text-muted mb-2">
+      <span class="me-2"><strong>lista para el mapa</strong> = ya se puede visualizar.</span>
+      <span><strong>preparando mapa</strong> = datos listos; el mapa la incorpora en ~30&nbsp;s.</span>
+    </p>
     <div id="visorAdminMartinBanner" class="d-none"></div>
     <select class="form-select form-select-sm" id="visorAdminTablePick">
       ${tables
         .map((t) => {
-          const suffix = t.needs_martin_restart ? " · reiniciar Martin" : "";
+          let suffix = "";
+          if (t.needs_martin_restart) suffix = " · mapa no disponible";
+          else if (t.pending_martin || (t.in_martin === false && t.in_postgis)) suffix = " · preparando mapa";
+          else if (t.in_martin) suffix = " · lista para el mapa";
           return `<option value="${escapeHtml(t.table)}">${escapeHtml(t.table)}${suffix}</option>`;
         })
         .join("")}
-    </select>`;
+    </select>
+    <div class="mt-2">
+      <button type="button" class="btn btn-sm btn-outline-danger" id="visorAdminDropOrphanTable">Eliminar tabla seleccionada</button>
+      <span class="small text-muted ms-1">Solo tablas no publicadas en el catálogo. No borra el núcleo del Atlas.</span>
+    </div>`;
   const pick = martinPane.querySelector("#visorAdminTablePick");
   const banner = martinPane.querySelector("#visorAdminMartinBanner");
   wizard.table = pick?.value || tables[0].table;
@@ -1317,8 +1574,50 @@ async function renderStepTables(body) {
     }
     const status = await fetchTablePublishStatus(wizard.table);
     renderMartinStatusBanner(banner, status);
+    banner?.querySelector('[data-act="retry-martin"]')?.addEventListener("click", () => {
+      void (async () => {
+        setWizardBusy(true, "Comprobando disponibilidad en el mapa…");
+        try {
+          await waitMartinDetection(wizard.table);
+          await syncTablePick();
+        } finally {
+          setWizardBusy(false);
+        }
+      })();
+    });
   };
   pick?.addEventListener("change", () => void syncTablePick());
+  martinPane.querySelector("#visorAdminDropOrphanTable")?.addEventListener("click", () => {
+    void (async () => {
+      const table = pick?.value || wizard.table;
+      if (!table) return;
+      if (
+        !window.confirm(
+          `¿Eliminar la tabla «${table}»?\n\nDebe estar fuera del catálogo del visor. Esta acción no se puede deshacer.`,
+        )
+      ) {
+        return;
+      }
+      if (
+        !window.confirm(
+          "Confirmación final:\nSe borrarán los datos de esta tabla de forma permanente.\n¿Continuar?",
+        )
+      ) {
+        return;
+      }
+      const { res, data } = await adminFetch(
+        `/api/visor/admin/tables/${encodeURIComponent(table)}?wait_martin=false`,
+        { method: "DELETE" },
+      );
+      if (!res?.ok) {
+        window.alert(friendlyUserMessage(apiErrorMessage(data, ""), "No se pudo eliminar la tabla"));
+        return;
+      }
+      window.alert(friendlyUserMessage(data?.message, "Tabla eliminada."));
+      wizard.table = "";
+      await renderStepTables(body);
+    })();
+  });
   await syncTablePick();
 }
 
@@ -1591,7 +1890,7 @@ function refreshStyleFieldSelect(root, selected) {
       statusEl.textContent = wizard.columns_load_error
         ? wizard.columns_load_error
         : wizard.table
-          ? `No se encontraron columnas para ${wizard.table}. Verifique PostGIS.`
+          ? `No se encontraron columnas para ${wizard.table}. Verifique la base de datos.`
           : "Seleccione una tabla primero.";
       statusEl.classList.add("text-danger");
     }
@@ -1663,7 +1962,7 @@ async function loadDistinctFieldPanel(body, previewHost) {
   }
   wizard.style_field = field;
   panel.classList.remove("d-none");
-  if (statusEl) statusEl.textContent = "Consultando valores únicos en PostGIS…";
+  if (statusEl) statusEl.textContent = "Consultando valores únicos en la base de datos…";
   if (valuesEl) valuesEl.innerHTML = "";
   if (autoBtn) autoBtn.disabled = true;
 
@@ -2800,8 +3099,7 @@ async function renderStepMap(body) {
     );
     body.innerHTML = `
       <div class="visor-admin-step-map">
-        ${isMapStepSkipped() ? `<div class="alert alert-info py-2 px-2 small mb-2">Sin etiquetas ni buscador activos, este paso se <strong>omite</strong> al pulsar Siguiente. Actívelos aquí o vuelva después desde la barra de pasos.</div>` : ""}
-        <p class="small text-muted mb-2">Texto sobre el mapa y participación en el buscador del visor (independiente del popup).</p>
+        <p class="small text-muted mb-2">Opcional: texto sobre el mapa y participación en el buscador del visor (independiente del popup). Puede dejarlo desactivado y continuar.</p>
         <div class="visor-admin-labels-block border rounded p-2 mb-3">
           <div class="form-check form-check-sm mb-2">
             <input class="form-check-input" type="checkbox" id="visorAdminLabelsEnabled" ${wizard.labels_enabled ? "checked" : ""} />
@@ -3135,7 +3433,8 @@ function renderStepReview(body) {
       : wizard.geometry === "point"
         ? "Desactivado"
         : "—";
-  const mapSkipped = isMapStepSkipped();
+  const labelsOn = Boolean(wizard.labels_enabled);
+  const searchOn = Boolean(wizard.search_enabled);
   body.innerHTML = `
     <p class="small visor-admin-review-hint mb-2 mb-md-3">Resumen de la configuración. Para cambiar algo, pulse cualquier paso en la barra superior o use <strong>Atrás</strong>.</p>
     <dl class="small mb-2 visor-admin-review">
@@ -3157,10 +3456,19 @@ function renderStepReview(body) {
       <dt>Export cols</dt><dd>${escapeHtml(exp)}</dd>
       <dt>Exportación</dt><dd>${exports.length ? exports.join(", ") : "Ninguna"}${kmlLabelField ? ` · KML etiqueta: ${escapeHtml(kmlLabelField)}` : ""}</dd>
     </dl>
-    ${mapSkipped ? `<p class="small text-muted mb-2">Paso <strong>Etiquetas y búsqueda</strong> omitido. Puede configurarlo desde la barra de pasos antes de publicar.</p>` : ""}
+    ${!labelsOn && !searchOn ? `<p class="small text-muted mb-2">Etiquetas y búsqueda quedaron desactivadas (opcional). Puede volver al paso 5 antes de publicar si las necesita.</p>` : ""}
     ${renderIndexHintsShell()}
     <div id="visorAdminStatus" class="small mt-2 text-danger" hidden></div>
-    ${wizard.martin_needs_restart ? `<div class="alert alert-warning py-2 px-2 small mb-0">Recuerde reiniciar Martin si la tabla es nueva: <code>docker compose restart martin</code></div>` : ""}`;
+    ${
+      wizard.pending_martin
+        ? `<div class="alert alert-info py-2 px-2 small mb-0">La capa aún se está preparando para el mapa (~30&nbsp;s). Puede publicar el catálogo; la visualización aparecerá al terminar. Use <strong>Comprobar de nuevo</strong> en el paso Tabla si hace falta.</div>`
+        : ""
+    }
+    ${
+      wizard.martin_needs_restart
+        ? `<div class="alert alert-warning py-2 px-2 small mb-0">El servicio de mapa no está disponible. Espere unos segundos y compruebe de nuevo en el paso Tabla.</div>`
+        : ""
+    }`;
   void refreshIndexHintsPanel();
 }
 
@@ -3476,11 +3784,11 @@ async function saveLayer() {
     }
     return;
   }
-  closeModal();
+  closeModal({ force: true });
   purgeOrphanModalBackdrops();
   await reloadVisorLayerCatalog();
   document.dispatchEvent(new CustomEvent("atlasgro-visor-layers-panel-refresh"));
-  window.alert(data?.message || (isEdit ? "Capa actualizada. Recargue el visor (Ctrl+F5)." : "Capa publicada. Recargue el visor (Ctrl+F5)."));
+  window.alert(friendlyUserMessage(data?.message, isEdit ? "Capa actualizada. Recargue el visor (Ctrl+F5)." : "Capa publicada. Recargue el visor (Ctrl+F5)."));
   purgeOrphanModalBackdrops();
 }
 
@@ -3643,31 +3951,104 @@ async function openEditWizard(layerId) {
   }
 }
 
-async function unpublishLayer(layerId, label) {
-  if (
-    !window.confirm(
-      `¿Despublicar "${label}" del catálogo?\n\nLa capa dejará de aparecer en el visor.`,
-    )
-  ) {
-    return;
+let _unpublishBusy = false;
+
+async function syncManageUiAfterCatalogChange() {
+  try {
+    await reloadVisorLayerCatalog();
+  } catch (err) {
+    console.warn("[visor-admin] reloadVisorLayerCatalog:", err);
   }
-  const { res, data } = await adminFetch(
-    `/api/visor/admin/layers/${encodeURIComponent(layerId)}`,
-    { method: "DELETE" },
-  );
-  if (!res?.ok) {
-    window.alert(apiErrorMessage(data, "No se pudo despublicar la capa"));
-    return;
-  }
-  await reloadVisorLayerCatalog();
   document.dispatchEvent(new CustomEvent("atlasgro-visor-layers-panel-refresh"));
   const manageBody = document
     .getElementById("visorCatalogAdminModal")
     ?.querySelector(".visor-admin-modal__body");
   if (manageBody?.querySelector(".visor-admin-manage-panel")) {
-    await refreshManagePanel(manageBody);
+    try {
+      await refreshManagePanel(manageBody);
+    } catch (err) {
+      console.warn("[visor-admin] refreshManagePanel:", err);
+    }
   }
-  window.alert(data?.message || "Capa despublicada.");
+}
+
+async function unpublishLayer(layerId, label, { dropTable = false, tableName = "" } = {}) {
+  if (_unpublishBusy) return { ok: false, busy: true };
+  const title = dropTable
+    ? `¿Eliminar permanentemente «${label}»?`
+    : `¿Quitar «${label}» del visor?`;
+  const detail = dropTable
+    ? "Se quitará del visor y se borrarán sus datos. Esta acción no se puede deshacer."
+    : "Dejará de aparecer en el visor. Los datos se conservan y podrá volver a publicarla después.";
+  if (!window.confirm(`${title}\n\n${detail}`)) {
+    return { ok: false, cancelled: true };
+  }
+  if (dropTable) {
+    const ok2 = window.confirm(
+      "Confirmación final:\nSe borrarán los datos de esta capa de forma permanente.\n¿Continuar?",
+    );
+    if (!ok2) return { ok: false, cancelled: true };
+  }
+
+  _unpublishBusy = true;
+  const manageHost = document.getElementById("visorAdminManageTabContent");
+  if (manageHost) {
+    manageHost.insertAdjacentHTML(
+      "afterbegin",
+      `<p class="small text-muted mb-2" id="visorAdminUnpublishBusy">${
+        dropTable ? "Eliminando capa y datos…" : "Quitando capa del visor…"
+      }</p>`,
+    );
+  }
+
+  try {
+    // Sin wait_martin: la respuesta es inmediata (antes se bloqueaba ~60 s y el portal no actualizaba).
+    const q = dropTable ? "?drop_table=true&wait_martin=false" : "";
+    const { res, data, networkError } = await adminFetch(
+      `/api/visor/admin/layers/${encodeURIComponent(layerId)}${q}`,
+      { method: "DELETE" },
+    );
+
+    // Siempre sincronizar UI: el servidor puede haber terminado aunque la respuesta falle.
+    await syncManageUiAfterCatalogChange();
+
+    const errCode = data?.detail?.error || data?.error || "";
+    const alreadyGone =
+      errCode === "LAYER_NOT_FOUND" ||
+      errCode === "LAYER_NOT_MANAGED" ||
+      /no encontrada|ya no/i.test(String(apiErrorMessage(data, "")));
+
+    if (networkError || !res) {
+      window.alert(
+        "No se pudo confirmar la respuesta del servidor. Se actualizó la lista; verifique si la capa ya desapareció.",
+      );
+      return { ok: false, networkError: true };
+    }
+    if (!res.ok) {
+      if (alreadyGone) {
+        window.alert(
+          dropTable
+            ? "La capa ya no estaba en el catálogo. Lista actualizada."
+            : "La capa ya no estaba publicada. Lista actualizada.",
+        );
+        return { ok: true, alreadyGone: true };
+      }
+      window.alert(
+        friendlyUserMessage(
+          apiErrorMessage(data, ""),
+          dropTable ? "No se pudo eliminar la capa" : "No se pudo quitar la capa",
+        ),
+      );
+      return { ok: false };
+    }
+    window.alert(
+      friendlyUserMessage(data?.message, dropTable ? "Capa y datos eliminados." : "Capa quitada del visor."),
+    );
+    return { ok: true };
+  } finally {
+    _unpublishBusy = false;
+    document.getElementById("visorAdminUnpublishBusy")?.remove();
+  }
 }
 
 function formatAuditWhen(iso) {
@@ -3840,7 +4221,9 @@ async function renderManageLayersTab(host) {
     return;
   }
   host.innerHTML = `
-    <p class="small text-muted mb-2">Capas publicadas con Visor Studio. Solo estas se pueden editar o despublicar.</p>
+    <p class="small text-muted mb-2">Capas publicadas con Visor Studio.
+      <strong>Despublicar</strong> quita del visor y conserva la tabla;
+      <strong>Borrar tabla</strong> despublica y elimina la tabla de la base de datos.</p>
     <ul class="list-group list-group-flush visor-admin-manage-list">
       ${layers
         .map(
@@ -3850,9 +4233,10 @@ async function renderManageLayersTab(host) {
             <div class="fw-semibold small">${escapeHtml(layer.label)}</div>
             <div class="text-muted small"><code>${escapeHtml(layer.layer_id)}</code> · ${escapeHtml(layer.table || "")}</div>
           </div>
-          <div class="d-flex gap-1 flex-shrink-0">
+          <div class="d-flex gap-1 flex-shrink-0 flex-wrap justify-content-end">
             <button type="button" class="btn btn-sm btn-outline-primary" data-edit="${escapeHtml(layer.layer_id)}">Editar</button>
-            <button type="button" class="btn btn-sm btn-outline-danger" data-delete="${escapeHtml(layer.layer_id)}" data-label="${escapeHtml(layer.label)}">Quitar</button>
+            <button type="button" class="btn btn-sm btn-outline-warning" data-unpublish="${escapeHtml(layer.layer_id)}" data-label="${escapeHtml(layer.label)}" data-table="${escapeHtml(layer.table || "")}">Despublicar</button>
+            <button type="button" class="btn btn-sm btn-outline-danger" data-drop="${escapeHtml(layer.layer_id)}" data-label="${escapeHtml(layer.label)}" data-table="${escapeHtml(layer.table || "")}">Borrar tabla</button>
           </div>
         </li>`,
         )
@@ -3864,11 +4248,26 @@ async function renderManageLayersTab(host) {
       void openEditWizard(btn.getAttribute("data-edit"));
     });
   });
-  host.querySelectorAll("[data-delete]").forEach((btn) => {
+  host.querySelectorAll("[data-unpublish]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      void unpublishLayer(btn.getAttribute("data-delete"), btn.getAttribute("data-label")).then(
-        () => void openManageModal(),
-      );
+      btn.disabled = true;
+      void unpublishLayer(btn.getAttribute("data-unpublish"), btn.getAttribute("data-label"), {
+        dropTable: false,
+        tableName: btn.getAttribute("data-table") || "",
+      }).finally(() => {
+        btn.disabled = false;
+      });
+    });
+  });
+  host.querySelectorAll("[data-drop]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      btn.disabled = true;
+      void unpublishLayer(btn.getAttribute("data-drop"), btn.getAttribute("data-label"), {
+        dropTable: true,
+        tableName: btn.getAttribute("data-table") || "",
+      }).finally(() => {
+        btn.disabled = false;
+      });
     });
   });
 }

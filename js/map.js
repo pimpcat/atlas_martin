@@ -1770,9 +1770,14 @@ function ensureBaseLayers(map) {
 
 function syncRefocusControlVisibility() {
   if (!_refocusCtrl) return;
-  const hideZoom = Boolean(_homeMode || _geoViewLock);
+  // Explorador / Datos geográficos: mapa fijo — sin zoom ni reencuadre.
+  if (_homeMode || _geoViewLock) {
+    _refocusCtrl.style.display = "none";
+    return;
+  }
+  _refocusCtrl.style.display = "";
   _refocusCtrl.querySelectorAll("[data-zoom]").forEach((el) => {
-    el.style.display = hideZoom ? "none" : "";
+    el.style.display = "";
   });
 }
 
@@ -4204,18 +4209,38 @@ function setHidroCuerposVisible(map, visible, cve) {
   setLayerVisible(map, HIDRO_CUERPOS_ID, visible, cve);
 }
 
-function applyGeoThematicLayers(map, activeTab, cve, inGeo) {
+function applyGeoThematicLayers(map, activeTab, cve, inGeo, layerIds) {
   ensureThematicMartinLayers(map);
   const c = pad3(cve || _focusCve || "001");
-  const on = (tabId) => Boolean(inGeo && activeTab === tabId);
+  const ids = Array.isArray(layerIds)
+    ? layerIds.map((x) => String(x || "").trim().toLowerCase()).filter(Boolean)
+    : null;
 
-  setLayerVisible(map, MARTIN_USO_SUELO.layerId, on("uso_suelo"), c);
-  setLayerVisible(map, "ly-clima", on("clima"), c);
-  setHidroCorrientesVisible(map, on("hidrografia"), c);
-  setHidroCuerposVisible(map, on("hidrografia"), c);
-  setCurnivelLayersVisible(map, on("relieve"), c);
+  /** @type {Set<string>} */
+  let onSet;
+  if (ids) {
+    onSet = new Set(inGeo ? ids : []);
+  } else {
+    const on = (tabId) => Boolean(inGeo && activeTab === tabId);
+    onSet = new Set();
+    if (on("uso_suelo")) onSet.add("uso_suelo");
+    if (on("clima")) onSet.add("clima");
+    if (on("hidrografia")) {
+      onSet.add("hidro_corrientes");
+      onSet.add("hidro_cuerpos");
+    }
+    if (on("relieve")) onSet.add("curvas_nivel");
+  }
 
-  _relieveActive = on("relieve");
+  const has = (id) => onSet.has(id);
+
+  setLayerVisible(map, MARTIN_USO_SUELO.layerId, has("uso_suelo"), c);
+  setLayerVisible(map, "ly-clima", has("clima"), c);
+  setHidroCorrientesVisible(map, has("hidro_corrientes"), c);
+  setHidroCuerposVisible(map, has("hidro_cuerpos"), c);
+  setCurnivelLayersVisible(map, has("curvas_nivel"), c);
+
+  _relieveActive = has("curvas_nivel");
 }
 
 /** Apaga de inmediato relieve, clima, hidrología y uso de suelo (Datos geográficos). */
@@ -4235,12 +4260,12 @@ function hideGeoThematicLayersOnMap(map) {
   setCurnivelLayersVisible(map, false, c);
 }
 
-/** Una sola pasada: solo la pestaña activa de Datos geográficos (evita carreras async). */
-export function syncGeoThematicLayers(activeTab, cve, inGeo) {
+/** Una sola pasada: capas del tab activo de Datos geográficos (evita carreras async). */
+export function syncGeoThematicLayers(activeTab, cve, inGeo, layerIds) {
   const gen = ++_geoThematicGen;
   const run = (map) => {
     if (gen !== _geoThematicGen) return;
-    applyGeoThematicLayers(map, activeTab, cve, inGeo);
+    applyGeoThematicLayers(map, activeTab, cve, inGeo, layerIds);
   };
   if (_map && _atlasLayersReady && _map.isStyleLoaded()) {
     run(_map);
@@ -4940,9 +4965,16 @@ export function getRelieveLayerActive() {
   return _relieveActive;
 }
 export function setClimaLayerActive(a, c) {
-  if (!a) {
-    whenAtlasMapReady((map) => setLayerVisible(map, "ly-clima", false, c || _focusCve || "001"));
+  const cve = c || _focusCve || "001";
+  const apply = (map) => {
+    ensureThematicMartinLayers(map);
+    setLayerVisible(map, "ly-clima", Boolean(a), cve);
+  };
+  if (_map && _atlasLayersReady && _map.isStyleLoaded()) {
+    apply(_map);
+    return;
   }
+  whenAtlasMapReady(apply);
 }
 export function getClimaLayerActive() {
   return _map?.getLayer("ly-clima") && _map.getLayoutProperty("ly-clima", "visibility") === "visible";
