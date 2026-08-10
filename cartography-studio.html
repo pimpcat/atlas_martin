@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Cartography Studio — GroSIG</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page cartography-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell">
+    <section id="cartoStudioLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card" style="max-width:28rem;margin:2rem auto">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Cartography Studio</h1>
+          <p class="small text-muted mb-3">
+            Branding de tiras PDF (logo, institución, advertencias, fechas). Misma sesión admin.
+          </p>
+          <form id="cartoStudioLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="cartoStudioUser">Usuario</label>
+              <input id="cartoStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="cartoStudioPass">Contraseña</label>
+              <input id="cartoStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="cartoStudioLoginError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="cartoStudioLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="cartoStudioDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h5 mb-0">Cartography Studio</h1>
+          <p class="small text-muted mb-0" id="cartoStudioWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStudioLogoutBtn">Cerrar sesión</button>
+      </div>
+      <div id="cartoStudioNav" class="mb-3"></div>
+
+      <div id="cartoStudioOffline" class="card shadow-sm visor-studio-card d-none mb-3">
+        <div class="card-body">
+          <h2 class="h6">Cartography Engine no disponible</h2>
+          <p class="small text-muted mb-0">
+            Este Studio solo vive si el Engine responde en
+            <code>GET /api/cartography/health</code>. Active el motor o revise el stack.
+          </p>
+        </div>
+      </div>
+
+      <div id="cartoStudioOnline" class="d-none">
+        <div class="card shadow-sm visor-studio-card mb-3" id="cartoStudioPhase0">
+          <div class="card-body">
+            <div class="fw-semibold mb-2">GroSIG Cartography Engine</div>
+            <dl class="row small mb-0" id="cartoStudioHealthDl"></dl>
+          </div>
+        </div>
+
+        <form id="cartoStudioForm" class="d-grid gap-3">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Institución</div>
+            <div class="card-body row g-2">
+              <div class="col-md-6">
+                <label class="form-label small" for="fBrandLine">Línea institucional</label>
+                <input id="fBrandLine" class="form-control form-control-sm" maxlength="200" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="fEngineLine">Línea del motor</label>
+                <input id="fEngineLine" class="form-control form-control-sm" maxlength="200" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Logo(s)</div>
+            <div class="card-body">
+              <p class="small text-muted mb-2">Archivos en <code>assets/logos/</code>. Orden = lista en branding.</p>
+              <ul id="cartoStudioLogosList" class="small mb-2"></ul>
+              <div class="d-flex flex-wrap gap-2 align-items-end">
+                <div>
+                  <label class="form-label small" for="fLogoFile">Subir PNG/JPG</label>
+                  <input type="file" id="fLogoFile" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" />
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStudioUploadLogoBtn">Subir logo</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Advertencias</div>
+            <div class="card-body">
+              <label class="form-label small" for="fAdvertencia">Texto legal / advertencia (tira y paneles)</label>
+              <textarea id="fAdvertencia" class="form-control form-control-sm" rows="5" maxlength="4000"></textarea>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Fechas</div>
+            <div class="card-body">
+              <label class="form-label small" for="fFechaAct">Fecha de actualización</label>
+              <input id="fFechaAct" class="form-control form-control-sm" maxlength="120" placeholder="DICIEMBRE DEL 2024" />
+              <div class="form-text">Se muestra en paneles de croquis / condensado y textos de tira.</div>
+            </div>
+          </div>
+
+          <div id="cartoStudioFormError" class="small text-danger d-none"></div>
+          <div id="cartoStudioFormOk" class="small text-success d-none"></div>
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-sm btn-primary">Guardar branding</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStudioReloadBtn">Recargar</button>
+          </div>
+          <p class="small text-muted mb-0">
+            La generación de PDF sigue en el <strong>Visor</strong> (panel Cartografía). Tras guardar, genere un producto y verifique tira/panel.
+          </p>
+        </form>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/cartographyStudioApp.js"></script>
+</body>
+</html>

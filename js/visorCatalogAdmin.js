@@ -6,6 +6,10 @@ import { ensureVisorLayersHeaderToolbar } from "./visorLayersToolbar.js";
 import { reloadVisorLayerCatalog } from "./visorLayers.js";
 import { purgeOrphanModalBackdrops } from "./atlasModalCleanup.js";
 import { renderAdminStylePreview } from "./visorAdminStylePreview.js";
+import {
+  collectLabelFieldColumns,
+  normalizeLabelParts,
+} from "./visorLabelRegistry.js";
 
 let _publishBtn = null;
 let _manageBtn = null;
@@ -247,8 +251,11 @@ const wizard = {
   mun_scope: "municipio",
   identify_fields: [],
   identify_title: "",
+  hover_fields: [],
+  hover_title: "",
   labels_enabled: false,
   labels_field: "",
+  labels_parts: [],
   labels_minzoom: 14,
   layer_minzoom_enabled: false,
   style_minzoom: 14,
@@ -537,8 +544,11 @@ function resetWizardForCreate() {
   wizard.mun_scope = "municipio";
   wizard.identify_fields = [{ column: "gid", label: "Identificador" }];
   wizard.identify_title = "";
+  wizard.hover_fields = [];
+  wizard.hover_title = "";
   wizard.labels_enabled = false;
   wizard.labels_field = "";
+  wizard.labels_parts = [];
   wizard.labels_minzoom = 14;
   wizard.layer_minzoom_enabled = false;
   wizard.style_minzoom = 14;
@@ -1331,6 +1341,7 @@ function refreshStylePreview(container) {
     defaultColor: document.getElementById("visorAdminDefaultColor")?.value || wizard.default_color,
     iconKey,
     iconVersion: iconMeta?.version,
+    iconFile: iconMeta?.file || "",
   });
 }
 
@@ -1421,6 +1432,13 @@ function bindIconUploadHints(root) {
         warnEl.innerHTML = "";
         return;
       }
+      const name = (file.name || "").toLowerCase();
+      const isRaster = /\.(png|jpe?g)$/i.test(name) || /^image\/(png|jpeg)$/i.test(file.type || "");
+      if (isRaster) {
+        warnEl.innerHTML =
+          '<span class="text-success">Imagen raster lista. Tras registrar, use Ctrl+F5 en el visor.</span>';
+        return;
+      }
       warnEl.innerHTML = '<span class="text-muted">Revisando SVG…</span>';
       try {
         const issues = await analyzeSvgFileForMap(file);
@@ -1445,7 +1463,7 @@ async function uploadIconFromStyleStep(body) {
   const label = body?.querySelector("#visorAdminIconLabel")?.value?.trim() || key;
   const file = body?.querySelector("#visorAdminIconFile")?.files?.[0];
   if (!key || !file) {
-    if (statusEl) statusEl.textContent = "Indique clave e icono SVG";
+    if (statusEl) statusEl.textContent = "Indique clave e icono (SVG, PNG o JPG)";
     return;
   }
   if (statusEl) statusEl.textContent = "Subiendo…";
@@ -2069,23 +2087,66 @@ function normalizeIdentifyFieldNames(fields) {
   return normalizeIdentifyFieldObjects(fields).map((f) => f.column);
 }
 
-function identifyFieldsEditorHtml(cols, selected) {
+/** Columnas del editor: primero las ya elegidas (en su orden), luego el resto de la tabla. */
+function orderedIdentifyEditorColumns(cols, selected) {
+  const all = Array.isArray(cols) ? cols.filter(Boolean).map((c) => String(c)) : [];
+  const selectedObjs = normalizeIdentifyFieldObjects(selected);
+  const seen = new Set();
+  const ordered = [];
+  for (const f of selectedObjs) {
+    const match = all.find((c) => c.toLowerCase() === f.column.toLowerCase());
+    const name = match || f.column;
+    const key = name.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ordered.push(name);
+  }
+  for (const c of all) {
+    const key = c.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    ordered.push(c);
+  }
+  return ordered;
+}
+
+function identifyFieldsEditorHtml(cols, selected, idPrefix = "idf") {
   const map = new Map(normalizeIdentifyFieldObjects(selected).map((f) => [f.column.toLowerCase(), f]));
-  return cols
+  const prefix = String(idPrefix || "idf").replace(/[^a-z0-9_-]/gi, "") || "idf";
+  return orderedIdentifyEditorColumns(cols, selected)
     .map((col) => {
       const saved = map.get(col.toLowerCase());
       const checked = saved ? "checked" : "";
       const labelVal = escapeHtml(saved?.label || defaultFieldLabel(col));
       const disabled = saved ? "" : "disabled";
+      const cid = `${prefix}_${escapeHtml(col)}`;
       return `<div class="visor-admin-identify-row">
+        <div class="visor-admin-idf-move" role="group" aria-label="Orden">
+          <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 visor-admin-idf-grip" draggable="true" title="Arrastrar para reordenar" aria-label="Arrastrar">☰</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" data-idf-move="up" title="Subir" aria-label="Subir">▲</button>
+          <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" data-idf-move="down" title="Bajar" aria-label="Bajar">▼</button>
+        </div>
         <div class="form-check form-check-sm mb-0">
-          <input class="form-check-input visor-admin-idf-check" type="checkbox" id="idf_${escapeHtml(col)}" value="${escapeHtml(col)}" ${checked} />
-          <label class="form-check-label small font-monospace" for="idf_${escapeHtml(col)}">${escapeHtml(col)}</label>
+          <input class="form-check-input visor-admin-idf-check" type="checkbox" id="${cid}" value="${escapeHtml(col)}" ${checked} />
+          <label class="form-check-label small font-monospace" for="${cid}">${escapeHtml(col)}</label>
         </div>
         <input type="text" class="form-control form-control-sm visor-admin-idf-label" data-for="${escapeHtml(col)}" placeholder="Etiqueta visible" value="${labelVal}" ${disabled} />
       </div>`;
     })
     .join("");
+}
+
+function moveIdentifyRow(row, direction) {
+  if (!row) return;
+  const parent = row.parentElement;
+  if (!parent) return;
+  if (direction === "up") {
+    const prev = row.previousElementSibling;
+    if (prev) parent.insertBefore(row, prev);
+  } else if (direction === "down") {
+    const next = row.nextElementSibling;
+    if (next) parent.insertBefore(next, row);
+  }
 }
 
 function bindIdentifyFieldEditors(root) {
@@ -2101,11 +2162,79 @@ function bindIdentifyFieldEditors(root) {
       }
     });
   });
+  root.querySelectorAll("[data-idf-move]").forEach((btn) => {
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const row = btn.closest(".visor-admin-identify-row");
+      moveIdentifyRow(row, btn.getAttribute("data-idf-move"));
+    });
+  });
+  let dragRow = null;
+  root.querySelectorAll(".visor-admin-idf-grip").forEach((grip) => {
+    grip.addEventListener("dragstart", (ev) => {
+      const row = grip.closest(".visor-admin-identify-row");
+      if (!row) {
+        ev.preventDefault();
+        return;
+      }
+      dragRow = row;
+      row.classList.add("is-dragging");
+      try {
+        ev.dataTransfer.effectAllowed = "move";
+        ev.dataTransfer.setData("text/plain", row.querySelector(".visor-admin-idf-check")?.value || "");
+      } catch {
+        /* ignore */
+      }
+    });
+    grip.addEventListener("dragend", () => {
+      const row = grip.closest(".visor-admin-identify-row");
+      row?.classList.remove("is-dragging");
+      root.querySelectorAll(".visor-admin-identify-row.is-drag-over").forEach((el) => {
+        el.classList.remove("is-drag-over");
+      });
+      dragRow = null;
+    });
+  });
+  root.querySelectorAll(".visor-admin-identify-row").forEach((row) => {
+    row.addEventListener("dragover", (ev) => {
+      if (!dragRow || dragRow === row) return;
+      ev.preventDefault();
+      row.classList.add("is-drag-over");
+      try {
+        ev.dataTransfer.dropEffect = "move";
+      } catch {
+        /* ignore */
+      }
+    });
+    row.addEventListener("dragleave", () => {
+      row.classList.remove("is-drag-over");
+    });
+    row.addEventListener("drop", (ev) => {
+      ev.preventDefault();
+      row.classList.remove("is-drag-over");
+      if (!dragRow || dragRow === row) return;
+      const parent = row.parentElement;
+      if (!parent || dragRow.parentElement !== parent) return;
+      const rows = [...parent.querySelectorAll(".visor-admin-identify-row")];
+      const from = rows.indexOf(dragRow);
+      const to = rows.indexOf(row);
+      if (from < 0 || to < 0) return;
+      if (from < to) parent.insertBefore(dragRow, row.nextElementSibling);
+      else parent.insertBefore(dragRow, row);
+    });
+  });
 }
 
-function readIdentifyFieldsFromDom() {
-  const root = document.getElementById("visorAdminIdentifyCols");
-  if (!root) return normalizeIdentifyFieldObjects(wizard.identify_fields);
+
+function readIdentifyFieldsFromDom(rootId = "visorAdminIdentifyCols") {
+  const root = document.getElementById(rootId);
+  if (!root) {
+    if (rootId === "visorAdminHoverCols") {
+      return normalizeIdentifyFieldObjects(wizard.hover_fields);
+    }
+    return normalizeIdentifyFieldObjects(wizard.identify_fields);
+  }
   const out = [];
   root.querySelectorAll(".visor-admin-identify-row").forEach((row) => {
     const cb = row.querySelector(".visor-admin-idf-check");
@@ -2116,6 +2245,210 @@ function readIdentifyFieldsFromDom() {
     out.push({ column: col, label });
   });
   return out;
+}
+
+/**
+ * Convierte labels legacy (`field`) o `parts` al editor visual.
+ * @param {object} labels
+ */
+function labelsPartsFromCatalog(labels) {
+  const lb = labels || {};
+  const parts = normalizeLabelParts(lb.parts);
+  if (parts.length) return parts;
+  if (lb.field) return [{ type: "field", column: String(lb.field) }];
+  if (Array.isArray(lb.fields) && lb.fields.length) {
+    const out = [];
+    lb.fields.forEach((f, i) => {
+      const col = typeof f === "string" ? f : f?.column;
+      if (!col) return;
+      if (i > 0) out.push({ type: "text", value: " " });
+      out.push({ type: "field", column: String(col) });
+    });
+    if (lb.prefix) out.unshift({ type: "text", value: String(lb.prefix) });
+    return out;
+  }
+  return [];
+}
+
+function ensureLabelsPartsDefault() {
+  if (normalizeLabelParts(wizard.labels_parts).length) return;
+  const col =
+    wizard.labels_field ||
+    normalizeIdentifyFieldObjects(wizard.identify_fields).find((f) => f.column === "nombre")
+      ?.column ||
+    normalizeIdentifyFieldObjects(wizard.identify_fields)[0]?.column ||
+    wizard.table_columns[0] ||
+    "";
+  wizard.labels_parts = col ? [{ type: "field", column: col }] : [];
+  wizard.labels_field = col;
+}
+
+function labelsPartsEditorHtml(cols, parts) {
+  const list = normalizeLabelParts(parts);
+  const fieldOpts = (selected) =>
+    (cols || [])
+      .map((c) => {
+        const sel = c === selected ? "selected" : "";
+        return `<option value="${escapeHtml(c)}" ${sel}>${escapeHtml(c)}</option>`;
+      })
+      .join("");
+  if (!list.length) {
+    return `<p class="small text-muted mb-1">Sin partes. Añada texto, campo o salto de línea.</p>`;
+  }
+  return list
+    .map((p, idx) => {
+      if (p.type === "newline") {
+        return `<div class="visor-admin-label-part border rounded p-2 mb-1" data-idx="${idx}" data-type="newline">
+          <div class="d-flex justify-content-between align-items-center gap-2">
+            <span class="small fw-semibold">Salto de línea</span>
+            <button type="button" class="btn btn-outline-danger btn-sm py-0" data-label-part-remove="${idx}">Quitar</button>
+          </div>
+        </div>`;
+      }
+      if (p.type === "text") {
+        return `<div class="visor-admin-label-part border rounded p-2 mb-1" data-idx="${idx}" data-type="text">
+          <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+            <span class="small fw-semibold">Texto fijo</span>
+            <button type="button" class="btn btn-outline-danger btn-sm py-0" data-label-part-remove="${idx}">Quitar</button>
+          </div>
+          <input type="text" class="form-control form-control-sm" data-label-part-text value="${escapeHtml(p.value || "")}" placeholder="Ej. Localidad: " />
+        </div>`;
+      }
+      return `<div class="visor-admin-label-part border rounded p-2 mb-1" data-idx="${idx}" data-type="field">
+        <div class="d-flex justify-content-between align-items-center gap-2 mb-1">
+          <span class="small fw-semibold">Campo</span>
+          <button type="button" class="btn btn-outline-danger btn-sm py-0" data-label-part-remove="${idx}">Quitar</button>
+        </div>
+        <select class="form-select form-select-sm" data-label-part-field>${fieldOpts(p.column || "")}</select>
+      </div>`;
+    })
+    .join("");
+}
+
+function syncLabelsPartsFromDom(root) {
+  if (!root) return;
+  const host = root.querySelector("#visorAdminLabelsParts");
+  if (!host) return;
+  const next = [];
+  host.querySelectorAll(".visor-admin-label-part").forEach((el) => {
+    const type = el.getAttribute("data-type");
+    if (type === "newline") {
+      next.push({ type: "newline", value: "\n" });
+      return;
+    }
+    if (type === "text") {
+      next.push({
+        type: "text",
+        value: el.querySelector("[data-label-part-text]")?.value ?? "",
+      });
+      return;
+    }
+    if (type === "field") {
+      const column = el.querySelector("[data-label-part-field]")?.value?.trim() || "";
+      if (column) next.push({ type: "field", column });
+    }
+  });
+  wizard.labels_parts = next;
+  const firstField = next.find((p) => p.type === "field");
+  wizard.labels_field = firstField?.column || "";
+}
+
+function refreshLabelsPartsEditor(root) {
+  if (!root) return;
+  const host = root.querySelector("#visorAdminLabelsParts");
+  if (!host) return;
+  /** No sincronizar desde DOM aquí: el llamador ya actualizó `wizard.labels_parts`.
+   *  Si se lee el DOM viejo, se pierde la parte recién añadida/quitada. */
+  host.innerHTML = labelsPartsEditorHtml(wizard.table_columns, wizard.labels_parts);
+  bindLabelsPartsHost(root);
+  updateLabelsFieldWarnings(root);
+}
+
+function updateLabelsFieldWarnings(root) {
+  const warnEl = root?.querySelector("#visorAdminLabelsFieldWarn");
+  if (!warnEl) return;
+  const cols = new Set((wizard.table_columns || []).map((c) => String(c).toLowerCase()));
+  const missing = collectLabelFieldColumns({ parts: wizard.labels_parts }).filter(
+    (c) => cols.size && !cols.has(String(c).toLowerCase()),
+  );
+  if (!missing.length) {
+    warnEl.innerHTML = "";
+    warnEl.hidden = true;
+    return;
+  }
+  warnEl.hidden = false;
+  warnEl.innerHTML = `<div class="alert alert-warning py-2 px-2 small mb-0">Advertencia: columnas no listadas en la tabla (pueden faltar en Martin/MVT): <code>${escapeHtml(missing.join(", "))}</code>. Se puede publicar igual.</div>`;
+}
+
+function bindLabelsPartsHost(root) {
+  if (!root) return;
+  const host = root.querySelector("#visorAdminLabelsParts");
+  host?.querySelectorAll("[data-label-part-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      syncLabelsPartsFromDom(root);
+      const idx = Number(btn.getAttribute("data-label-part-remove"));
+      if (!Number.isFinite(idx)) return;
+      wizard.labels_parts = normalizeLabelParts(wizard.labels_parts).filter((_, i) => i !== idx);
+      refreshLabelsPartsEditor(root);
+    });
+  });
+  host?.querySelectorAll("[data-label-part-text], [data-label-part-field]").forEach((el) => {
+    el.addEventListener("change", () => {
+      syncLabelsPartsFromDom(root);
+      updateLabelsFieldWarnings(root);
+    });
+    el.addEventListener("input", () => {
+      syncLabelsPartsFromDom(root);
+      updateLabelsFieldWarnings(root);
+    });
+  });
+}
+
+function bindLabelsPartsToolbar(root) {
+  if (!root) return;
+  /** Rebind seguro: el HTML del paso se regenera al entrar; evita listeners huérfanos. */
+  const bindOne = (id, handler) => {
+    const btn = root.querySelector(id);
+    if (!btn) return;
+    const fresh = btn.cloneNode(true);
+    btn.replaceWith(fresh);
+    fresh.addEventListener("click", handler);
+  };
+  bindOne("#visorAdminLabelsAddText", () => {
+    syncLabelsPartsFromDom(root);
+    wizard.labels_parts = [...normalizeLabelParts(wizard.labels_parts), { type: "text", value: "" }];
+    refreshLabelsPartsEditor(root);
+  });
+  bindOne("#visorAdminLabelsAddField", () => {
+    syncLabelsPartsFromDom(root);
+    const col =
+      wizard.table_columns[0] ||
+      wizard.labels_field ||
+      normalizeLabelParts(wizard.labels_parts).find((p) => p.type === "field")?.column ||
+      "";
+    if (!col) {
+      window.alert("No hay columnas de tabla disponibles para añadir un campo.");
+      return;
+    }
+    wizard.labels_parts = [
+      ...normalizeLabelParts(wizard.labels_parts),
+      { type: "field", column: col },
+    ];
+    refreshLabelsPartsEditor(root);
+  });
+  bindOne("#visorAdminLabelsAddNl", () => {
+    syncLabelsPartsFromDom(root);
+    wizard.labels_parts = [
+      ...normalizeLabelParts(wizard.labels_parts),
+      { type: "newline", value: "\n" },
+    ];
+    refreshLabelsPartsEditor(root);
+  });
+}
+
+function bindLabelsPartsEditor(root) {
+  bindLabelsPartsToolbar(root);
+  bindLabelsPartsHost(root);
 }
 
 function columnsCheckboxList(id, cols, selected) {
@@ -2903,34 +3236,31 @@ function labelFieldOptionsHtml(cols, identifyFields, selected) {
 
 function bindLabelsStepUi(root) {
   if (!root) return;
-  const enabled = root.querySelector("#visorAdminLabelsEnabled");
   const opts = root.querySelector("#visorAdminLabelsOptions");
   const aboveWrap = root.querySelector("#visorAdminLabelsAboveWrap");
   const sync = () => {
-    const on = Boolean(enabled?.checked);
+    const enabledEl = root.querySelector("#visorAdminLabelsEnabled");
+    const on = Boolean(enabledEl?.checked);
     opts?.classList.toggle("d-none", !on);
     if (aboveWrap) {
       aboveWrap.classList.toggle("d-none", wizard.geometry !== "point");
     }
     if (on) {
-      const fieldEl = root.querySelector("#visorAdminLabelsField");
-      if (fieldEl && !fieldEl.value) {
-        const idFields = normalizeIdentifyFieldObjects(wizard.identify_fields);
-        const pick =
-          idFields.find((f) => f.column === "nombre")?.column ||
-          idFields[0]?.column ||
-          wizard.table_columns[0] ||
-          "";
-        if (pick) fieldEl.value = pick;
-      }
+      ensureLabelsPartsDefault();
+      refreshLabelsPartsEditor(root);
     }
     wizard.labels_enabled = on;
     renderWizardStepNav();
   };
+  const enabled = root.querySelector("#visorAdminLabelsEnabled");
   if (enabled) {
-    enabled.addEventListener("change", sync);
+    const freshEnabled = enabled.cloneNode(true);
+    enabled.replaceWith(freshEnabled);
+    freshEnabled.addEventListener("change", sync);
     sync();
   }
+  /** Siempre enlazar toolbar: antes solo se hacía si no había checkbox (ruta muerta). */
+  bindLabelsPartsToolbar(root);
 }
 
 function readLabelsFromDom() {
@@ -2938,7 +3268,10 @@ function readLabelsFromDom() {
   if (!enabledEl) return;
   wizard.labels_enabled = Boolean(enabledEl.checked);
   if (!wizard.labels_enabled) return;
-  wizard.labels_field = document.getElementById("visorAdminLabelsField")?.value?.trim() || "";
+  const root = document.getElementById("visorAdminLabelsOptions")?.closest(".visor-admin-labels-block")
+    || document.querySelector(".visor-admin-step-map");
+  if (root) syncLabelsPartsFromDom(root);
+  ensureLabelsPartsDefault();
   const minz = Number(document.getElementById("visorAdminLabelsMinzoom")?.value);
   wizard.labels_minzoom = Number.isFinite(minz) ? minz : defaultLabelMinzoom(wizard.geometry);
   wizard.labels_above_icon = Boolean(document.getElementById("visorAdminLabelsAboveIcon")?.checked);
@@ -2964,11 +3297,14 @@ async function prepareColumnsWizardDefaults() {
       label: defaultFieldLabel(col),
     }));
   }
-  if (!wizard.labels_field) {
+  if (!wizard.labels_field && !normalizeLabelParts(wizard.labels_parts).length) {
     wizard.labels_field =
       normalizeIdentifyFieldObjects(wizard.identify_fields).find((f) => f.column === "nombre")?.column ||
       normalizeIdentifyFieldObjects(wizard.identify_fields)[0]?.column ||
       "";
+    if (wizard.labels_field) {
+      wizard.labels_parts = [{ type: "field", column: wizard.labels_field }];
+    }
   }
   if (!wizard.search_name_column) {
     wizard.search_name_column = defaultSearchNameColumn(cols);
@@ -3009,11 +3345,20 @@ async function renderStepIdentify(body) {
         </div>
         <div class="row g-3 visor-admin-cols-grid">
           <div class="col-lg-6 visor-admin-cols-pane">
-            <div class="fw-semibold small mb-1">Identificación (clic en mapa)</div>
-            <div class="form-text mb-1">Columna técnica → etiqueta visible antes de los dos puntos.</div>
-            <div id="visorAdminIdentifyCols" class="visor-admin-cols-list atlas-scroll">${identifyFieldsEditorHtml(cols, wizard.identify_fields)}</div>
+            <div class="fw-semibold small mb-1">Identify (clic en mapa)</div>
+            <div class="form-text mb-1">Información completa: columnas y alias. Use ▲ ▼ o arrastre la fila para cambiar el orden en el popup.</div>
+            <div id="visorAdminIdentifyCols" class="visor-admin-cols-list atlas-scroll">${identifyFieldsEditorHtml(cols, wizard.identify_fields, "idf")}</div>
           </div>
           <div class="col-lg-6 visor-admin-cols-pane">
+            <div class="fw-semibold small mb-1">Hover (al pasar el ratón)</div>
+            <div class="form-text mb-1">Resumen en el globo. Si no marca nada, se usa Identify. El orden de filas (▲ ▼ / arrastre) también aplica.</div>
+            <label class="form-label small mb-1" for="visorAdminHoverTitle">Título del hover (opcional)</label>
+            <input type="text" class="form-control form-control-sm mb-2" id="visorAdminHoverTitle" value="${escapeHtml(wizard.hover_title || "")}" placeholder="Vacío = mismo título que Identify" />
+            <div id="visorAdminHoverCols" class="visor-admin-cols-list atlas-scroll">${identifyFieldsEditorHtml(cols, wizard.hover_fields, "hvf")}</div>
+          </div>
+        </div>
+        <div class="row g-3 visor-admin-cols-grid mt-1">
+          <div class="col-12 visor-admin-cols-pane">
             <div class="fw-semibold small mb-1">Exportación KML / SHP</div>
             <div class="form-text mb-1">Si no marca ninguna, se exportan todas las columnas.</div>
             <div id="visorAdminExportCols" class="visor-admin-cols-list atlas-scroll">${columnsCheckboxList("exp", cols, wizard.export_columns)}</div>
@@ -3075,6 +3420,7 @@ async function renderStepIdentify(body) {
         </div>
       </div>`;
     bindIdentifyFieldEditors(body.querySelector("#visorAdminIdentifyCols"));
+    bindIdentifyFieldEditors(body.querySelector("#visorAdminHoverCols"));
     bindIdentifyFieldEditors(body.querySelector("#visorAdminTabularCols"));
     bindSpatialFieldEditors(body.querySelector("#visorAdminSpatialFields"));
     bindIdentifyFieldEditors(body.querySelector("#visorAdminSpatialDetailCols"));
@@ -3089,8 +3435,8 @@ async function renderStepMap(body) {
   body.innerHTML = '<p class="small text-muted mb-0">Cargando columnas…</p>';
   try {
     const cols = await prepareColumnsWizardDefaults();
+    ensureLabelsPartsDefault();
     const labelMinz = wizard.labels_minzoom ?? defaultLabelMinzoom(wizard.geometry);
-    const labelField = wizard.labels_field || cols[0] || "";
     const searchTipo = escapeHtml(wizard.search_tipo || wizard.label || "");
     const searchExtras = searchExtraColumnsHtml(
       cols,
@@ -3106,12 +3452,17 @@ async function renderStepMap(body) {
             <label class="form-check-label small fw-semibold" for="visorAdminLabelsEnabled">Etiquetas automáticas en el mapa</label>
           </div>
           <div id="visorAdminLabelsOptions" class="${wizard.labels_enabled ? "" : "d-none"}">
+            <div class="fw-semibold small mb-1">Constructor de la etiqueta automática</div>
+            <div class="form-text mb-2">Combine texto fijo, campos y saltos de línea. Ej.: «Localidad: » + nom_loc + salto + poblacion.</div>
+            <div id="visorAdminLabelsParts" class="mb-2">${labelsPartsEditorHtml(cols, wizard.labels_parts)}</div>
+            <div class="d-flex flex-wrap gap-1 mb-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="visorAdminLabelsAddText">+ Texto</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="visorAdminLabelsAddField">+ Campo</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="visorAdminLabelsAddNl">+ Salto de línea</button>
+            </div>
+            <div id="visorAdminLabelsFieldWarn" class="mb-2" hidden></div>
             <div class="row g-2 align-items-end">
-              <div class="col-md-5">
-                <label class="form-label small mb-1" for="visorAdminLabelsField">Campo del letrerito</label>
-                <select class="form-select form-select-sm" id="visorAdminLabelsField">${labelFieldOptionsHtml(cols, wizard.identify_fields, labelField)}</select>
-              </div>
-              <div class="col-md-3">
+              <div class="col-md-4">
                 <label class="form-label small mb-1" for="visorAdminLabelsMinzoom">Zoom mínimo</label>
                 <input type="number" class="form-control form-control-sm" id="visorAdminLabelsMinzoom" min="8" max="20" step="0.5" value="${escapeHtml(String(labelMinz))}" />
               </div>
@@ -3226,10 +3577,10 @@ function renderStepStyle(body) {
           <label class="form-label small mb-1">Icono</label>
           <select class="form-select form-select-sm" id="visorAdminIcon">${iconOptionsHtml()}</select>
           <div class="visor-admin-icon-upload border rounded p-2 mt-2">
-            <div class="fw-semibold small mb-1">Subir icono SVG</div>
+            <div class="fw-semibold small mb-1">Subir icono (SVG / PNG / JPG)</div>
             <div class="alert alert-info py-2 px-2 small mb-2 visor-admin-icon-hint">
-              <strong>Recomendado para mapa:</strong> SVG con <code>viewBox="0 0 32 32"</code>, trazo grueso o relleno sólido.
-              Evite logos con línea muy fina o SVG de Potrace sin revisar — en el mapa se rasterizan pequeños y el contorno se adelgaza.
+              <strong>Recomendado para mapa:</strong> SVG con <code>viewBox="0 0 32 32"</code>, o PNG/JPG cuadrado (~32–128 px) con fondo transparente si aplica.
+              Evite logos con línea muy fina — en el mapa se rasterizan pequeños.
               <div class="mt-1">Catálogo de iconos del visor (referencia y reutilización):
                 <a href="./assets/icons/map/" target="_blank" rel="noopener">assets/icons/map/</a>
                 · registro en <code>config/visor/icons.json</code>
@@ -3245,8 +3596,8 @@ function renderStepStyle(body) {
                 <input type="text" class="form-control form-control-sm" id="visorAdminIconLabel" placeholder="Mi icono" />
               </div>
               <div class="col-sm-4">
-                <label class="form-label small mb-1" for="visorAdminIconFile">Archivo .svg</label>
-                <input type="file" class="form-control form-control-sm" id="visorAdminIconFile" accept=".svg,image/svg+xml" />
+                <label class="form-label small mb-1" for="visorAdminIconFile">Archivo</label>
+                <input type="file" class="form-control form-control-sm" id="visorAdminIconFile" accept=".svg,.png,.jpg,.jpeg,image/svg+xml,image/png,image/jpeg" />
               </div>
             </div>
             <button type="button" class="btn btn-sm btn-outline-primary mt-2" id="visorAdminIconUploadBtn">Registrar icono</button>
@@ -3398,8 +3749,20 @@ function renderStepReview(body) {
     ? wizard.export_kml_name_field || defaultKmlNameField(wizard.table_columns) || "—"
     : null;
   const labelsSummary = wizard.labels_enabled
-    ? `${wizard.labels_field || "—"} (zoom ≥ ${wizard.labels_minzoom ?? defaultLabelMinzoom(wizard.geometry)}${wizard.labels_offset_x || wizard.labels_offset_y ? ` · offset ${wizard.labels_offset_x}, ${wizard.labels_offset_y}` : ""})`
+    ? `${normalizeLabelParts(wizard.labels_parts)
+        .map((p) =>
+          p.type === "newline"
+            ? "↵"
+            : p.type === "text"
+              ? `"${p.value || ""}"`
+              : p.column || "?",
+        )
+        .join(" + ") || wizard.labels_field || "—"} (zoom ≥ ${wizard.labels_minzoom ?? defaultLabelMinzoom(wizard.geometry)}${wizard.labels_offset_x || wizard.labels_offset_y ? ` · offset ${wizard.labels_offset_x}, ${wizard.labels_offset_y}` : ""})`
     : "Desactivadas";
+  const hoverFields = normalizeIdentifyFieldObjects(wizard.hover_fields);
+  const hoverSummary = hoverFields.length
+    ? hoverFields.map((f) => f.label || f.column).join(", ")
+    : "Igual que Identify (legacy)";
   const searchSummary = wizard.search_enabled
     ? `${wizard.search_tipo || wizard.label || "—"} · ${wizard.search_name_column || "—"}`
     : "No incluida";
@@ -3447,6 +3810,7 @@ function renderStepReview(body) {
       <dt>Alcance</dt><dd>${wizard.mun_scope === "estatal" ? "Estatal" : "Municipal"}</dd>
       <dt>Título popup</dt><dd>${escapeHtml(idTitle || "—")}</dd>
       <dt>Identify</dt><dd>${escapeHtml(idf)}</dd>
+      <dt>Hover</dt><dd>${escapeHtml(hoverSummary)}</dd>
       <dt>Etiquetas mapa</dt><dd>${escapeHtml(labelsSummary)}</dd>
       <dt>Buscador</dt><dd>${escapeHtml(searchSummary)}</dd>
       <dt>Filtro atributo</dt><dd>${escapeHtml(filterSummary)}</dd>
@@ -3510,7 +3874,13 @@ function readStepFields() {
     wizard.identify_title = document.getElementById("visorAdminIdentifyTitle")?.value?.trim() || "";
   }
   if (document.getElementById("visorAdminIdentifyCols")) {
-    wizard.identify_fields = readIdentifyFieldsFromDom();
+    wizard.identify_fields = readIdentifyFieldsFromDom("visorAdminIdentifyCols");
+  }
+  if (document.getElementById("visorAdminHoverCols")) {
+    wizard.hover_fields = readIdentifyFieldsFromDom("visorAdminHoverCols");
+  }
+  if (document.getElementById("visorAdminHoverTitle")) {
+    wizard.hover_title = document.getElementById("visorAdminHoverTitle")?.value?.trim() || "";
   }
   if (document.getElementById("visorAdminExportCols")) {
     wizard.export_columns = readCheckedColumns("visorAdminExportCols");
@@ -3628,14 +3998,33 @@ function buildPayload() {
   } else {
     payload.identify = { title: idTitle, fields: [] };
   }
-  if (wizard.labels_enabled && wizard.labels_field) {
+  const hoverFields = normalizeIdentifyFieldObjects(wizard.hover_fields);
+  if (hoverFields.length) {
+    payload.hover = {
+      title: (wizard.hover_title || idTitle).trim(),
+      fields: hoverFields,
+    };
+  }
+  const labelParts = normalizeLabelParts(wizard.labels_parts);
+  if (wizard.labels_enabled && (labelParts.length || wizard.labels_field)) {
+    const parts =
+      labelParts.length > 0
+        ? labelParts
+        : wizard.labels_field
+          ? [{ type: "field", column: wizard.labels_field }]
+          : [];
+    const firstField = parts.find((p) => p.type === "field");
     payload.labels = {
       enabled: true,
-      field: wizard.labels_field,
+      parts,
       minzoom: wizard.labels_minzoom ?? defaultLabelMinzoom(wizard.geometry),
       above_icon: wizard.labels_above_icon !== false,
       color: wizard.labels_color || "#2c3e50",
+      color_claro: wizard.labels_color || "#2c3e50",
     };
+    if (firstField?.column) {
+      payload.labels.field = firstField.column;
+    }
     const ox = Number(wizard.labels_offset_x) || 0;
     const oy = Number(wizard.labels_offset_y) || 0;
     if (ox !== 0 || oy !== 0) {
@@ -3645,7 +4034,9 @@ function buildPayload() {
       payload.labels.source = "centroid";
     }
     const exportCols = new Set(data.export_columns || wizard.export_columns || []);
-    exportCols.add(wizard.labels_field);
+    for (const col of collectLabelFieldColumns(payload.labels)) {
+      exportCols.add(col);
+    }
     data.export_columns = [...exportCols];
   }
   if (idFields.length) {
@@ -3767,6 +4158,15 @@ async function saveLayer() {
   const payload = buildPayload();
   const status = document.getElementById("visorAdminStatus");
   const isEdit = wizard.mode === "edit";
+  const labelWarnCols = collectLabelFieldColumns(payload.labels || {});
+  const known = new Set((wizard.table_columns || []).map((c) => String(c).toLowerCase()));
+  const missingLabelCols = labelWarnCols.filter((c) => known.size && !known.has(String(c).toLowerCase()));
+  if (missingLabelCols.length) {
+    const ok = window.confirm(
+      `Advertencia: columnas de etiqueta no listadas en la tabla (pueden faltar en Martin):\n${missingLabelCols.join(", ")}\n\n¿Publicar de todos modos?`,
+    );
+    if (!ok) return;
+  }
   const url = isEdit
     ? `/api/visor/admin/layers/${encodeURIComponent(wizard.editingLayerId)}`
     : "/api/visor/admin/layers";
@@ -3897,9 +4297,17 @@ async function openEditWizard(layerId) {
     wizard.mun_scope = data.data?.mun_filter === false ? "estatal" : "municipio";
     wizard.identify_fields = normalizeIdentifyFieldObjects(data.identify?.fields);
     wizard.identify_title = data.identify?.title || data.label || "";
+    wizard.hover_fields = normalizeIdentifyFieldObjects(data.hover?.fields);
+    wizard.hover_title = data.hover?.title || "";
     const lb = data.labels || {};
-    wizard.labels_enabled = Boolean(lb.enabled && lb.field);
-    wizard.labels_field = lb.field || "";
+    wizard.labels_parts = labelsPartsFromCatalog(lb);
+    wizard.labels_enabled = Boolean(
+      lb.enabled && (wizard.labels_parts.length || lb.field || (lb.fields && lb.fields.length)),
+    );
+    wizard.labels_field =
+      lb.field ||
+      wizard.labels_parts.find((p) => p.type === "field")?.column ||
+      "";
     wizard.labels_minzoom = lb.minzoom ?? defaultLabelMinzoom(data.geometry || "point");
     wizard.labels_above_icon = lb.above_icon !== false;
     wizard.labels_color = lb.color || "#2c3e50";

@@ -12,17 +12,19 @@ Guía para configurar **desde el catálogo** la interacción al pasar el ratón 
 
 | Mecanismo | Qué ve el usuario | Cuándo aparece | Bloque en `catalog.json` |
 |-----------|-------------------|----------------|--------------------------|
-| **Tooltip (globo)** | Cuadro flotante al pasar el ratón | Solo con el cursor encima del elemento | `identify` o `tooltip` |
-| **Etiqueta en mapa** | Texto dibujado sobre el mapa | Al activar la capa y superar un **zoom mínimo** | `labels` |
+| **Hover (globo)** | Cuadro flotante al pasar el ratón | Solo con el cursor encima | `hover` (si falta → mismo que `identify`) |
+| **Identify (ficha)** | Panel/ficha al hacer clic | Clic con herramienta identify | `identify` (o `tooltip`) |
+| **Etiqueta en mapa** | Texto dibujado sobre el mapa | Capa activa y zoom ≥ `minzoom` | `labels` |
 
-El tooltip **no sustituye** a la etiqueta: pueden usarse juntos o por separado.
+Hover e identify **pueden diferir**: use `hover` para un resumen y `identify` para la ficha completa. Sin `hover`, el globo replica identify (paridad con capas legacy).
 
 ```
 catalog.json
     │
-    ├─ identify / tooltip  →  visorIdentifyCatalog.js  →  mapOverlayTips.js (hover + clic)
+    ├─ identify  →  clic (ficha)
+    ├─ hover     →  mouseenter (globo); si ausente = identify
     │
-    └─ labels                →  visorLabelRegistry.js   →  capa ly-{overlay_key}-labels
+    └─ labels    →  visorLabelRegistry.js   →  capa ly-{overlay_key}-labels
 ```
 
 Al abrir el visor, `visorLayers.js` ejecuta en orden: estilos → etiquetas → tooltips.
@@ -31,19 +33,26 @@ Al abrir el visor, `visorLayers.js` ejecuta en orden: estilos → etiquetas → 
 
 ## Tooltips (globo al pasar el ratón)
 
-### Opción A — `identify` (recomendada)
+### Opción A — `identify` + `hover` (recomendada)
 
-Es el bloque que ya usa para la ficha al hacer clic. **También alimenta el globo al pasar el ratón.**
+`identify` alimenta la ficha al clic. Opcionalmente declare `hover` con menos campos:
 
 ```json
 "identify": {
   "title": "Pozo de agua",
   "fields": [
     { "column": "nombre" },
-    { "label": "Profundidad (m)", "column": "profundidad" }
+    { "label": "Profundidad (m)", "column": "profundidad" },
+    { "label": "Estado", "column": "estatus" }
   ]
+},
+"hover": {
+  "title": "Pozo",
+  "fields": [{ "column": "nombre" }]
 }
 ```
+
+Si **no** hay bloque `hover`, el globo usa el mismo HTML que identify.
 
 **Variantes** (igual que en [AGREGAR_CAPA.md](./AGREGAR_CAPA.md)):
 
@@ -116,6 +125,28 @@ Bloque `labels` en la entrada de la capa. El texto se muestra en la capa MapLibr
   "minzoom": 14
 }
 ```
+
+### Constructor de partes (Visor Studio / multilínea)
+
+Preferido para capas nuevas. Si existe `parts`, tiene prioridad sobre `field` / `fields` / `join`:
+
+```json
+"labels": {
+  "enabled": true,
+  "parts": [
+    { "type": "text", "value": "Localidad: " },
+    { "type": "field", "column": "nom_loc" },
+    { "type": "text", "value": "\n" },
+    { "type": "field", "column": "poblacion" }
+  ],
+  "minzoom": 12,
+  "color": "#2c3e50",
+  "color_claro": "#2c3e50",
+  "above_icon": true
+}
+```
+
+Legacy con solo `field` / `fields` / `join` / `prefix` **sigue renderizando igual**.
 
 ### Ejemplo con estilo
 
@@ -196,12 +227,14 @@ Bloque `labels` en la entrada de la capa. El texto se muestra en la capa MapLibr
 
 | Campo | Obligatorio | Default | Descripción |
 |-------|-------------|---------|-------------|
-| `field` | Uno de field / fields / join | — | Columna principal del texto |
+| `parts` | Uno de parts / field / fields / join | — | Constructor visual: `text` / `field` / `newline` |
+| `field` | | — | Columna principal (legacy; se conserva al publicar desde Studio) |
 | `fields` | | — | Lista de columnas a concatenar |
 | `join` | | — | `{ left: [], right: [], separator?: ": " }` |
 | `prefix` | No | — | Texto fijo antes del valor |
 | `minzoom` | No | 14 (punto/polígono), 16 (línea) | Zoom a partir del cual se ven las etiquetas |
-| `color` | No | `#2c3e50` | Color del texto |
+| `color` | No | `#2c3e50` | Color del texto (tema oscuro) |
+| `color_claro` | No | = `color` | Color en tema claro |
 | `halo_color` | No | `#ffffff` | Halo del texto |
 | `halo_width` | No | `2` | Grosor del halo |
 | `size` | No | 13 (punto), 11 (línea) | Tamaño base del texto |

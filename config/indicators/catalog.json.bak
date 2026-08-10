@@ -941,7 +941,7 @@
         ],
         "title": "Tasa de analfabetismo de la población de 15 años y más por entidad federativay municipios seleccionados 2010 y 2020",
         "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Educación 4.",
-        "ranking_size": 6,
+        "ranking_size": 5,
         "style": {
           "colors": {
             "claro": {
@@ -1988,6 +1988,93 @@
         "fecha_inicial": "",
         "fecha_final": "",
         "ultima_actualizacion": ""
+      }
+    },
+    {
+      "id": "eco_prueba",
+      "group_id": "socio",
+      "label": "Prueba Wizard",
+      "subtitle": "INEGI-DEV",
+      "unit": "",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "studio"
+      },
+      "fields": [
+        {
+          "key": "imb",
+          "column": "imb",
+          "label": "Imb",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_dual_bars",
+        "sort_by": "imb",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "imb"
+        ],
+        "title": "Test",
+        "footer": "Fuente: DEV INEGI, PRUEBAS",
+        "ranking": true,
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "series": [
+                "#6342ff"
+              ],
+              "serie1": "#6342ff"
+            },
+            "oscuro": {
+              "series": [
+                "#1a4971"
+              ],
+              "serie1": "#1a4971"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "Prueba Wizard",
+        "periodicidad": "",
+        "unidad_medida": "",
+        "fuente": "DEV INEGI, PRUEBAS",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "api": {
+        "path": "/api/indicators/eco_prueba",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal"
+      },
+      "export": {
+        "filename_prefix": "test",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": "#indicatorFullVizRoot",
+        "footer": "Fuente: DEV INEGI, PRUEBAS"
+      },
+      "legacy": {
+        "menu_flag": "eco_prueba"
       }
     }
   ]

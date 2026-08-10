@@ -66,9 +66,10 @@
             <div class="card-body p-3 p-md-4">
               <div id="indStudioFormEmpty" class="text-muted small">Seleccione un indicador o cree uno nuevo.</div>
               <form id="indStudioForm" class="d-none d-grid gap-3">
-                <div class="d-flex flex-wrap gap-2 small" id="indStudioSteps"></div>
+                <div class="d-flex flex-wrap gap-2 small" id="indStudioSteps" aria-label="Pasos del asistente"></div>
+                <p class="small text-muted mb-0" id="indStudioStepHint"></p>
 
-                <div class="border rounded p-3">
+                <div class="border rounded p-3" data-wizard-step="1">
                   <div class="fw-semibold small mb-2">1. Identidad en el menú</div>
                   <div class="row g-2">
                     <div class="col-md-4">
@@ -106,7 +107,7 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3">
+                <div class="border rounded p-3 d-none" data-wizard-step="2">
                   <div class="fw-semibold small mb-2">2. Datos y columnas</div>
                   <div class="row g-2">
                     <div class="col-md-4">
@@ -128,9 +129,13 @@
                       </select>
                     </div>
                     <div class="col-12">
-                      <label class="form-label small">Columnas de la vista</label>
-                      <textarea id="fFields" class="form-control form-control-sm font-monospace" rows="5" placeholder="prod_brut|prod_brut|Producción bruta|float"></textarea>
-                      <div class="form-text">Al hacer clic se agrega en formato corto: <code>clave|Etiqueta|tipo</code>. Si la columna en la BD tiene otro nombre: <code>clave|columna_bd|Etiqueta|tipo</code>.</div>
+                      <div class="fw-semibold small mb-1">Constructor de campos</div>
+                      <div class="form-text mb-2">Añada campos a mano o con «Ver columnas». Clave, columna BD, etiqueta y tipo. Use ▲ ▼ para el orden.</div>
+                      <div id="indStudioFieldsEditor" class="ind-studio-fields-editor mb-2"></div>
+                      <div class="d-flex flex-wrap gap-2 mb-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioFieldAddBtn">+ Campo</button>
+                      </div>
+                      <textarea id="fFields" class="d-none" aria-hidden="true" tabindex="-1"></textarea>
                     </div>
                     <div class="col-12 d-flex flex-wrap gap-2 align-items-center">
                       <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioLoadColsBtn">Ver columnas de la tabla</button>
@@ -142,7 +147,7 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3">
+                <div class="border rounded p-3 d-none" data-wizard-step="3">
                   <div class="fw-semibold small mb-2">3. Cómo se ve en el Atlas</div>
                   <div class="row g-2">
                     <div class="col-md-6">
@@ -205,8 +210,8 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3 d-none" data-studio-field="bar_colors" id="indStudioColorsBlock">
-                  <div class="fw-semibold small mb-2">4. Colores de las barras</div>
+                <div class="border rounded p-3 d-none" data-studio-field="bar_colors" id="indStudioColorsBlock" data-wizard-step="3">
+                  <div class="fw-semibold small mb-2">Colores de las barras</div>
                   <p class="small text-muted mb-2">Opcional. Se aplican según el tema claro u oscuro del Atlas.</p>
                   <div class="row g-2" data-studio-field="bar_colors_simple">
                     <div class="col-md-3">
@@ -259,9 +264,9 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3" style="border-color: rgba(245,158,11,0.35) !important">
+                <div class="border rounded p-3 d-none" data-wizard-step="4" style="border-color: rgba(245,158,11,0.35) !important">
                   <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="badge text-bg-warning">5. Metadatos</span>
+                    <span class="badge text-bg-warning">4. Metadatos</span>
                     <span class="small text-muted">Formato INEGI · botón «Metadatos» en el Atlas</span>
                   </div>
                   <div class="row g-2">
@@ -334,16 +339,25 @@
                   </div>
                 </div>
 
+                <div class="border rounded p-3 d-none" data-wizard-step="5">
+                  <div class="fw-semibold small mb-2">5. Revisar y publicar</div>
+                  <p class="small text-muted mb-2">Confirme el resumen. Puede volver atrás para ajustar. El contrato JSON del catálogo no cambia.</p>
+                  <div id="indStudioReviewSummary" class="small ind-studio-review mb-3"></div>
+                  <div class="d-flex flex-wrap gap-2">
+                    <button type="submit" class="btn btn-sm btn-primary">Publicar</button>
+                    <button type="button" class="btn btn-sm btn-outline-primary" id="indStudioPreviewBtn">Vista previa JSON</button>
+                    <button type="button" class="btn btn-sm btn-outline-danger" id="indStudioDeleteBtn">Eliminar</button>
+                  </div>
+                  <pre id="indStudioPreview" class="small bg-dark text-light p-2 rounded d-none mt-2" style="max-height:240px;overflow:auto"></pre>
+                </div>
+
                 <div id="indStudioFormError" class="small text-danger d-none"></div>
                 <div id="indStudioFormOk" class="small text-success d-none"></div>
 
-                <div class="d-flex flex-wrap gap-2">
-                  <button type="submit" class="btn btn-sm btn-primary">Publicar</button>
-                  <button type="button" class="btn btn-sm btn-outline-primary" id="indStudioPreviewBtn">Vista previa JSON</button>
-                  <button type="button" class="btn btn-sm btn-outline-danger" id="indStudioDeleteBtn">Eliminar</button>
+                <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center" id="indStudioWizardNav">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioWizardBack">Atrás</button>
+                  <button type="button" class="btn btn-sm btn-primary" id="indStudioWizardNext">Siguiente</button>
                 </div>
-
-                <pre id="indStudioPreview" class="small bg-dark text-light p-2 rounded d-none" style="max-height:240px;overflow:auto"></pre>
               </form>
             </div>
           </div>

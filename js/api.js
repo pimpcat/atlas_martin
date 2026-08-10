@@ -272,24 +272,26 @@ const MENU_VIEW_PARAM_BY_ID = {
 const MENU_CATALOG_GROUP_IDS = ["socio", "viv", "eco", "gov"];
 
 /** Secciones fuera del catálogo de indicadores tabulares. */
-const MENU_GEO_STATIC_ITEMS = [
-  {
-    id: "geo_visor",
-    title: "Visor Geográfico",
-    subtitle: "Mapa ampliado y capas",
-    unit: "",
-    viewParam: MENU_VIEW_PARAM_DEFAULT,
-    visor: true,
-  },
-  {
-    id: "geo_inv_viv",
-    title: "Inventario de Viviendas",
-    subtitle: "INV 2020 · Manzanas",
-    unit: "",
-    viewParam: MENU_VIEW_PARAM_DEFAULT,
-    invViv: true,
-  },
-];
+const MENU_GEO_VISOR_ITEM = {
+  id: "geo_visor",
+  title: "Visor Geográfico",
+  subtitle: "Mapa ampliado y capas",
+  unit: "",
+  viewParam: MENU_VIEW_PARAM_DEFAULT,
+  visor: true,
+};
+
+const MENU_GEO_INV_ITEM = {
+  id: "geo_inv_viv",
+  title: "Inventario de Viviendas",
+  subtitle: "INV 2020 · Manzanas",
+  unit: "",
+  viewParam: MENU_VIEW_PARAM_DEFAULT,
+  invViv: true,
+};
+
+/** @deprecated usar MENU_GEO_VISOR_ITEM + INV condicional */
+const MENU_GEO_STATIC_ITEMS = [MENU_GEO_VISOR_ITEM, MENU_GEO_INV_ITEM];
 
 const MENU_SECTION_GEO = {
   id: "geo",
@@ -341,7 +343,7 @@ function catalogIndicatorToMenuItem(ind) {
 /**
  * Arma el modelo del menú mezclando catálogo (socio/viv/eco/gov) con geo y sitios.
  * @param {object} catalog — payload de catalog.json / GET /api/indicators/catalog
- * @param {{ geographyCatalog?: object|null, geographyEnabled?: boolean }} [opts]
+ * @param {{ geographyCatalog?: object|null, geographyEnabled?: boolean, invEnabled?: boolean, invCatalog?: object|null }} [opts]
  */
 export function buildMenuModelFromCatalog(catalog, opts = {}) {
   const groupById = new Map((catalog?.groups || []).map((g) => [g.id, g]));
@@ -380,7 +382,25 @@ export function buildMenuModelFromCatalog(catalog, opts = {}) {
       geoContext: true,
     });
   }
-  geoItems.push(...MENU_GEO_STATIC_ITEMS);
+  geoItems.push(MENU_GEO_VISOR_ITEM);
+  if (opts.invEnabled === true) {
+    const invCat = opts.invCatalog || null;
+    if (invCat?.menu) {
+      const m = invCat.menu;
+      if (m.enabled !== false) {
+        geoItems.push({
+          id: m.id || "geo_inv_viv",
+          title: m.label || "Inventario de Viviendas",
+          subtitle: m.subtitle || "INV 2020 · Manzanas",
+          unit: "",
+          viewParam: MENU_VIEW_PARAM_DEFAULT,
+          invViv: true,
+        });
+      }
+    } else {
+      geoItems.push(MENU_GEO_INV_ITEM);
+    }
+  }
 
   const geoSection = {
     id: (geoCat?.menu?.section_id) || "geo",
@@ -412,6 +432,8 @@ export function buildMenuModelFromCatalog(catalog, opts = {}) {
 export async function getMenuModelAsync() {
   let geographyEnabled = false;
   let geographyCatalog = null;
+  let invEnabled = false;
+  let invCatalog = null;
   try {
     const {
       probeGeographyContext,
@@ -430,22 +452,46 @@ export async function getMenuModelAsync() {
   }
 
   try {
+    const { probeInvEngine } = await import("./invHealth.js");
+    const { loadInvCatalog, getInvCatalogCached } = await import(
+      "./invVivCatalog.js"
+    );
+    invEnabled = await probeInvEngine();
+    if (invEnabled) {
+      try {
+        await loadInvCatalog();
+        invCatalog = getInvCatalogCached();
+      } catch (err) {
+        console.warn("[menu] INV catalog no disponible:", err);
+      }
+    }
+  } catch (err) {
+    console.warn("[menu] INV Engine probe falló:", err);
+  }
+
+  try {
     const { loadIndicatorsCatalog } = await import("./indicatorCatalog.js");
     const catalog = await loadIndicatorsCatalog();
-    return buildMenuModelFromCatalog(catalog, { geographyEnabled, geographyCatalog });
+    return buildMenuModelFromCatalog(catalog, {
+      geographyEnabled,
+      geographyCatalog,
+      invEnabled,
+      invCatalog,
+    });
   } catch (err) {
     console.warn("[menu] Catálogo no disponible; menú estático legacy.", err);
     const model = getMenuModel();
-    if (!geographyEnabled) {
-      return model.map((section) => {
-        if (section.id !== "geo") return section;
-        return {
-          ...section,
-          items: (section.items || []).filter((it) => !it.geoContext),
-        };
-      });
-    }
-    return model;
+    return model.map((section) => {
+      if (section.id !== "geo") return section;
+      return {
+        ...section,
+        items: (section.items || []).filter((it) => {
+          if (it.geoContext && !geographyEnabled) return false;
+          if (it.invViv && !invEnabled) return false;
+          return true;
+        }),
+      };
+    });
   }
 }
 

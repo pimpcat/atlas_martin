@@ -697,7 +697,7 @@ async function onIndicatorSelected(indicator) {
 
     const host = document.getElementById("invVivLayerList");
     if (host) {
-      renderInvVivPanel(host, visorLayerPanelOptions());
+      void renderInvVivPanel(host, visorLayerPanelOptions());
     }
     attachInvVivMap(visorLayerPanelOptions());
     updateVisorMunicipioLabel();

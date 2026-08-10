@@ -33,18 +33,25 @@ const TIP_DEFS = [
 const TIP_DEF_BY_PRIMARY = Object.fromEntries(TIP_DEFS.map((d) => [d.primary, d]));
 
 /** Tips registrados desde el catálogo del visor (data-driven). */
-/** @type {Map<string, { tipHtml: (p: object) => string, visorOnly?: boolean }>} */
+/** @type {Map<string, { tipHtml: (p: object) => string, identifyHtml?: (p: object) => string, visorOnly?: boolean }>} */
 const _catalogTipByPrimary = new Map();
 
 /**
  * Registra identify/hover desde el catálogo del visor geográfico.
  * @param {string} primary - id MapLibre (p. ej. ly-colonias)
- * @param {(props: object) => string} tipHtmlFn
+ * @param {(props: object) => string} tipHtmlFn - HTML de hover
  * @param {boolean} [visorOnly]
+ * @param {{ identifyHtml?: (props: object) => string }} [opts] - HTML de identify (clic); por defecto = hover
  */
-export function registerCatalogTipDef(primary, tipHtmlFn, visorOnly = false) {
+export function registerCatalogTipDef(primary, tipHtmlFn, visorOnly = false, opts = {}) {
   if (!primary || typeof tipHtmlFn !== "function") return;
-  _catalogTipByPrimary.set(primary, { tipHtml: tipHtmlFn, visorOnly });
+  const identifyHtml =
+    typeof opts.identifyHtml === "function" ? opts.identifyHtml : tipHtmlFn;
+  _catalogTipByPrimary.set(primary, {
+    tipHtml: tipHtmlFn,
+    identifyHtml,
+    visorOnly,
+  });
 }
 
 export function clearCatalogTipDefs() {
@@ -286,7 +293,8 @@ export function buildOverlayIdentifyHtml(layerId, properties) {
   const catalogDef = _catalogTipByPrimary.get(primary);
   if (catalogDef) {
     if (catalogDef.visorOnly && !_visorGeograficoActiveFn()) return null;
-    return catalogDef.tipHtml(properties || {});
+    const fn = catalogDef.identifyHtml || catalogDef.tipHtml;
+    return fn(properties || {});
   }
 
   const def = TIP_DEF_BY_PRIMARY[primary];
@@ -492,12 +500,13 @@ function refreshOverlayIdentifyBindings(map, overlayLayerIds) {
   if (!map || !_onIdentifyClick) return;
 
   for (const [primary, catalogDef] of _catalogTipByPrimary) {
+    const identifyFn = catalogDef.identifyHtml || catalogDef.tipHtml;
     for (const layerId of overlayLayerIds(map, primary)) {
       bindLayerIdentifyClick(
         map,
         layerId,
         primary,
-        catalogDef.tipHtml,
+        identifyFn,
         Boolean(catalogDef.visorOnly),
       );
     }

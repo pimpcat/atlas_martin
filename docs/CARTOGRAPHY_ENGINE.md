@@ -1,9 +1,9 @@
 # GroSIG Cartography Engine
 
 Documentación operativa del motor de cartografía vectorial (estado al **22 jul 2026**).  
-Código: `app_api/cartography_engine/` · UI: panel **Cartografía** del Visor (`htdocs/atlas_gro/js/cartographyClient.js`).
+Código: `app_api/cartography_engine/` · UI generación: panel **Cartografía** del Visor (`htdocs/atlas_gro/js/cartographyClient.js`) · Admin branding 1.0: **Cartography Studio** (`cartography-studio.html`).
 
-**Versión engine:** `1.12.43` (`cartography_engine.__version__`)
+**Versión engine:** `1.12.51` (`cartography_engine.__version__`)
 
 **Handoff condensado estatal:** [`context-condensado.md`](./context-condensado.md) · [`CONTEXT_CONDENSADO_ESTATAL.md`](./CONTEXT_CONDENSADO_ESTATAL.md)  
 **Handoff croquis municipal (chat nuevo):** [`CONTEXT_CROQUIS_MUNICIPAL.md`](./CONTEXT_CROQUIS_MUNICIPAL.md)  
@@ -89,7 +89,7 @@ En la imagen Docker sí se instala `gdal-bin` (CLI del Atlas histórico) y `libg
 |---------|------------------------|
 | **fastapi** + **uvicorn** | `router.py`: `GET /health`, `POST /generate`, respuestas binarias. |
 | **pydantic** | Viene con FastAPI; modelos de request/response en `models/` (`GenerateMapRequest`, etc.). |
-| **psycopg[binary]** (v3) | Conexión PostGIS vía `database.get_cartography_db()` / `get_db()`. El datasource arma SQL y lee `ST_AsGeoJSON`. |
+| **psycopg[binary]** (v3) | Conexión PostGIS vía `database.get_cartography_db()` / `get_db()`. El datasource arma SQL y lee **`ST_AsBinary` (WKB)** para geometrías (fallback GeoJSON solo donde aplica, p. ej. `localidades_a`). |
 | **python-dotenv** | Carga `.env` (`CARTOGRAPHY_*`) en el proceso de settings del API. |
 | **pytest** | Tests en `cartography_engine/tests/` (no es runtime de producción). |
 
@@ -97,14 +97,16 @@ En la imagen Docker sí se instala `gdal-bin` (CLI del Atlas histórico) y `libg
 
 ```
 PostGIS (psycopg)
-    → ST_AsGeoJSON [+ ST_SimplifyPreserveTopology]
-    → shapely (shape / unary_union / clip)
+    → ST_AsBinary / WKB [+ ST_SimplifyPreserveTopology en capas]
+    → shapely.wkb.loads (shape / unary_union / clip)
     → reportlab Canvas (mapa, leyenda, tira, SIP, logos)
     → PDF bytes
          ├─ format=pdf  → respuesta directa
          ├─ format=svg  → rama propia (shapely + ElementTree stdlib)
          └─ format=geopdf → pyproj (WGS84) + pikepdf (Measure/VP)
 ```
+
+Capas de mapa usan WKB desde **1.12.42** (`fetch_layer`). Desde **1.12.51** el mismo patrón cubre focos/extents, etiquetas, near-localidad, SIP/CD y vialidad (sin cambiar plantillas ni `simplify`).
 
 ### Sistema operativo en el contenedor (`Dockerfile`)
 
@@ -144,7 +146,33 @@ En Docker Compose: el backend debe recibir `CARTOGRAPHY_*`; el visor usa el mism
 
 ### `GET /api/cartography/health`
 
-Feature-detect para el cliente. Incluye `enabled`, `engine`, `version`, `templates`, `formats`, `capabilities`, estado de `cartography_db`.
+**Contrato Core** (único mecanismo para saber si vive el Engine). No usar flags paralelos ni “¿existe el engine?” por otra vía.
+
+Consumidores: **Visor**, **GroSIG Studio**, **Cartography Studio**, Deployment Manager e Installer.
+
+| Campo | Descripción |
+|-------|-------------|
+| `engine` | Debe ser `grosig-cartography` |
+| `enabled` | `true` si el router está montado |
+| `status` | `available` \| `degraded` (p. ej. BD cartografía no OK) |
+| `version` | Versión del engine |
+| `templates` / `templates_count` | IDs y conteo |
+| `logos_count` | Logos resueltos desde branding |
+| `branding_updated_at` | ISO mtime de `branding.json` (o null) |
+| `formats` / `capabilities` | Feature-detect del cliente |
+| `cartography_db` | Estado de la BD dedicada |
+
+Criterio UI “vivo”: HTTP OK + `enabled` + `engine === "grosig-cartography"`. Cliente compartido: [`js/cartographyHealth.js`](../js/cartographyHealth.js).
+
+### Admin branding (Cartography Studio)
+
+| Método | Ruta | Descripción |
+|--------|------|-------------|
+| GET | `/api/cartography/admin/branding` | Snapshot branding + logos (JWT admin) |
+| PUT | `/api/cartography/admin/branding` | Guarda institución / advertencia / fecha / logos |
+| POST | `/api/cartography/admin/logos` | Upload PNG/JPG a `assets/logos/` |
+
+Config: `assets/branding.json` (`advertencia`, `fecha_actualizacion`, …). Fallback: `symbols/legal_texts.py`.
 
 ### `POST /api/cartography/generate`
 
@@ -459,6 +487,7 @@ Sesión orientada a **producto usable + formato de plano/croquis/condensado**.
 
 | Ver | Qué |
 |-----|-----|
+| **1.12.51** | Pipeline WKB homogeneizado: focos/extents, labels, near, SIP/CD/vialidad; timing logs en croquis y plano (sin tocar plantillas/simplify) |
 | **1.12.43** | Condensado: panel lateral escalado; +++ estatal visible; urbanas completas; aeropuertos overlay; más hidrónimos |
 | **1.12.42** | Condensado perf: WKB en `fetch_layer`, simplify por escala (~100–200 m), un `drawPath` por capa de líneas/MultiPolygon |
 | **1.12.41** | Condensado reducido: perenne + límites mun/ent + carretera doble línea + loc. urbana + aeropuertos (sin rural/1–2 carril/FFCC) |
@@ -541,7 +570,7 @@ PLR y PLU overview **no** cambiaron su formato de calle ni tipografía fina.
 ## Checklist rápido al retomar
 
 - [ ] `docker compose ps` → `api_backend` / Nginx `:850` OK  
-- [ ] `GET /api/cartography/health` → `enabled`, `version` ~1.12.42, `plu_multipage`, `plu_assembly_package`, `cartography_db.ok`  
+- [ ] `GET /api/cartography/health` → `enabled`, `version` ~1.12.51, `plu_multipage`, `plu_assembly_package`, `cartography_db.ok`  
 - [ ] Visor: municipio → Cartografía → localidad; opcional «Cartas detalle» + Armado paquete  
 - [ ] Regresión: PLR `001/0143` y PLU 1 hoja `029/0001` sin `multipage`  
 - [ ] MP: `029/0001` + `multipage:true` → PDF N páginas  

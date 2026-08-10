@@ -16,6 +16,7 @@ const $ = (id) => document.getElementById(id);
 
 let _pollTimer = null;
 let _activeId = null;
+let _keepBackups = 5;
 
 function escapeHtml(s) {
   return String(s || "")
@@ -87,9 +88,10 @@ async function loadMeta() {
     }
   }
   if (hint) {
+    _keepBackups = Number(data.keep) || 5;
     const parts = [
       data.pg_dump_available ? "pg_dump OK" : "⚠ pg_dump no disponible en API",
-      `retención ${data.keep || 5}`,
+      `retención ${_keepBackups} (se borran los más viejos al crear)`,
       data.mbtiles_available ? "MBTiles montado" : "MBTiles no montado",
     ];
     hint.textContent = parts.join(" · ");
@@ -146,12 +148,19 @@ async function loadList() {
                 : ""
             }
           </div>
-          <div class="flex-shrink-0">
+          <div class="flex-shrink-0 d-flex flex-column gap-1">
             ${
               ready
                 ? `<button type="button" class="btn btn-success btn-sm" data-dl="${escapeHtml(
                     b.id
                   )}">Descargar</button>`
+                : ""
+            }
+            ${
+              ready || failed
+                ? `<button type="button" class="btn btn-outline-danger btn-sm" data-del="${escapeHtml(
+                    b.id
+                  )}">Eliminar</button>`
                 : ""
             }
           </div>
@@ -162,6 +171,32 @@ async function loadList() {
   host.querySelectorAll("[data-dl]").forEach((btn) => {
     btn.addEventListener("click", () => void downloadBackup(btn.getAttribute("data-dl")));
   });
+  host.querySelectorAll("[data-del]").forEach((btn) => {
+    btn.addEventListener("click", () => void deleteBackup(btn.getAttribute("data-del")));
+  });
+}
+
+async function deleteBackup(id) {
+  if (!id) return;
+  const ok = window.confirm(
+    `¿Eliminar el respaldo ${id} del servidor?\n\nSe borra el ZIP del disco. Al crear nuevos, se conservan solo los ${_keepBackups} más recientes.`
+  );
+  if (!ok) return;
+  setMsg($("bkCreateMsg"), "Eliminando…", true);
+  const { res, data } = await adminFetch(`/api/admin/backups/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+  });
+  if (!res?.ok) {
+    setMsg(
+      $("bkCreateMsg"),
+      data?.detail?.message || "No se pudo eliminar",
+      false
+    );
+    return;
+  }
+  if (_activeId === id) stopPoll();
+  setMsg($("bkCreateMsg"), `Respaldo ${id} eliminado.`, true);
+  await loadList();
 }
 
 async function downloadBackup(id) {

@@ -5985,12 +5985,43 @@ html[data-theme="claro"] .visor-admin-icon-upload {
 
 .visor-admin-identify-row {
   display: grid;
-  grid-template-columns: minmax(7.5rem, 40%) minmax(0, 1fr);
-  gap: 0.35rem 0.65rem;
+  grid-template-columns: auto minmax(6.5rem, 38%) minmax(0, 1fr);
+  gap: 0.35rem 0.5rem;
   align-items: center;
   margin-bottom: 0.4rem;
   padding-bottom: 0.4rem;
   border-bottom: 1px solid rgba(128, 128, 128, 0.15);
+}
+
+.visor-admin-identify-row.is-dragging {
+  opacity: 0.55;
+}
+
+.visor-admin-identify-row.is-drag-over {
+  border-top: 2px solid var(--bs-primary, #0d6efd);
+}
+
+.visor-admin-idf-move {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  flex-shrink: 0;
+}
+
+.visor-admin-idf-move .btn {
+  line-height: 1;
+  font-size: 0.65rem;
+  min-width: 1.35rem;
+  padding-left: 0.2rem;
+  padding-right: 0.2rem;
+}
+
+.visor-admin-idf-grip {
+  cursor: grab;
+}
+
+.visor-admin-idf-grip:active {
+  cursor: grabbing;
 }
 
 .visor-admin-identify-row:last-child {
@@ -6923,6 +6954,23 @@ html[data-theme="oscuro"] .visor-admin-modal__panel .visor-admin-index-hints.ale
 /* Indicators Studio: ~30% más ancho que Visor Studio + contraste legible */
 .indicators-studio-shell {
   max-width: 1170px;
+}
+
+.ind-studio-fields-editor {
+  max-height: min(320px, 40vh);
+  overflow-y: auto;
+}
+
+.ind-studio-field-row .ind-studio-field-move .btn {
+  line-height: 1;
+  font-size: 0.65rem;
+  min-width: 1.35rem;
+}
+
+.ind-studio-review {
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
 }
 
 .ind-studio-cols-picker {

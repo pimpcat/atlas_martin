@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>INV Studio — GroSIG</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page indicators-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell indicators-studio-shell">
+    <section id="invStudioLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">INV Studio</h1>
+          <p class="small text-muted mb-3">
+            Catálogo del Inventario Nacional de Viviendas (grupos, campos de
+            <code>atlas.c_inv</code>, simbología). Misma sesión admin que Visor Studio.
+          </p>
+          <form id="invStudioLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="invStudioUser">Usuario</label>
+              <input id="invStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="invStudioPass">Contraseña</label>
+              <input id="invStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="invStudioError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="invStudioLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="invStudioDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h5 mb-0">INV Studio</h1>
+          <p class="small text-muted mb-0" id="invStudioWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="invStudioLogoutBtn">Cerrar sesión</button>
+      </div>
+      <div id="invStudioNav" class="mb-3"></div>
+
+      <div class="row g-3">
+        <div class="col-lg-4">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <span class="fw-semibold">Grupos / secciones</span>
+              <button type="button" class="btn btn-sm btn-primary" id="invGroupNewBtn">+ Grupo</button>
+            </div>
+            <div class="card-body p-2" id="invGroupList" style="max-height:28vh;overflow:auto"></div>
+          </div>
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+              <span class="fw-semibold">Indicadores</span>
+              <button type="button" class="btn btn-sm btn-primary" id="invIndNewBtn">+ Campo</button>
+            </div>
+            <div class="card-body p-2" id="invIndList" style="max-height:42vh;overflow:auto"></div>
+          </div>
+        </div>
+
+        <div class="col-lg-8">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body p-3">
+              <div class="fw-semibold small mb-2">Menú Atlas</div>
+              <div class="row g-2">
+                <div class="col-md-4">
+                  <label class="form-label small">Título</label>
+                  <input id="invMenuLabel" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small">Subtítulo</label>
+                  <input id="invMenuSubtitle" class="form-control form-control-sm" />
+                </div>
+                <div class="col-md-4">
+                  <div class="form-check mt-4">
+                    <input class="form-check-input" type="checkbox" id="invMenuEnabled" checked />
+                    <label class="form-check-label small" for="invMenuEnabled">Ítem habilitado en catálogo</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body p-3 p-md-4">
+              <div id="invStudioFormEmpty" class="text-muted small">Seleccione un grupo o indicador, o cree uno nuevo.</div>
+
+              <form id="invGroupForm" class="d-none d-grid gap-3">
+                <div class="fw-semibold small">Editar grupo</div>
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <label class="form-label small">Id</label>
+                    <input id="fGroupId" class="form-control form-control-sm" required pattern="[a-z][a-z0-9_]*" />
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label small">Etiqueta</label>
+                    <input id="fGroupLabel" class="form-control form-control-sm" required />
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small">Orden</label>
+                    <input id="fGroupOrder" type="number" class="form-control form-control-sm" />
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="submit" class="btn btn-sm btn-primary">Guardar grupo (borrador)</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="invGroupDeleteBtn">Eliminar</button>
+                </div>
+              </form>
+
+              <form id="invIndForm" class="d-none d-grid gap-3">
+                <div class="fw-semibold small">Editar indicador</div>
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <label class="form-label small">Id</label>
+                    <input id="fIndId" class="form-control form-control-sm" required pattern="[a-z][a-z0-9_]*" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">Columna BD (c_inv)</label>
+                    <select id="fIndField" class="form-select form-select-sm" required></select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">Etiqueta</label>
+                    <input id="fIndLabel" class="form-control form-control-sm" required />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">Grupo</label>
+                    <select id="fIndGroup" class="form-select form-select-sm" required></select>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">Tipo de valor (kind)</label>
+                    <select id="fIndKind" class="form-select form-select-sm" aria-describedby="fIndKindHelp">
+                      <option value="count">Conteo / cantidad</option>
+                      <option value="percent">Porcentaje</option>
+                      <option value="grade">Promedio / grado</option>
+                      <option value="entorno">Entorno urbano (código)</option>
+                    </select>
+                    <div class="form-text" id="fIndKindHelp">Cómo se interpreta y formatea el valor en el mapa.</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">Dibujo en mapa (render)</label>
+                    <select id="fIndRender" class="form-select form-select-sm" aria-describedby="fIndRenderHelp">
+                      <option value="point">Punto + etiqueta</option>
+                      <option value="polygon">Polígono de manzana</option>
+                    </select>
+                    <div class="form-text" id="fIndRenderHelp">Polígono solo con tipo «Entorno urbano».</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small">Color</label>
+                    <input id="fIndColor" type="color" class="form-control form-control-sm form-control-color" value="#66bb6a" />
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label small">Icono (panel)</label>
+                    <div class="d-flex align-items-center gap-2">
+                      <select id="fIndIcon" class="form-select form-select-sm" aria-describedby="fIndIconHelp"></select>
+                      <div id="fIndIconPreview" class="inv-studio-icon-preview border rounded d-flex align-items-center justify-content-center" title="Vista previa"></div>
+                    </div>
+                    <div class="form-text" id="fIndIconHelp">Se muestra junto a la etiqueta en el panel INV.</div>
+                  </div>
+                  <div class="col-md-3 d-flex align-items-end gap-3">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="fIndEnabled" checked />
+                      <label class="form-check-label small" for="fIndEnabled">Visible</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="fIndHover" checked />
+                      <label class="form-check-label small" for="fIndHover">En hover</label>
+                    </div>
+                  </div>
+                </div>
+                <div class="small text-muted border rounded p-2" id="fIndKindDoc">
+                  <!-- ayuda dinámica kind -->
+                </div>
+                <div id="invIndCopyHint" class="small border rounded p-2 d-none text-primary" role="status"></div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="submit" class="btn btn-sm btn-primary">Guardar indicador (borrador)</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="invIndCopyBtn">Copiar como nuevo</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="invIndDeleteBtn">Eliminar</button>
+                </div>
+              </form>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-header fw-semibold">Vista previa del panel</div>
+            <div class="card-body p-3" id="invPanelPreview"></div>
+          </div>
+
+          <div class="d-flex flex-wrap align-items-center gap-2">
+            <button type="button" class="btn btn-success btn-sm" id="invStudioPublishBtn">Publicar catálogo</button>
+            <span class="small" id="invStudioPublishMsg"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/invStudioApp.js"></script>
+  <style>
+    .inv-studio-icon-preview {
+      width: 40px;
+      height: 40px;
+      flex-shrink: 0;
+      background: rgba(127, 127, 127, 0.12);
+    }
+    .inv-studio-icon-preview .invviv-ico-svg {
+      width: 28px;
+      height: 28px;
+    }
+  </style>
+</body>
+</html>

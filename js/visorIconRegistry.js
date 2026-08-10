@@ -5,6 +5,8 @@ import {
   atlasMapIconUrl,
   getSymbolIconRasterPx,
   invalidateSvgFileCache,
+  isRasterIconFilename,
+  loadRasterFileAsMapSymbol,
   loadSvgFileAsMapSymbol,
   symbolLayoutIconSize,
 } from "./mapSvgIcons.js";
@@ -173,10 +175,20 @@ export async function ensureVisorIconKeyOnMap(map, iconKey) {
   const rasterPx = getSymbolIconRasterPx(base, maxScale, supersample);
   const anchor = icon.texture_anchor || "bottom";
   invalidateSvgFileCache(icon.file);
-  await loadSvgFileAsMapSymbol(map, icon.id, icon.file, rasterPx, {
+  const loadOpts = {
     cacheBust: ver,
     textureAnchor: anchor,
-  });
+  };
+  const isRaster =
+    icon.format === "png" ||
+    icon.format === "jpg" ||
+    icon.format === "jpeg" ||
+    isRasterIconFilename(icon.file);
+  if (isRaster) {
+    await loadRasterFileAsMapSymbol(map, icon.id, icon.file, rasterPx, loadOpts);
+  } else {
+    await loadSvgFileAsMapSymbol(map, icon.id, icon.file, rasterPx, loadOpts);
+  }
   map[iconVersionKey(iconKey)] = ver;
 }
 

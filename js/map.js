@@ -5,6 +5,10 @@
 
 import { martinTileJson, martinTileUrl, apiUrl } from "./atlasConfig.js";
 import {
+  loadExplorerCatalog,
+  getExplorerStyleCached,
+} from "./explorerCatalog.js";
+import {
   HOME_MUN_DISP_FILL_PAINT,
   HOME_MUN_DISP_LINE_HALO_PAINT,
   HOME_MUN_DISP_LINE_PAINT,
@@ -650,9 +654,10 @@ function ensureOverlayLabelLayer(map, def) {
 /** Reaplica simbología vectorial estatal (tras hot reload o capas ya creadas). */
 function applyHomeMunLinePaint(map) {
   if (!map) return;
+  const linePaint = explorerHomeMunLinePaint();
   for (const [layerId, paint] of [
     [LAYER_IDS.munAllLineHalo, HOME_MUN_DISP_LINE_HALO_PAINT],
-    [LAYER_IDS.munAllLine, HOME_MUN_DISP_LINE_PAINT],
+    [LAYER_IDS.munAllLine, linePaint],
   ]) {
     if (!map.getLayer(layerId)) continue;
     for (const [key, value] of Object.entries(paint)) {
@@ -783,7 +788,7 @@ function applyHomeVectorRenderQuality(map) {
     [LAYER_IDS.entFill, LAYER_PAINT.entFill],
     [LAYER_IDS.marcoEntCasing, LAYER_PAINT.marcoEntLineCasing],
     [LAYER_IDS.marcoEntHalo, LAYER_PAINT.marcoEntLineHalo],
-    [LAYER_IDS.marcoEnt, LAYER_PAINT.marcoEntLine],
+    [LAYER_IDS.marcoEnt, explorerHomeEntLinePaint()],
   ];
   for (const [layerId, paint] of sets) {
     if (!map.getLayer(layerId)) continue;
@@ -955,6 +960,34 @@ let _homePickHandler = null;
 const MUN_HIGHLIGHT_FILL = "#008b8b";
 const MUN_HIGHLIGHT_LINE = "#004858";
 const MUN_HIGHLIGHT_HALO = "#ffffff";
+
+/** Estilos del Explorador desde catálogo (Explorer Studio); fallback = constantes. */
+function explorerHomeMunLinePaint() {
+  const s = getExplorerStyleCached();
+  return {
+    ...HOME_MUN_DISP_LINE_PAINT,
+    "line-color": s.municipios.line_color,
+    "line-width": s.municipios.line_width,
+  };
+}
+
+function explorerHomeEntLinePaint() {
+  const s = getExplorerStyleCached();
+  return {
+    ...LAYER_PAINT.marcoEntLine,
+    "line-color": s.estado.line_color,
+    "line-width": s.estado.line_width,
+  };
+}
+
+function explorerHighlightFill() {
+  return getExplorerStyleCached().municipio_seleccionado.fill_color || MUN_HIGHLIGHT_FILL;
+}
+
+function explorerHighlightOpacity() {
+  const o = getExplorerStyleCached().municipio_seleccionado.fill_opacity;
+  return typeof o === "number" && Number.isFinite(o) ? o : 0.42;
+}
 let _geoMacro = null;
 let _geoMacroPendingCve = null;
 let _geoMacroHiGen = 0;
@@ -1376,7 +1409,7 @@ function munDispBaseFill(layerIds) {
 }
 
 function munDispBaseLine(layerIds) {
-  if (layerIds === MUN_DISP_PAINT_IDS && _homeMode) return HOME_MUN_DISP_LINE_PAINT;
+  if (layerIds === MUN_DISP_PAINT_IDS && _homeMode) return explorerHomeMunLinePaint();
   return LAYER_PAINT.munAllLine;
 }
 
@@ -1433,10 +1466,14 @@ function applyMunDispHighlightPaint(map, cve_mun, layerIds = MUN_DISP_PAINT_IDS)
   map.setPaintProperty(fillId, "fill-color", [
     "case",
     match,
-    MUN_HIGHLIGHT_FILL,
+    explorerHighlightFill(),
     baseFill["fill-color"],
   ]);
-  map.setPaintProperty(fillId, "fill-opacity", paintExprWithMunHighlight(match, 0.42, baseFill["fill-opacity"]));
+  map.setPaintProperty(
+    fillId,
+    "fill-opacity",
+    paintExprWithMunHighlight(match, explorerHighlightOpacity(), baseFill["fill-opacity"])
+  );
   if (map.getLayer(lineId)) {
     map.setPaintProperty(lineId, "line-color", [
       "case",
@@ -4608,6 +4645,11 @@ function finalizeHomeMapView(map, cve_mun) {
 export async function enterExploradorMapView(cve_mun) {
   const gen = ++_homeEnterGen;
   invalidateMunicipioMapFocus();
+  try {
+    await loadExplorerCatalog();
+  } catch (err) {
+    console.warn("[explorer] catálogo no disponible; defaults embebidos", err);
+  }
   if (!_map) {
     const el = document.getElementById("mapFrame");
     if (el) ensureMap(el);

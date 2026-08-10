@@ -1,14 +1,18 @@
 /**
  * Cliente GroSIG Cartography Engine (opcional).
- * Solo se activa si GET /api/cartography/health responde OK.
+ * Solo se activa si GET /api/cartography/health responde OK (contrato Core).
  * Controles y formatos se arman desde health (feature-detect).
  */
 import { apiUrl } from "./atlasConfig.js";
 import { fetchLocsAtlasLabels } from "./api.js";
+import {
+  getCartographyHealth,
+  isCartographyEnabled,
+  probeCartographyEngine,
+  probeCartographyHealth,
+} from "./cartographyHealth.js";
 
-let _enabled = false;
-let _probed = false;
-let _health = null;
+export { getCartographyHealth, isCartographyEnabled, probeCartographyEngine, probeCartographyHealth };
 
 /** Cache de localidades amanzanadas por municipio (cve_mun → lista). */
 const _locCache = new Map();
@@ -38,37 +42,6 @@ const PRODUCT_LABELS = {
   croquis: "Croquis municipal (Atlas)",
   atlas: "Atlas multipágina",
 };
-
-export function isCartographyEnabled() {
-  return _enabled;
-}
-
-export function getCartographyHealth() {
-  return _health;
-}
-
-/** Sondea el engine. Seguro si está deshabilitado o caído. */
-export async function probeCartographyEngine() {
-  if (_probed) return _enabled;
-  _probed = true;
-  try {
-    const res = await fetch(apiUrl("/api/cartography/health"), {
-      method: "GET",
-      headers: { Accept: "application/json" },
-    });
-    if (!res.ok) {
-      _enabled = false;
-      return false;
-    }
-    const data = await res.json();
-    _health = data;
-    _enabled = Boolean(data?.enabled) && data?.engine === "grosig-cartography";
-    return _enabled;
-  } catch {
-    _enabled = false;
-    return false;
-  }
-}
 
 function _normCve3(cveMun) {
   const cve = String(cveMun || "").replace(/\D/g, "").slice(-3).padStart(3, "0");
@@ -575,7 +548,7 @@ export async function attachCartographyUi(options) {
   if (host.dataset.bound === "1") return;
   host.dataset.bound = "1";
 
-  _renderControls(host, _health || {});
+  _renderControls(host, getCartographyHealth() || {});
   _syncProductRows(host);
   _updateContext(host, options);
 

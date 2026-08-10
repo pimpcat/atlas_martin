@@ -26,7 +26,7 @@ import { getVisorGeocoderContainer } from "./visorGeocoder.js";
 import { getVisorLayerEntry } from "./visorCatalog.js";
 import {
   buildIdentifyHtmlFromCatalog,
-  resolveVisorHoverConfig,
+  resolveVisorIdentifyConfig,
 } from "./visorIdentifyCatalog.js";
 import {
   showIdentifyHighlight,
@@ -100,7 +100,7 @@ function rebuildIdentifyPanelHtml() {
     normalizeIdentifyPrimary(_lastPrimary || _lastLayerId || ""),
   );
   const entry = catalogId ? getVisorLayerEntry(catalogId) : null;
-  const identify = entry ? resolveVisorHoverConfig(entry) : null;
+  const identify = entry ? resolveVisorIdentifyConfig(entry) : null;
   const props = _lastFeature.properties || {};
   let html = identify ? buildIdentifyHtmlFromCatalog(identify, props) : null;
   if (!html) {

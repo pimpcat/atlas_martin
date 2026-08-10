@@ -99,12 +99,13 @@ Tras crear o eliminar un grupo, el panel **Capas** del visor se actualiza sin re
 
 ### Paso identificación (columnas)
 
-- **Título del popup:** texto en negrita (como colonias, DENUE, etc.).
-- **Identificación:** marque columnas y edite la **etiqueta visible** (alias antes de los dos puntos).
-- **Etiquetas en mapa:** active letreritos automáticos, elija campo y **zoom mínimo** (p. ej. 12–14 en puntos densos).
+- **Identify (completo):** título y campos de la ficha al **hacer clic** (alias visibles antes de los dos puntos).
+- **Hover (resumen):** constructor independiente para el **globo al pasar el ratón**. Si lo deja vacío, el hover usa el mismo contenido que Identify (capas legacy).
+- **Etiquetas en mapa:** constructor de partes (`texto` + `campo` + salto de línea), zoom mínimo, color y «encima del símbolo». Si una columna de etiqueta no aparece en el MVT, el asistente avisa con **warning** (no bloquea publicar).
 - **Buscador del visor:** marque **Incluir en buscador** para publicar el bloque `search` en `catalog.json` (campo nombre, tipo en resultados, columnas ILIKE). El alcance municipal/estatal sigue el de la capa.
 - **Análisis espacial:** active para incluir la capa en la herramienta de polígono del visor. Elija **conteo** (puntos) o **agregación** (suma/promedio de columnas numéricas), tabla detalle opcional y textos de UI. Detalle en **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)**.
 - **Exportación:** columnas en KML/SHP; si no marca ninguna, se exportan todas.
+- **Iconos de punto:** SVG, PNG o JPG desde Visor Studio (preset «Punto con icono»).
 
 Tras guardar basta **Ctrl+F5** en el visor. Martin usa `auto_publish` del esquema `atlas` (todas las columnas en el MVT) y `reload_interval: 30s` para descubrir tablas nuevas **sin reiniciar** el contenedor. **No** hace falta reiniciar Martin al editar identify, etiquetas, estilo, ni al importar un SHP nuevo. Solo reinicie Martin si cambia `martin.yaml` o fuentes MBTiles.
 

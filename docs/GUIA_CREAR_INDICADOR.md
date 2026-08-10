@@ -21,12 +21,13 @@ Tras publicar, recarga el Atlas con **Ctrl+F5** para ver el menú y la vista act
 
 | Paso | Dónde | Qué haces |
 |------|--------|-----------|
-| 1 | Studio → **+ Nuevo** | Creas la ficha vacía |
-| 2 | Formulario | Identidad, grupo, perfil y preset |
-| 3 | Campos | Defines columnas (`key\|column\|label\|type`) |
-| 4 | Metadatos | Redactas (o dejas el espacio listo) |
-| 5 | **Publicar** | Guarda en `catalog.json` |
-| 6 | Atlas | Ctrl+F5 y abres el indicador en el menú |
+| 1 | Studio → **+ Nuevo** | Asistente por pasos |
+| 2 | **Identidad** | Id, grupo, nombre visible |
+| 3 | **Datos** | Tabla + constructor visual de campos (o «Ver columnas») |
+| 4 | **Presentación** | Preset / ranking / colores |
+| 5 | **Metadatos** | Fuente, notas, fechas |
+| 6 | **Revisar → Publicar** | Confirma y guarda en `catalog.json` |
+| 7 | Atlas | Ctrl+F5 y abre el indicador en el menú |
 
 ---
 
@@ -92,26 +93,13 @@ Colores por serie y por tema (claro/oscuro) se configuran en el Studio y se guar
 ### 6. Tabla y campos
 
 1. Elige la **tabla principal** (`tab_municipal`, `tab_nacional` o `c_mun`).
-2. Opcional: **Cargar columnas de tabla** para ver nombres reales en la base.
-3. En **Campos**, una línea por columna, con este formato:
+2. Use el **constructor visual de campos** (clave, columna BD, etiqueta, tipo). Reordene con ▲ ▼.
+3. Opcional: **Ver columnas de la tabla** y haga clic para añadir campos.
+4. El Studio genera el mismo modelo JSON que antes (`fields[]`); no hace falta escribir líneas `clave|columna|etiqueta|tipo` a mano.
 
-```text
-clave|columna_bd|Etiqueta visible|tipo
-```
+Tipos habituales: `integer`, `float`, `percent`, `text`. La **clave** es la que usas en `sort_by` y `bar_metrics`.
 
-Tipos habituales: `integer`, `float`, `percent`, `text`.
-
-Ejemplo:
-
-```text
-ue|ue|Unidades económicas|integer
-pers_ocup|pers_ocup|Personal ocupado|integer
-prod_brut|prod_brut|Producción bruta|float
-```
-
-La **clave** (primera parte) es la que usas en `sort_by` y `bar_metrics`.
-
-4. **filename_prefix export:** nombre base de los archivos PNG/CSV/Excel (sin extensión).
+5. **filename_prefix export:** nombre base de los archivos PNG/CSV/Excel (sin extensión).
 
 ### 7. Metadatos (recomendado)
 

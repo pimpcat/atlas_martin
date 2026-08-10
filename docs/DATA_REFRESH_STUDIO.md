@@ -19,7 +19,22 @@ ETL asistido para **actualizar tablas espaciales** e **indicadores tabulares** e
 
 ## Historial
 
-`GET /api/data-refresh/history` — Fecha, usuario, tabla, tipo (`spatial` \| `indicator`), resumen, duración, estado. La UI muestra tabla en lugar del listado compacto de jobs.
+`GET /api/data-refresh/history` — Fecha, usuario, tabla, tipo (`spatial` \| `indicator` \| `derived`), resumen, duración, estado. La UI muestra tabla en lugar del listado compacto de jobs.
+
+## Tablas derivadas (KPIs explorador)
+
+Tras actualizar **`c_loc_punto`** o **`c_denue`**, los KPIs del explorador municipal (localidades y unidades económicas) leen **`atlas.municipio_conteos`**, no un COUNT en vivo.
+
+| Campo | Valor |
+|-------|--------|
+| Origen | `c_mun` + `c_loc_punto` + `c_denue` |
+| Derivada | `atlas.municipio_conteos` (`n_localidades`, `n_denue`) |
+| Función SQL | `atlas.refresh_municipio_conteos()` (`sql/001_municipio_conteos.sql`) |
+| UI | Data Refresh → tarjeta **Tablas derivadas** → «Recalcular municipio_conteos» |
+| API | `GET /api/data-refresh/derived` · `POST /api/data-refresh/derived/municipio-conteos/refresh` |
+| Efecto | Recalcula filas, invalida caché del explorador, registra job `kind=derived` en historial |
+
+**Fuera de 1.0:** motor genérico de dependencias entre tablas. Las columnas ETL de indicadores (`007`) ya se refrescan al aplicar Indicator Refresh.
 
 ## Rollback (últimas 3)
 
@@ -40,6 +55,8 @@ DENUE × 3 ocupa disco; las tablas bloqueadas del refresh no generan versiones.
 | GET | `/api/data-refresh/targets` |
 | GET | `/api/data-refresh/jobs` |
 | GET | `/api/data-refresh/history` |
+| GET | `/api/data-refresh/derived` |
+| POST | `/api/data-refresh/derived/{id}/refresh` |
 | GET | `/api/data-refresh/versions` |
 | POST | `/api/data-refresh/versions/{id}/restore` |
 | POST | `/api/data-refresh/jobs` (multipart: `target_table`, `file`) |
@@ -82,9 +99,10 @@ ZIP local bajo volumen `data_backups/` (montado en API como `/data/backups`).
 | GET | `/api/admin/backups` |
 | POST | `/api/admin/backups` |
 | GET | `/api/admin/backups/{id}` |
+| DELETE | `/api/admin/backups/{id}` |
 | GET | `/api/admin/backups/{id}/download` |
 
-Retención: últimos `BACKUP_STUDIO_KEEP` (default 5). Requiere `postgresql-client` en la imagen API. No incluye `.env` ni sustituye política DR offsite.
+Retención automática: al terminar un job se conservan los últimos `BACKUP_STUDIO_KEEP` (default **5**) y se borran los más viejos. Además, la UI permite **Eliminar** un respaldo concreto (`ready` o `failed`). Requiere `postgresql-client` en la imagen API. No incluye `.env` ni sustituye política DR offsite.
 
 ## Código
 

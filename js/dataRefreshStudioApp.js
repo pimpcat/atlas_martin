@@ -162,6 +162,7 @@ function setMode(mode) {
   $("drSpatialFields")?.classList.toggle("d-none", _mode !== "spatial");
   $("drIndicatorFields")?.classList.toggle("d-none", _mode !== "indicators");
   $("drIndScopeTabs")?.classList.toggle("d-none", _mode !== "indicators");
+  $("drDerivedCard")?.classList.toggle("d-none", _mode !== "spatial");
   const spat = $("drModeSpatial");
   const ind = $("drModeIndicators");
   if (spat) {
@@ -419,9 +420,8 @@ async function loadJobs() {
   const params = new URLSearchParams({ limit: "50" });
   if (_mode === "indicators") {
     params.set("kind", "indicator");
-  } else {
-    params.set("kind", "spatial");
   }
+  // En modo espacial: historial sin filtro kind → espacial + derivadas (excluye indicadores en cliente)
   const { res, data } = await adminFetch(`/api/data-refresh/history?${params}`);
   const host = $("drJobsList");
   if (!host) return;
@@ -436,6 +436,8 @@ async function loadJobs() {
       if (_indScope === "nacional") return tgt === "tab_nacional";
       return tgt === "tab_municipal";
     });
+  } else {
+    jobs = jobs.filter((j) => j.kind !== "indicator");
   }
   if (!jobs.length) {
     host.innerHTML = `<tr><td colspan="7" class="text-muted px-2">Sin jobs aún.</td></tr>`;
@@ -451,7 +453,11 @@ async function loadJobs() {
             })} s`
           : "—";
       const kind =
-        j.kind === "indicator" ? "Indicator" : "Spatial";
+        j.kind === "indicator"
+          ? "Indicator"
+          : j.kind === "derived"
+            ? "Derived"
+            : "Spatial";
       return `<tr class="dr-hist-row" role="button" tabindex="0" data-job="${escapeHtml(
         j.id
       )}" style="cursor:pointer">
@@ -629,7 +635,12 @@ function renderJobSummary(job) {
           `<li class="${c.ok ? "dr-check--ok" : "dr-check--warn"}">${c.ok ? "✔" : "△"} ${escapeHtml(c.label)}</li>`
       )
       .join("");
-    const title = r.kind === "indicator" ? "Indicadores actualizados" : "Swap completado";
+    const title =
+      r.kind === "indicator"
+        ? "Indicadores actualizados"
+        : r.kind === "derived"
+          ? "Tabla derivada recalculada"
+          : "Swap completado";
     host.innerHTML = `
       <div class="dr-report__card dr-report__card--success">
         <h2 class="dr-report__h">${escapeHtml(title)}</h2>
@@ -638,7 +649,9 @@ function renderJobSummary(job) {
           ${
             r.kind === "indicator"
               ? ""
-              : `· Registros finales: <strong>${fmtInt(r.final_count)}</strong>`
+              : r.kind === "derived"
+                ? `· Municipios: <strong>${fmtInt(r.rows_written)}</strong>`
+                : `· Registros finales: <strong>${fmtInt(r.final_count)}</strong>`
           }</p>
       </div>`;
     return;
@@ -869,7 +882,9 @@ function renderJobSummary(job) {
 
 function renderJob(job) {
   _currentJobId = job?.id || null;
-  _currentJobKind = job?.report?.kind === "indicator" ? "indicator" : "spatial";
+  const rk = job?.report?.kind;
+  _currentJobKind =
+    rk === "indicator" ? "indicator" : rk === "derived" ? "derived" : "spatial";
   const empty = $("drJobEmpty");
   const panel = $("drJobPanel");
   if (!job) {
@@ -888,9 +903,12 @@ function renderJob(job) {
   if ($("drJobReport")) $("drJobReport").textContent = JSON.stringify(report, null, 2);
   renderJobSummary(job);
   const blocked = (job.report?.validation?.level || "") === "block";
-  const canApply = job.status === "ready" && !_busy && !blocked;
+  const isDerived = _currentJobKind === "derived";
+  const canApply = !isDerived && job.status === "ready" && !_busy && !blocked;
   const canCancel =
-    !["applied", "cancelled", "applying"].includes(job.status) && !_busy;
+    !isDerived &&
+    !["applied", "cancelled", "applying"].includes(job.status) &&
+    !_busy;
   if ($("drApplyBtn")) $("drApplyBtn").disabled = !canApply;
   if ($("drCancelBtn")) $("drCancelBtn").disabled = !canCancel;
 }
@@ -1132,6 +1150,10 @@ async function uploadIndicatorCsv() {
 
 async function applyCurrent() {
   if (!_currentJobId || _busy) return;
+  if (_currentJobKind === "derived") {
+    setMsg($("drApplyMsg"), "Este job ya está aplicado (recálculo derivado).", false);
+    return;
+  }
   const kind = _currentJobKind === "indicator" ? "indicator" : "spatial";
 
   if (
@@ -1178,13 +1200,26 @@ async function applyCurrent() {
       return;
     }
     setProgress(100, "Aplicado");
+    const tgt = String(data.job?.target_table || "").toLowerCase();
+    const needsConteos =
+      kind === "spatial" && (tgt === "c_loc_punto" || tgt === "c_denue");
     setMsg(
       $("drApplyMsg"),
       kind === "indicator"
         ? "Indicadores actualizados correctamente."
-        : "Swap aplicado correctamente.",
+        : needsConteos
+          ? "Swap aplicado. Recuerde recalcular municipio_conteos (tarjeta Tablas derivadas) para actualizar los KPIs del explorador."
+          : "Swap aplicado correctamente.",
       true
     );
+    if (needsConteos) {
+      setMsg(
+        $("drDerivedMsg"),
+        "Origen actualizado: use «Recalcular municipio_conteos» para refrescar localidades / DENUE del explorador.",
+        true
+      );
+      $("drDerivedConteosBtn")?.focus();
+    }
     renderJob(data.job);
     if (kind === "spatial") await loadTargets();
     await loadJobs();
@@ -1200,6 +1235,10 @@ async function applyCurrent() {
 
 async function cancelCurrent() {
   if (!_currentJobId || _busy) return;
+  if (_currentJobKind === "derived") {
+    setMsg($("drApplyMsg"), "Los jobs derivados no se cancelan (ya son síncronos).", false);
+    return;
+  }
   const { res, data } = await adminFetch(
     `/api/data-refresh/jobs/${encodeURIComponent(_currentJobId)}/cancel`,
     { method: "POST", body: "{}" }
@@ -1211,6 +1250,51 @@ async function cancelCurrent() {
   setMsg($("drApplyMsg"), "Job cancelado.", true);
   renderJob(data.job);
   await loadJobs();
+}
+
+async function refreshMunicipioConteos() {
+  if (_busy) return;
+  if (
+    !window.confirm(
+      "¿Recalcular atlas.municipio_conteos?\n\nActualiza n_localidades y n_denue por municipio (KPIs del explorador). Puede tardar si c_denue es grande."
+    )
+  ) {
+    return;
+  }
+  setBusyUi(true);
+  setProgress(30, "Recalculando municipio_conteos…", { indeterminate: true });
+  setMsg($("drDerivedMsg"), "", true);
+  try {
+    const { res, data, networkError } = await adminFetch(
+      "/api/data-refresh/derived/municipio-conteos/refresh",
+      { method: "POST", body: "{}" }
+    );
+    if (networkError || !res) {
+      setMsg($("drDerivedMsg"), "Error de red / timeout al recalcular.", false);
+      return;
+    }
+    if (!res.ok) {
+      setMsg(
+        $("drDerivedMsg"),
+        data?.detail?.message || data?.message || `Fallo (HTTP ${res.status})`,
+        false
+      );
+      if (data?.detail?.job) renderJob(data.detail.job);
+      return;
+    }
+    const n = data.municipios_actualizados ?? data.job?.report?.rows_written;
+    const sec = data.elapsed_seconds ?? data.job?.report?.elapsed_seconds;
+    setProgress(100, "Listo");
+    setMsg(
+      $("drDerivedMsg"),
+      `✓ ${n ?? "—"} municipios procesados · ${sec ?? "—"} s. KPIs del explorador actualizados.`,
+      true
+    );
+    if (data.job) renderJob(data.job);
+    await loadJobs();
+  } finally {
+    setBusyUi(false);
+  }
 }
 
 async function bootDashboard() {
@@ -1309,6 +1393,7 @@ async function init() {
   $("drSynthBtn")?.addEventListener("click", () => void downloadSyntheticIndicator());
   $("drHistoryRefresh")?.addEventListener("click", () => void loadJobs());
   $("drVersionsRefresh")?.addEventListener("click", () => void loadVersions());
+  $("drDerivedConteosBtn")?.addEventListener("click", () => void refreshMunicipioConteos());
 
   if (isVisorAdminLoggedIn()) {
     try {

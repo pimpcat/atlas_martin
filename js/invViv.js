@@ -7,8 +7,11 @@ import { getLeafletMap, whenAtlasMapReady, scheduleMunicipioMapFocus } from "./m
 import {
   INV_ALL_LAYERS,
   INV_PANEL_GROUPS,
+  getInvHoverDefaults,
+  getInvHoverLayersForField,
   getInvLayer,
   isInvPolygonLayer,
+  loadInvCatalog,
 } from "./invVivCatalog.js";
 import { invLayerIconSvg } from "./invVivIcons.js";
 import { INV_ENTORNO_CODES, getEntornoLabel } from "./invVivEntorno.js";
@@ -652,27 +655,54 @@ function badgeTextColor(layerColor) {
   return lum > 165 ? "#001e28" : "#ffffff";
 }
 
+function formatPropValue(layerDef, raw) {
+  if (layerDef && layerDef.kind === "entorno") {
+    return getEntornoLabel(raw);
+  }
+  return fmtVal(raw);
+}
+
 function buildTooltipHtml(props) {
-  const cvegeo = props && props.cvegeo != null ? String(props.cvegeo) : "—";
+  const defaults = getInvHoverDefaults();
+  const cvegeo =
+    props && props.cvegeo != null ? String(props.cvegeo) : "—";
   const amb = props && props.ambito != null ? String(props.ambito) : "—";
-  const pobt = fmtVal(props ? props.pobtot : null);
-  const pobf = fmtVal(props ? props.pobfem : null);
-  const pobm = fmtVal(props ? props.pobmas : null);
   const layerDef = _activeField ? getInvLayer(_activeField) : null;
-  const label = layerDef ? layerDef.label : "—";
-  const val =
-    layerDef && layerDef.kind === "entorno"
-      ? getEntornoLabel(props ? props.value : null)
-      : fmtVal(props ? props.value : null);
+  const hoverLayers = _activeField
+    ? getInvHoverLayersForField(_activeField)
+    : [];
+
+  const rows = [];
+  if (defaults.includes("ambito") || defaults.includes("Ámbito")) {
+    rows.push(
+      `<div class="invviv-tip__row"><span>Ámbito</span><strong>${amb}</strong></div>`
+    );
+  }
+
+  const seen = new Set();
+  for (const hl of hoverLayers) {
+    const key = hl.field || hl.id;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const isActive =
+      layerDef && (hl.id === layerDef.id || hl.field === layerDef.field);
+    const raw = isActive
+      ? props
+        ? props.value
+        : null
+      : props
+        ? props[key]
+        : null;
+    const val = formatPropValue(hl, raw);
+    rows.push(
+      `<div class="invviv-tip__row"><span>${hl.label}</span><strong>${val}</strong></div>`
+    );
+  }
 
   return `
     <div class="invviv-tip">
       <div class="invviv-tip__title">Manzana ${cvegeo}</div>
-      <div class="invviv-tip__row"><span>Ámbito</span><strong>${amb}</strong></div>
-      <div class="invviv-tip__row"><span>${label}</span><strong>${val}</strong></div>
-      <div class="invviv-tip__row"><span>Pob. total</span><strong>${pobt}</strong></div>
-      <div class="invviv-tip__row"><span>Pob. fem.</span><strong>${pobf}</strong></div>
-      <div class="invviv-tip__row"><span>Pob. masc.</span><strong>${pobm}</strong></div>
+      ${rows.join("\n")}
     </div>
   `.trim();
 }
@@ -728,7 +758,7 @@ async function fetchAndRender(map, cve_mun) {
 
   const u = new URL(API_INV_BBOX, window.location.href);
   u.searchParams.set("cve_mun", cve);
-  u.searchParams.set("field", _activeField);
+  u.searchParams.set("field", (layerDef && layerDef.field) || _activeField);
   if (isPolygon) u.searchParams.set("mode", "polygon");
   u.searchParams.set("xmin", String(padded.sw.x));
   u.searchParams.set("ymin", String(padded.sw.y));
@@ -887,12 +917,18 @@ export function setInvVivActive(fieldId) {
 }
 
 /**
- * Panel lateral INV 2020 (Población + Viviendas).
+ * Panel lateral INV 2020 (grupos + indicadores desde catálogo).
  * @param {HTMLElement} container
  * @param {{ getCveMun?: () => string | null }} [options]
  */
-export function renderInvVivPanel(container, options = {}) {
+export async function renderInvVivPanel(container, options = {}) {
   if (!container) return;
+
+  try {
+    await loadInvCatalog();
+  } catch (err) {
+    console.warn("[invViv] catálogo: usando semilla embebida", err);
+  }
 
   _activeField = null;
   clearLayerInternal();

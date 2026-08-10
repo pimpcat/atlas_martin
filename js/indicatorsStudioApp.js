@@ -20,6 +20,15 @@ let _meta = null;
 let _catalog = null;
 let _editingId = null;
 
+const WIZARD_STEPS = [
+  { id: 1, title: "Identidad", hint: "Nombre en el menú, grupo y visibilidad." },
+  { id: 2, title: "Datos", hint: "Perfil, tabla y constructor de campos." },
+  { id: 3, title: "Presentación", hint: "Tipo de gráfica, ranking y colores." },
+  { id: 4, title: "Metadatos", hint: "Fuente, notas y fechas (panel Metadatos del Atlas)." },
+  { id: 5, title: "Revisar", hint: "Resumen y publicación." },
+];
+let _wizardStep = 1;
+
 /** Campos del formulario visibles según preset. */
 const PRESET_FORM = {
   horizontal_bars: {
@@ -78,6 +87,254 @@ function applyPresetFormVisibility() {
   if (hint) hint.textContent = conf.hint || "Elija el diseño visual.";
   refreshFieldKeySelects(true);
   renderSeriesColorPickers();
+  if (_wizardStep === 3) {
+    document.querySelectorAll('[data-wizard-step="3"]').forEach((panel) => {
+      if (panel.getAttribute("data-studio-field") === "bar_colors") return;
+      panel.classList.remove("d-none");
+    });
+  }
+}
+
+function renderWizardChrome() {
+  const host = $("indStudioSteps");
+  if (!host) return;
+  host.innerHTML = WIZARD_STEPS.map((s) => {
+    const active = s.id === _wizardStep;
+    const done = s.id < _wizardStep;
+    const cls = active
+      ? "btn btn-sm btn-primary"
+      : done
+        ? "btn btn-sm btn-outline-success"
+        : "btn btn-sm btn-outline-secondary";
+    return `<button type="button" class="${cls}" data-wizard-goto="${s.id}">${s.id}. ${s.title}</button>`;
+  }).join("");
+  host.querySelectorAll("[data-wizard-goto]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const target = Number(btn.getAttribute("data-wizard-goto"));
+      if (!Number.isFinite(target)) return;
+      if (target > _wizardStep) {
+        for (let i = _wizardStep; i < target; i++) {
+          const err = validateWizardStep(i);
+          if (err) {
+            showErr($("indStudioFormError"), err);
+            showWizardStep(i);
+            return;
+          }
+        }
+      }
+      showErr($("indStudioFormError"));
+      showWizardStep(target);
+    });
+  });
+  const hint = $("indStudioStepHint");
+  const cur = WIZARD_STEPS.find((s) => s.id === _wizardStep);
+  if (hint) hint.textContent = cur?.hint || "";
+  const back = $("indStudioWizardBack");
+  const next = $("indStudioWizardNext");
+  if (back) back.disabled = _wizardStep <= 1;
+  if (next) {
+    next.classList.toggle("d-none", _wizardStep >= WIZARD_STEPS.length);
+  }
+}
+
+function showWizardStep(step) {
+  _wizardStep = Math.max(1, Math.min(WIZARD_STEPS.length, Number(step) || 1));
+  document.querySelectorAll("[data-wizard-step]").forEach((panel) => {
+    const id = Number(panel.getAttribute("data-wizard-step"));
+    panel.classList.toggle("d-none", id !== _wizardStep);
+  });
+  if (_wizardStep === 3) {
+    applyPresetFormVisibility();
+    ensurePresetMetricDefaults();
+  }
+  if (_wizardStep === 5) renderReviewSummary();
+  if (_wizardStep === 2) {
+    syncFieldsTextareaFromEditor();
+    renderFieldsEditor(parseFieldsText($("fFields")?.value || ""));
+  }
+  renderWizardChrome();
+}
+
+function validateWizardStep(step) {
+  if (step === 1) {
+    const id = $("fId")?.value?.trim() || "";
+    if (!_editingId && !/^[a-z][a-z0-9_]*$/.test(id)) {
+      return "Indique un identificador válido (minúsculas, números y _).";
+    }
+    if (!($("fLabel")?.value || "").trim()) return "Indique el nombre que ve el usuario.";
+    if (!($("fGroup")?.value || "").trim()) return "Seleccione un grupo del menú.";
+  }
+  if (step === 2) {
+    syncFieldsTextareaFromEditor();
+    const fields = parseFieldsText($("fFields")?.value || "");
+    if (!fields.length) return "Añada al menos un campo en el constructor.";
+  }
+  if (step === 3) {
+    if (!($("fPreset")?.value || "").trim()) return "Seleccione el tipo de gráfica o tabla.";
+    const metrics = ensurePresetMetricDefaults();
+    if (!metrics.ok) return metrics.error;
+  }
+  return "";
+}
+
+function renderReviewSummary() {
+  const host = $("indStudioReviewSummary");
+  if (!host) return;
+  syncFieldsTextareaFromEditor();
+  ensurePresetMetricDefaults();
+  const fields = parseFieldsText($("fFields")?.value || "");
+  const fieldList = fields
+    .map((f) => `<li><code>${escapeHtml(f.key)}</code> → ${escapeHtml(f.label || f.key)} (${escapeHtml(f.type)})</li>`)
+    .join("");
+  const bars = getMultiSelectValues($("fBarMetrics"));
+  const charts = getMultiSelectValues($("fChartMetrics"));
+  host.innerHTML = `
+    <dl class="row mb-0">
+      <dt class="col-sm-3">Id</dt><dd class="col-sm-9"><code>${escapeHtml($("fId")?.value || "")}</code></dd>
+      <dt class="col-sm-3">Etiqueta</dt><dd class="col-sm-9">${escapeHtml($("fLabel")?.value || "")}</dd>
+      <dt class="col-sm-3">Grupo</dt><dd class="col-sm-9">${escapeHtml($("fGroup")?.value || "")}</dd>
+      <dt class="col-sm-3">Visible</dt><dd class="col-sm-9">${$("fEnabled")?.value === "false" ? "No" : "Sí"}</dd>
+      <dt class="col-sm-3">Perfil</dt><dd class="col-sm-9">${escapeHtml($("fProfile")?.value || "")}</dd>
+      <dt class="col-sm-3">Tabla</dt><dd class="col-sm-9">${escapeHtml($("fTable")?.value || "")}</dd>
+      <dt class="col-sm-3">Preset</dt><dd class="col-sm-9">${escapeHtml($("fPreset")?.value || "")}</dd>
+      <dt class="col-sm-3">Ordenar por</dt><dd class="col-sm-9">${escapeHtml($("fSortBy")?.value || "—")}</dd>
+      <dt class="col-sm-3">Series barras</dt><dd class="col-sm-9">${bars.length ? escapeHtml(bars.join(", ")) : "—"}</dd>
+      <dt class="col-sm-3">Eje X</dt><dd class="col-sm-9">${charts.length ? escapeHtml(charts.join(", ")) : "—"}</dd>
+      <dt class="col-sm-3">Campos (${fields.length})</dt><dd class="col-sm-9"><ul class="mb-0 ps-3">${fieldList || "<li class='text-muted'>Ninguno</li>"}</ul></dd>
+      <dt class="col-sm-3">Metadatos</dt><dd class="col-sm-9">${$("fMetaEnabled")?.value === "false" ? "Botón oculto" : "Botón visible"}</dd>
+    </dl>`;
+}
+
+function fieldsEditorHtml(fields) {
+  const list = fields || [];
+  if (!list.length) {
+    return `<p class="small text-muted mb-0">Sin campos. Use «+ Campo» o «Ver columnas de la tabla».</p>`;
+  }
+  const typeOpts = (selected) =>
+    ["float", "integer", "percent", "text"]
+      .map((t) => `<option value="${t}" ${t === selected ? "selected" : ""}>${t}</option>`)
+      .join("");
+  return list
+    .map((f, idx) => {
+      const key = escapeHtml(f.key || "");
+      const column = escapeHtml(f.column || f.key || "");
+      const label = escapeHtml(f.label || "");
+      const type = String(f.type || "float").toLowerCase();
+      const typeNorm = type === "int" || type === "number" ? "integer" : type === "string" ? "text" : type;
+      return `<div class="ind-studio-field-row border rounded p-2 mb-1" data-field-idx="${idx}">
+        <div class="d-flex gap-1 align-items-start">
+          <div class="ind-studio-field-move d-flex flex-column gap-1">
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" data-field-move="up" title="Subir">▲</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" data-field-move="down" title="Bajar">▼</button>
+          </div>
+          <div class="row g-1 flex-grow-1">
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Clave</label>
+              <input type="text" class="form-control form-control-sm font-monospace" data-field-key value="${key}" />
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small mb-0">Columna BD</label>
+              <input type="text" class="form-control form-control-sm font-monospace" data-field-column value="${column}" />
+            </div>
+            <div class="col-md-4">
+              <label class="form-label small mb-0">Etiqueta</label>
+              <input type="text" class="form-control form-control-sm" data-field-label value="${label}" />
+            </div>
+            <div class="col-md-2">
+              <label class="form-label small mb-0">Tipo</label>
+              <select class="form-select form-select-sm" data-field-type>${typeOpts(typeNorm)}</select>
+            </div>
+          </div>
+          <button type="button" class="btn btn-outline-danger btn-sm py-0" data-field-remove title="Quitar">×</button>
+        </div>
+      </div>`;
+    })
+    .join("");
+}
+
+function readFieldsFromEditorDom() {
+  const host = $("indStudioFieldsEditor");
+  if (!host) return parseFieldsText($("fFields")?.value || "");
+  const defaultTable = $("fTable")?.value || "tab_municipal";
+  const out = [];
+  host.querySelectorAll(".ind-studio-field-row").forEach((row) => {
+    const key = row.querySelector("[data-field-key]")?.value?.trim() || "";
+    if (!key) return;
+    const column = row.querySelector("[data-field-column]")?.value?.trim() || key;
+    const label = row.querySelector("[data-field-label]")?.value?.trim() || humanizeColumnLabel(key);
+    const type = row.querySelector("[data-field-type]")?.value?.trim() || "float";
+    const field = { key, column, label, type, source_table: defaultTable };
+    if (column !== key) field.column_aliases = [key];
+    out.push(field);
+  });
+  return out;
+}
+
+function syncFieldsTextareaFromEditor() {
+  const ta = $("fFields");
+  if (!ta) return;
+  const fields = readFieldsFromEditorDom();
+  ta.value = fieldsToText(fields);
+}
+
+function renderFieldsEditor(fields) {
+  const host = $("indStudioFieldsEditor");
+  if (!host) return;
+  host.innerHTML = fieldsEditorHtml(fields || []);
+  host.querySelectorAll("[data-field-remove]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest(".ind-studio-field-row");
+      row?.remove();
+      syncFieldsTextareaFromEditor();
+      refreshFieldKeySelects(true);
+      renderSeriesColorPickers();
+      refreshColsPickerSelectedState();
+    });
+  });
+  host.querySelectorAll("[data-field-move]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest(".ind-studio-field-row");
+      if (!row || !host) return;
+      const dir = btn.getAttribute("data-field-move");
+      if (dir === "up" && row.previousElementSibling) {
+        host.insertBefore(row, row.previousElementSibling);
+      } else if (dir === "down" && row.nextElementSibling) {
+        host.insertBefore(row.nextElementSibling, row);
+      }
+      syncFieldsTextareaFromEditor();
+      refreshFieldKeySelects(true);
+    });
+  });
+  host.querySelectorAll("[data-field-key], [data-field-column], [data-field-label], [data-field-type]").forEach((el) => {
+    el.addEventListener("input", () => {
+      syncFieldsTextareaFromEditor();
+      refreshFieldKeySelects(true);
+      renderSeriesColorPickers();
+      refreshColsPickerSelectedState();
+    });
+    el.addEventListener("change", () => {
+      syncFieldsTextareaFromEditor();
+      refreshFieldKeySelects(true);
+      renderSeriesColorPickers();
+      refreshColsPickerSelectedState();
+    });
+  });
+}
+
+function addEmptyFieldRow() {
+  const cur = readFieldsFromEditorDom();
+  const n = cur.length + 1;
+  cur.push({
+    key: `campo_${n}`,
+    column: `campo_${n}`,
+    label: `Campo ${n}`,
+    type: "float",
+    source_table: $("fTable")?.value || "tab_municipal",
+  });
+  if ($("fFields")) $("fFields").value = fieldsToText(cur);
+  renderFieldsEditor(cur);
+  refreshFieldKeySelects(true);
+  refreshColsPickerSelectedState();
 }
 
 function showErr(el, msg) {
@@ -246,6 +503,7 @@ function fillSelects() {
 }
 
 function fieldKeysFromForm() {
+  syncFieldsTextareaFromEditor();
   return parseFieldsText($("fFields")?.value).map((f) => f.key);
 }
 
@@ -260,6 +518,53 @@ function setMultiSelectValues(sel, values) {
 function getMultiSelectValues(sel) {
   if (!sel) return [];
   return [...sel.selectedOptions].map((o) => o.value);
+}
+
+/**
+ * Presets de barras/chart exigen métricas. Si el usuario no marcó ninguna
+ * (Ctrl+clic poco intuitivo), usar todas las claves de fields.
+ */
+function ensurePresetMetricDefaults() {
+  syncFieldsTextareaFromEditor();
+  refreshFieldKeySelects(true);
+  const template = $("fPreset")?.value || "";
+  const presetUi = PRESET_FORM[template] || {};
+  const fieldsUi = presetUi.fields || [];
+  const keys = fieldKeysFromForm();
+  if (!keys.length) return { ok: false, error: "Defina al menos un campo en Datos." };
+
+  if (fieldsUi.includes("bar_metrics")) {
+    let bars = getMultiSelectValues($("fBarMetrics"));
+    if (!bars.length) {
+      setMultiSelectValues($("fBarMetrics"), keys);
+      bars = keys;
+      renderSeriesColorPickers();
+    }
+    if (!bars.length) {
+      return {
+        ok: false,
+        error:
+          "Este preset exige series de barras. Marque al menos una en «Series / columnas de las barras» (Ctrl+clic).",
+      };
+    }
+  }
+  if (fieldsUi.includes("chart_metrics")) {
+    let charts = getMultiSelectValues($("fChartMetrics"));
+    if (!charts.length) {
+      setMultiSelectValues($("fChartMetrics"), keys);
+      charts = keys;
+    }
+    if (!charts.length) {
+      return {
+        ok: false,
+        error: "Este preset exige categorías del eje X. Marque al menos una.",
+      };
+    }
+  }
+  if (fieldsUi.includes("sort_by") && !($("fSortBy")?.value || "").trim()) {
+    if ($("fSortBy") && keys[0]) $("fSortBy").value = keys[0];
+  }
+  return { ok: true, error: "" };
 }
 
 function refreshFieldKeySelects(preserve = true) {
@@ -873,6 +1178,11 @@ function writeColorsToForm(colors) {
 }
 
 function buildIndicatorFromForm() {
+  syncFieldsTextareaFromEditor();
+  const metricsReady = ensurePresetMetricDefaults();
+  if (!metricsReady.ok) {
+    throw new Error(metricsReady.error || "Revise presentación (métricas del preset).");
+  }
   const id = $("fId").value.trim();
   const profile = $("fProfile").value;
   const handler = $("fHandler").value.trim();
@@ -1011,6 +1321,7 @@ function fillForm(ind) {
   const st = ind.fields?.[0]?.source_table || "tab_municipal";
   $("fTable").value = st;
   $("fFields").value = fieldsToText(ind.fields || []);
+  renderFieldsEditor(ind.fields || []);
   refreshFieldKeySelects(false);
   if (ind.presentation?.sort_by) $("fSortBy").value = ind.presentation.sort_by;
   setMultiSelectValues($("fBarMetrics"), ind.presentation?.bar_metrics || []);
@@ -1049,6 +1360,7 @@ function fillForm(ind) {
   $("fMetaUltimaAct").value = md.ultima_actualizacion || "";
   renderMetaNotasEditor(md.notas);
   renderMetaShowToggles(md.show);
+  showWizardStep(1);
 }
 
 function openNew() {
@@ -1205,8 +1517,7 @@ function existingFieldKeys() {
 function addFieldLineFromColumn(col) {
   const name = (col?.name || "").trim();
   if (!name) return;
-  const ta = $("fFields");
-  if (!ta) return;
+  syncFieldsTextareaFromEditor();
   const keys = existingFieldKeys();
   if (keys.has(name)) {
     if ($("indStudioColsHint")) {
@@ -1216,11 +1527,18 @@ function addFieldLineFromColumn(col) {
   }
   const type = mapDbTypeToFieldType(col.data_type);
   const label = humanizeColumnLabel(name);
-  // Formato corto: clave|Etiqueta|tipo (columna y tabla se infieren)
-  const line = `${name}|${label}|${type}`;
-  const cur = ta.value.trim();
-  ta.value = cur ? `${cur}\n${line}` : line;
-  ta.dispatchEvent(new Event("input", { bubbles: true }));
+  const fields = parseFieldsText($("fFields")?.value || "");
+  fields.push({
+    key: name,
+    column: name,
+    label,
+    type,
+    source_table: $("fTable")?.value || "tab_municipal",
+  });
+  if ($("fFields")) $("fFields").value = fieldsToText(fields);
+  renderFieldsEditor(fields);
+  refreshFieldKeySelects(true);
+  renderSeriesColorPickers();
   refreshColsPickerSelectedState();
   if ($("indStudioColsHint")) {
     $("indStudioColsHint").textContent = `Añadida «${label}» (${name}). Clic en otra para seguir armando la lista.`;
@@ -1319,20 +1637,24 @@ function bindForm() {
   $("indStudioPreviewBtn")?.addEventListener("click", () => void onPreview());
   $("indStudioLoadColsBtn")?.addEventListener("click", () => void onLoadCols());
   $("indStudioAuditRefreshBtn")?.addEventListener("click", () => void loadAuditLog());
+  $("indStudioFieldAddBtn")?.addEventListener("click", () => addEmptyFieldRow());
+  $("indStudioWizardBack")?.addEventListener("click", () => {
+    showErr($("indStudioFormError"));
+    showWizardStep(_wizardStep - 1);
+  });
+  $("indStudioWizardNext")?.addEventListener("click", () => {
+    const err = validateWizardStep(_wizardStep);
+    if (err) {
+      showErr($("indStudioFormError"), err);
+      return;
+    }
+    showErr($("indStudioFormError"));
+    showWizardStep(_wizardStep + 1);
+  });
   $("fPreset")?.addEventListener("change", () => applyPresetFormVisibility());
   $("fTable")?.addEventListener("change", () => {
     $("indStudioColsPicker")?.classList.add("d-none");
     if ($("indStudioColsHint")) $("indStudioColsHint").textContent = "";
-  });
-  $("fFields")?.addEventListener("input", () => {
-    refreshFieldKeySelects(true);
-    renderSeriesColorPickers();
-    refreshColsPickerSelectedState();
-  });
-  $("fFields")?.addEventListener("change", () => {
-    refreshFieldKeySelects(true);
-    renderSeriesColorPickers();
-    refreshColsPickerSelectedState();
   });
   $("fBarMetrics")?.addEventListener("change", () => renderSeriesColorPickers());
   $("fMetaNotasAdd")?.addEventListener("click", () => {

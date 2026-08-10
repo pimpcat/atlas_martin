@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Explorer Studio — GroSIG</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+  <style>
+    .explorer-preview-swatch {
+      width: 28px;
+      height: 28px;
+      border-radius: 4px;
+      border: 1px solid rgba(127, 127, 127, 0.45);
+      flex-shrink: 0;
+    }
+    .explorer-preview-line {
+      height: 0;
+      border-radius: 2px;
+      border-style: solid;
+      border-top: none;
+      border-left: none;
+      border-right: none;
+      width: 100%;
+      max-width: 180px;
+    }
+    .explorer-preview-fill {
+      width: 64px;
+      height: 40px;
+      border-radius: 4px;
+      border: 1px solid rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body class="visor-studio-page indicators-studio-page">
+  <main class="container-fluid px-3 px-lg-4 py-4 visor-studio-shell indicators-studio-shell">
+    <section id="explorerStudioLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Explorer Studio</h1>
+          <p class="small text-muted mb-3">
+            Estilos mínimos del Explorador Municipal (líneas y relleno de selección).
+            Misma sesión admin que Visor Studio.
+          </p>
+          <form id="explorerStudioLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="explorerStudioUser">Usuario</label>
+              <input id="explorerStudioUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="explorerStudioPass">Contraseña</label>
+              <input id="explorerStudioPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="explorerStudioError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+          <p class="small text-muted mt-3 mb-0" id="explorerStudioLoginFooter"></p>
+        </div>
+      </div>
+    </section>
+
+    <section id="explorerStudioDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+        <div>
+          <h1 class="h5 mb-0">Explorer Studio</h1>
+          <p class="small text-muted mb-0" id="explorerStudioWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="explorerStudioLogoutBtn">Cerrar sesión</button>
+      </div>
+      <div id="explorerStudioNav" class="mb-3"></div>
+
+      <div class="row g-3">
+        <div class="col-lg-7">
+          <form id="explorerStudioForm" class="d-grid gap-3">
+            <div class="card shadow-sm visor-studio-card">
+              <div class="card-header fw-semibold">Estado</div>
+              <div class="card-body p-3">
+                <div class="row g-2 align-items-end">
+                  <div class="col-sm-6">
+                    <label class="form-label small" for="fEstadoColor">Color de línea</label>
+                    <input id="fEstadoColor" type="color" class="form-control form-control-sm form-control-color" value="#0f172a" />
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label small" for="fEstadoWidth">Grosor</label>
+                    <input id="fEstadoWidth" type="number" class="form-control form-control-sm" min="0.5" max="12" step="0.1" value="2.4" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm visor-studio-card">
+              <div class="card-header fw-semibold">Municipios</div>
+              <div class="card-body p-3">
+                <div class="row g-2 align-items-end">
+                  <div class="col-sm-6">
+                    <label class="form-label small" for="fMunColor">Color de línea</label>
+                    <input id="fMunColor" type="color" class="form-control form-control-sm form-control-color" value="#475569" />
+                  </div>
+                  <div class="col-sm-6">
+                    <label class="form-label small" for="fMunWidth">Grosor</label>
+                    <input id="fMunWidth" type="number" class="form-control form-control-sm" min="0.5" max="12" step="0.05" value="1.25" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm visor-studio-card">
+              <div class="card-header fw-semibold">Municipio seleccionado</div>
+              <div class="card-body p-3">
+                <div class="row g-2 align-items-end">
+                  <div class="col-sm-6">
+                    <label class="form-label small" for="fSelFill">Color de relleno</label>
+                    <input id="fSelFill" type="color" class="form-control form-control-sm form-control-color" value="#008b8b" />
+                  </div>
+                  <div class="col-sm-6">
+                    <p class="small text-muted mb-0">La opacidad de selección (0.42) se mantiene fija en 1.0.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+              <button type="submit" class="btn btn-success btn-sm">Publicar</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="explorerStudioResetBtn">Restaurar defaults</button>
+              <span class="small" id="explorerStudioMsg"></span>
+            </div>
+          </form>
+        </div>
+
+        <div class="col-lg-5">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Vista previa</div>
+            <div class="card-body p-3 d-grid gap-3" id="explorerStudioPreview">
+              <div>
+                <div class="small text-muted mb-1">Línea estatal</div>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="explorer-preview-swatch" id="prevEstadoSwatch"></span>
+                  <div class="explorer-preview-line" id="prevEstadoLine"></div>
+                </div>
+              </div>
+              <div>
+                <div class="small text-muted mb-1">Líneas municipales</div>
+                <div class="d-flex align-items-center gap-2">
+                  <span class="explorer-preview-swatch" id="prevMunSwatch"></span>
+                  <div class="explorer-preview-line" id="prevMunLine"></div>
+                </div>
+              </div>
+              <div>
+                <div class="small text-muted mb-1">Relleno selección</div>
+                <div class="explorer-preview-fill" id="prevSelFill"></div>
+              </div>
+            </div>
+          </div>
+          <p class="small text-muted mt-2 mb-0">
+            Tras publicar, recargue el Atlas (Ctrl+F5) y abra <strong>Explorador municipal</strong> para ver el cambio.
+          </p>
+        </div>
+      </div>
+    </section>
+  </main>
+  <script type="module" src="./js/explorerStudioApp.js"></script>
+</body>
+</html>

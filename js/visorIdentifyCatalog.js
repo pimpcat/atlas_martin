@@ -165,13 +165,12 @@ export function buildIdentifyHtmlFromCatalog(identify, props) {
 }
 
 /**
- * Configuración de hover/clic desde catálogo (`identify`, `tooltip` o `labels`).
+ * Configuración de identify (clic) desde catálogo.
  * @param {object} entry
  * @returns {object|null}
  */
-export function resolveVisorHoverConfig(entry) {
+export function resolveVisorIdentifyConfig(entry) {
   if (!entry) return null;
-  if (entry.tooltip?.enabled === false) return null;
   if (entry.identify) {
     return {
       ...entry.identify,
@@ -193,14 +192,45 @@ export function resolveVisorHoverConfig(entry) {
   }
 
   const labels = entry.labels;
-  if (labels && labels.enabled !== false && labels.field) {
-    return {
-      title: labels.title ?? entry.label,
-      fields: [{ column: labels.field }],
-    };
+  if (labels && labels.enabled !== false) {
+    const col =
+      labels.field ||
+      labels.parts?.find((p) => p?.type === "field")?.column ||
+      labels.fields?.[0];
+    const column = typeof col === "string" ? col : col?.column;
+    if (column) {
+      return {
+        title: labels.title ?? entry.label,
+        fields: [{ column }],
+      };
+    }
   }
 
   return null;
+}
+
+/**
+ * Configuración de hover. Si no hay `hover`, replica identify (paridad legacy).
+ * @param {object} entry
+ * @returns {object|null}
+ */
+export function resolveVisorHoverConfig(entry) {
+  if (!entry) return null;
+  if (entry.tooltip?.enabled === false) return null;
+
+  if (entry.hover && (entry.hover.fields?.length || entry.hover.template || entry.hover.join)) {
+    return {
+      ...entry.hover,
+      title: entry.hover.title ?? entry.identify?.title ?? entry.label,
+    };
+  }
+
+  return resolveVisorIdentifyConfig(entry);
+}
+
+/** @deprecated use resolveVisorIdentifyConfig / resolveVisorHoverConfig */
+export function resolveVisorTipConfig(entry) {
+  return resolveVisorHoverConfig(entry);
 }
 
 /** Registra tooltips/identify del catálogo en mapOverlayTips (solo visor). */
@@ -208,25 +238,24 @@ export function registerVisorCatalogIdentify() {
   clearCatalogTipDefs();
   for (const entry of getOrderedVisorLayerEntries()) {
     const primary = maplibrePrimaryIdForCatalogLayer(entry);
-    const identify = resolveVisorHoverConfig(entry);
-    if (!identify) continue;
+    const identify = resolveVisorIdentifyConfig(entry);
+    const hover = resolveVisorHoverConfig(entry);
+    if (!identify && !hover) continue;
     const visorOnly = Boolean(entry.identify_visor_only);
-    registerCatalogTipDef(primary, (props) => buildIdentifyHtmlFromCatalog(identify, props), visorOnly);
+    const identifyFn = (props) =>
+      buildIdentifyHtmlFromCatalog(identify || hover, props);
+    const hoverFn = (props) =>
+      buildIdentifyHtmlFromCatalog(hover || identify, props);
+    registerCatalogTipDef(primary, hoverFn, visorOnly, { identifyHtml: identifyFn });
 
     if (entry.id === "curvas_nivel") {
-      registerCatalogTipDef(
-        "ly-curnivel-ma",
-        (props) => buildIdentifyHtmlFromCatalog(identify, props),
-        true,
-      );
+      registerCatalogTipDef("ly-curnivel-ma", hoverFn, true, { identifyHtml: identifyFn });
     }
     if (entry.id === "rnc") {
       for (const suffix of ["-estatal", "-troncal"]) {
-        registerCatalogTipDef(
-          `ly-rnc${suffix}`,
-          (props) => buildIdentifyHtmlFromCatalog(identify, props),
-          false,
-        );
+        registerCatalogTipDef(`ly-rnc${suffix}`, hoverFn, false, {
+          identifyHtml: identifyFn,
+        });
       }
     }
   }

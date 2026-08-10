@@ -10,6 +10,10 @@ import {
 } from "./visorAdminAuth.js";
 import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
 import { apiUrl } from "./atlasConfig.js";
+import {
+  probeCartographyHealth,
+  summarizeCartographyHealth,
+} from "./cartographyHealth.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -55,10 +59,10 @@ async function refreshHealth() {
   if (!host) return;
   host.innerHTML = `<span class="badge text-bg-secondary grosig-status-pill">Comprobando…</span>`;
 
-  const [atlas, geo, carto] = await Promise.all([
+  const [atlas, geo, cartoProbe] = await Promise.all([
     probeJson("/api/health"),
     probeJson("/api/geography-context/health"),
-    probeJson("/api/cartography/health"),
+    probeCartographyHealth({ force: true }),
   ]);
 
   const parts = [];
@@ -74,9 +78,12 @@ async function refreshHealth() {
     geo.data?.enabled &&
     geo.data?.engine === "grosig-geography-context";
   parts.push(pill("Geography Context", geoOn, geoOn ? "enabled" : "off"));
-  const cartoOn =
-    carto.ok && carto.data?.enabled && carto.data?.engine === "grosig-cartography";
-  parts.push(pill("Cartography Engine", cartoOn, cartoOn ? "enabled" : "off"));
+
+  const cartoSummary = summarizeCartographyHealth(cartoProbe.health);
+  const cartoDetail = cartoProbe.ok
+    ? `${cartoSummary.statusLabel} · ${cartoSummary.version}`
+    : "off";
+  parts.push(pill("Cartography Engine", cartoProbe.ok, cartoDetail));
   host.innerHTML = parts.join("");
 }
 

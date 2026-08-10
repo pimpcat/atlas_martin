@@ -205,7 +205,7 @@ Plantillas disponibles hoy: `locs_punto`, `locs_atlas`, `colonias`, `manzanas`, 
 
 Use plantilla solo si su capa **reutiliza** la misma lógica que una capa existente. Si no, use campos simples (A).
 
-Para el **globo al pasar el ratón**, el bloque `identify` basta (mismo contenido que la ficha). Atajo opcional: `tooltip: { "field": "nombre" }`. Ver [VISOR_LABELS_TOOLTIPS.md](./VISOR_LABELS_TOOLTIPS.md).
+Para el **globo al pasar el ratón**, puede reutilizar `identify` (mismo contenido) o declarar un bloque `hover` independiente con menos campos. Atajo opcional: `tooltip: { "field": "nombre" }`. Ver [VISOR_LABELS_TOOLTIPS.md](./VISOR_LABELS_TOOLTIPS.md).
 
 ### D) Solo visor (no en otros módulos)
 
@@ -288,11 +288,27 @@ Implementación: `visorStyleRegistry.js` → `minzoom` en `OVERLAY_DEFS`; hint e
 **Nivel:** solo catálogo  
 Bloque `labels` — texto fijo en el mapa a partir de un zoom mínimo (sin pasar el ratón).
 
+Legacy (un campo):
+
 ```json
 "labels": {
   "field": "nombre",
   "minzoom": 14,
   "color": "#2c3e50"
+}
+```
+
+Constructor de partes (Visor Studio; multilínea con `"\n"`):
+
+```json
+"labels": {
+  "parts": [
+    { "type": "text", "value": "Nombre: " },
+    { "type": "field", "column": "nombre" },
+    { "type": "newline" },
+    { "type": "field", "column": "clave" }
+  ],
+  "minzoom": 14
 }
 ```
 
@@ -649,8 +665,10 @@ Omita el bloque `search`. La capa sigue visible y exportable.
 
 # Caso 5 — Puntos con icono (SVG, PNG, JPG)
 
-**Nivel:** catálogo + código (icono una vez por tipo)  
+**Nivel:** Visor Studio (upload) o catálogo + código  
 **Mejor calidad:** preferir **SVG** (vector, sin pixelado al hacer zoom).
+
+En **Visor Studio**, el preset «Punto con icono» acepta `.svg`, `.png`, `.jpg` / `.jpeg`. Raster se registra en `icons.json` y se carga en el mapa sin parser SVG.
 
 Raster (PNG/JPG) se cargan con **supersampling** en el mapa para reducir dientes de sierra; aun así SVG es la opción recomendada.
 
@@ -698,6 +716,8 @@ Si sus puntos vienen de `c_denue` filtrados por actividad:
 ```
 
 **Desarrollo (una vez por icono nuevo):** SVG en `js/icons/`, registro en `mapDenueIcons.js`.
+
+**Known issue (GroSIG 1.0):** todas las subcapas DENUE comparten la fuente Martin `c_denue`. El `codigo_act` filtra en el mapa, no en el tile. La primera capa del grupo puede sentirse más lenta que una tabla puntual propia; al encender otra DENUE suele ir rápido (tiles ya en caché). No es bug: es el diseño actual. Mejora futura opcional: vista materializada / source filtrada por SCIAN. Detalle en Manual del Desarrollador §6.
 
 ## 5B — Capa de puntos propia con icono
 

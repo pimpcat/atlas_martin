@@ -93,3 +93,66 @@ export function loadSvgAsMapSymbol(map, id, svg, rasterPx, options = {}) {
     img.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
   });
 }
+
+/**
+ * Rasteriza PNG/JPG (u otra imagen) en textura cuadrada para MapLibre.
+ * @param {import("maplibre-gl").Map} map
+ * @param {string} id
+ * @param {string} url
+ * @param {number} rasterPx
+ * @param {{ textureAnchor?: string, cacheBust?: string|number }} [options]
+ */
+export function loadRasterUrlAsMapSymbol(map, id, url, rasterPx, options = {}) {
+  const anchor = options.textureAnchor || "bottom";
+  const bust =
+    options.cacheBust != null
+      ? `${url.includes("?") ? "&" : "?"}v=${encodeURIComponent(String(options.cacheBust))}`
+      : "";
+  const fetchUrl = bust ? `${url}${bust}` : url;
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = rasterPx;
+        canvas.height = rasterPx;
+        const ctx = canvas.getContext("2d", { alpha: true });
+        if (!ctx) {
+          reject(new Error("Canvas 2D no disponible"));
+          return;
+        }
+        ctx.clearRect(0, 0, rasterPx, rasterPx);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        const iw = img.naturalWidth || rasterPx;
+        const ih = img.naturalHeight || rasterPx;
+        const scale = Math.min(rasterPx / iw, rasterPx / ih);
+        const drawW = iw * scale;
+        const drawH = ih * scale;
+        const ox = (rasterPx - drawW) / 2;
+        let oy = (rasterPx - drawH) / 2;
+        if (anchor === "bottom") oy = rasterPx - drawH;
+        else if (anchor === "top") oy = 0;
+        ctx.drawImage(img, ox, oy, drawW, drawH);
+        if (map.hasImage(id)) map.removeImage(id);
+        map.addImage(id, ctx.getImageData(0, 0, rasterPx, rasterPx), { sdf: false });
+        resolve();
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error(`No se pudo cargar icono raster ${id}`));
+    img.src = fetchUrl;
+  });
+}
+
+/** Carga un PNG/JPG desde assets/icons/map/ y lo registra en MapLibre. */
+export async function loadRasterFileAsMapSymbol(map, id, filename, rasterPx, options = {}) {
+  const url = atlasMapIconUrl(filename);
+  return loadRasterUrlAsMapSymbol(map, id, url, rasterPx, options);
+}
+
+export function isRasterIconFilename(filename) {
+  return /\.(png|jpe?g|webp)$/i.test(String(filename || ""));
+}

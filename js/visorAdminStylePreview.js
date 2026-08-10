@@ -118,7 +118,8 @@ export async function renderAdminStylePreview(container, opts = {}) {
   if (preset === "point_symbol") {
     const iconKey = (opts.iconKey || "").trim();
     if (iconKey) {
-      const file = `${iconKey.replace(/_/g, "-")}.svg`;
+      const fileFromMeta = (opts.iconFile || "").trim();
+      const file = fileFromMeta || `${iconKey.replace(/_/g, "-")}.svg`;
       const bust = opts.iconVersion ? `?v=${opts.iconVersion}` : "";
       const url = `${atlasMapIconUrl(file)}${bust}`;
       container.innerHTML = `<div class="visor-admin-style-preview__icon-wrap" style="width:${PREVIEW_W}px;height:${previewH}px;background:#f1f5f9;border-radius:4px;display:flex;align-items:flex-end;justify-content:center;"><img src="${url}" alt="" class="visor-admin-style-preview__img" style="max-width:100%;max-height:100%;object-fit:contain;object-position:center bottom;" /></div>`;
