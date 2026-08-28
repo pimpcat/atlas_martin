@@ -29,6 +29,7 @@ const SECTION_ICON_SRC = {
   eco: "./assets/icons/menu/eco.svg",
   gov: "./assets/icons/menu/gov.svg",
   sitios_interes: "./assets/icons/menu/sitios-interes.svg",
+  analitica: "./assets/icons/menu/analitica.svg",
 };
 
 function sectionIcon(sectionId) {
@@ -46,6 +47,14 @@ function sectionIcon(sectionId) {
 
 let _collapseAllMenuSections = null;
 let _clearActiveMenuItem = null;
+/** @type {Map<string, () => void | Promise<void>>} */
+let _activateById = new Map();
+
+/** Activa un ítem del menú por id (p. ej. analitica_comparador). */
+export async function activateMenuItemById(id) {
+  const fn = _activateById.get(String(id || "").trim());
+  if (fn) await fn();
+}
 
 /** Cierra todas las temáticas del acordeón (p. ej. al pulsar Inicio). */
 export function collapseAllMenuSections() {
@@ -67,6 +76,7 @@ export function clearActiveMenuItem() {
  */
 export function createMenu(root, sections, { onSelect }) {
   root.innerHTML = "";
+  _activateById = new Map();
 
   let activeItemEl = null;
   const sectionRefs = [];
@@ -105,6 +115,10 @@ export function createMenu(root, sections, { onSelect }) {
       ]);
 
       const activate = async () => {
+        for (const r of sectionRefs) {
+          if (r !== ref) collapseRef(r);
+        }
+        expandRef(ref);
         if (activeItemEl) activeItemEl.classList.remove("is-active");
         itemEl.classList.add("is-active");
         activeItemEl = itemEl;
@@ -118,6 +132,8 @@ export function createMenu(root, sections, { onSelect }) {
           void activate();
         }
       });
+
+      _activateById.set(item.id, activate);
 
       itemsWrap.append(itemEl);
     }

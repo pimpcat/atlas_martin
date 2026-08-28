@@ -1,34 +1,136 @@
 /**
  * Indicators Studio — wizard admin del catálogo de indicadores (Fase 11).
- * Reutiliza la sesión JWT de Visor Studio (visorAdminAuth.js).
+ * Reutiliza la sesión JWT de Visor Studio (studioShell).
  */
-import {
-  adminFetch,
-  clearAdminSession,
-  getAdminUser,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
-} from "./visorAdminAuth.js";
+import { adminFetch } from "./visorAdminAuth.js";
 import { resetIndicatorsCatalogCache } from "./indicatorCatalog.js";
 import { resetPresentationPresetsCache } from "./presentationPresets.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+import {
+  createStudioShell,
+  studioIdsFromPrefix,
+} from "./studioShell.js";
+import {
+  INDICATORS_WIZARD_STEPS,
+  createNumberedWizardController,
+} from "./indicatorsWizardSteps.js";
+import {
+  addMetricRow,
+  buildCoreContractFromForm,
+  buildRefreshMold,
+  coreContractFromBundle,
+  emptyMetricRow,
+  fieldsFromCoreMetrics,
+  metricsFromCatalogEntry,
+  metricsFromCoreBundle,
+  renderMetricsEditor,
+  syncMetricsFromDom,
+  validateCoreContractStep,
+} from "./indicatorsStudioCoreContract.js";
 
 const $ = (id) => document.getElementById(id);
 
 let _meta = null;
 let _catalog = null;
 let _editingId = null;
+/** @type {Array<any>} */
+let _coreList = [];
+/** @type {"core"|"menu"} */
+let _workspace = "core";
+/** @type {string|null} */
+let _editingCoreClave = null;
+/** @type {any} */
+let _pickedCoreBundle = null;
 
-const WIZARD_STEPS = [
-  { id: 1, title: "Identidad", hint: "Nombre en el menú, grupo y visibilidad." },
-  { id: 2, title: "Datos", hint: "Perfil, tabla y constructor de campos." },
-  { id: 3, title: "Presentación", hint: "Tipo de gráfica, ranking y colores." },
-  { id: 4, title: "Metadatos", hint: "Fuente, notas y fechas (panel Metadatos del Atlas)." },
-  { id: 5, title: "Revisar", hint: "Resumen y publicación." },
-];
-let _wizardStep = 1;
+function publicationCoreKey(ind) {
+  if (!ind || typeof ind !== "object") return "";
+  const amigo = ind.amigo && typeof ind.amigo === "object" ? ind.amigo : {};
+  const mold = ind.refresh_mold || amigo.mold || {};
+  return String(
+    ind.core_indicator_key ||
+      ind.core_indicator_key ||
+      amigo.core_clave ||
+      amigo.core_clave ||
+      mold.core_clave ||
+      mold.core_clave ||
+      ""
+  ).trim();
+}
 
+function matchCoreClaveInList(candidates) {
+  const list = _coreList || [];
+  for (const raw of candidates || []) {
+    const k = String(raw || "").trim();
+    if (!k) continue;
+    const hit = list.find((c) => c.clave === k);
+    if (hit) return hit.clave;
+  }
+  return "";
+}
+
+function inferCoreClaveFromPublication(ind) {
+  const id = String(ind?.id || $("fId")?.value || "").trim();
+  const label = String(ind?.label || $("fLabel")?.value || "")
+    .trim()
+    .toLowerCase();
+  const explicit = publicationCoreKey(ind);
+  const stripped = id.replace(/^[a-z]+_/, "");
+  const fromList = matchCoreClaveInList([explicit, id, stripped]);
+  if (fromList) return fromList;
+  if (explicit) return explicit;
+  if (label) {
+    const byName = (_coreList || []).find(
+      (c) => String(c.nombre || "").trim().toLowerCase() === label
+    );
+    if (byName) return byName.clave;
+  }
+  return stripped || id || "";
+}
+
+async function resolveCoreClaveFromMoldSpec(templateId) {
+  const tid = String(templateId || "").trim();
+  if (!tid) return "";
+  try {
+    const { res, data } = await adminFetch(
+      `/api/amigo/admin/mold-spec/${encodeURIComponent(tid)}`,
+      { clearOn401: false }
+    );
+    if (!res?.ok) return "";
+    return String(data?.spec?.core_clave || data?.core_clave || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+async function hydratePublicationCoreLink(ind) {
+  const pub = ind || (_catalog?.indicators || []).find((x) => x.id === _editingId) || {
+    id: $("fId")?.value || "",
+    label: $("fLabel")?.value || "",
+  };
+  let key = inferCoreClaveFromPublication(pub);
+  const listed = matchCoreClaveInList([key]);
+  if (!listed && pub.id) {
+    const fromSpec = await resolveCoreClaveFromMoldSpec(pub.id);
+    if (fromSpec) key = fromSpec;
+  }
+  if (!key) return "";
+  fillCorePickSelect(key);
+  await refreshCorePickSummary();
+  return key;
+}
+
+const wizardNav = createNumberedWizardController({
+  steps: INDICATORS_WIZARD_STEPS,
+  initialStep: 1,
+});
+
+function coreFormIds() {
+  return {
+    coreClave: $("fCoreClave"),
+    nombre: $("fCoreNombre"),
+    tema: $("fCoreTema"),
+    descripcion: $("fCoreDescripcion"),
+  };
+}
 /** Campos del formulario visibles según preset. */
 const PRESET_FORM = {
   horizontal_bars: {
@@ -87,72 +189,130 @@ function applyPresetFormVisibility() {
   if (hint) hint.textContent = conf.hint || "Elija el diseño visual.";
   refreshFieldKeySelects(true);
   renderSeriesColorPickers();
-  if (_wizardStep === 3) {
-    document.querySelectorAll('[data-wizard-step="3"]').forEach((panel) => {
+  if (wizardNav.getStep() === 4) {
+    document.querySelectorAll('[data-wizard-step="4"]').forEach((panel) => {
       if (panel.getAttribute("data-studio-field") === "bar_colors") return;
       panel.classList.remove("d-none");
     });
   }
 }
 
-function renderWizardChrome() {
-  const host = $("indStudioSteps");
-  if (!host) return;
-  host.innerHTML = WIZARD_STEPS.map((s) => {
-    const active = s.id === _wizardStep;
-    const done = s.id < _wizardStep;
-    const cls = active
-      ? "btn btn-sm btn-primary"
-      : done
-        ? "btn btn-sm btn-outline-success"
-        : "btn btn-sm btn-outline-secondary";
-    return `<button type="button" class="${cls}" data-wizard-goto="${s.id}">${s.id}. ${s.title}</button>`;
-  }).join("");
-  host.querySelectorAll("[data-wizard-goto]").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const target = Number(btn.getAttribute("data-wizard-goto"));
-      if (!Number.isFinite(target)) return;
-      if (target > _wizardStep) {
-        for (let i = _wizardStep; i < target; i++) {
-          const err = validateWizardStep(i);
-          if (err) {
-            showErr($("indStudioFormError"), err);
-            showWizardStep(i);
-            return;
-          }
-        }
-      }
-      showErr($("indStudioFormError"));
-      showWizardStep(target);
-    });
-  });
-  const hint = $("indStudioStepHint");
-  const cur = WIZARD_STEPS.find((s) => s.id === _wizardStep);
-  if (hint) hint.textContent = cur?.hint || "";
-  const back = $("indStudioWizardBack");
-  const next = $("indStudioWizardNext");
-  if (back) back.disabled = _wizardStep <= 1;
-  if (next) {
-    next.classList.toggle("d-none", _wizardStep >= WIZARD_STEPS.length);
+function onEnterWizardStep(step) {
+  if (step === 2) {
+    const current = ($("fCorePick")?.value || "").trim();
+    if (current) {
+      fillCorePickSelect(current);
+      void refreshCorePickSummary();
+    } else {
+      void hydratePublicationCoreLink();
+    }
   }
-}
-
-function showWizardStep(step) {
-  _wizardStep = Math.max(1, Math.min(WIZARD_STEPS.length, Number(step) || 1));
-  document.querySelectorAll("[data-wizard-step]").forEach((panel) => {
-    const id = Number(panel.getAttribute("data-wizard-step"));
-    panel.classList.toggle("d-none", id !== _wizardStep);
-  });
-  if (_wizardStep === 3) {
+  if (step === 4) {
     applyPresetFormVisibility();
     ensurePresetMetricDefaults();
   }
-  if (_wizardStep === 5) renderReviewSummary();
-  if (_wizardStep === 2) {
+  if (step === 6) renderReviewSummary();
+  if (step === 3) {
     syncFieldsTextareaFromEditor();
     renderFieldsEditor(parseFieldsText($("fFields")?.value || ""));
   }
+}
+
+function renderWizardChrome() {
+  wizardNav.renderChrome({
+    host: $("indStudioSteps"),
+    hintEl: $("indStudioStepHint"),
+    backBtn: $("indStudioWizardBack"),
+    nextBtn: $("indStudioWizardNext"),
+    onGoto: (target) => {
+      wizardNav.tryGoTo(target, {
+        validateStep: validateWizardStep,
+        onBlocked: (err) => showErr($("indStudioFormError"), err),
+        onClearError: () => showErr($("indStudioFormError")),
+        onEnter: onEnterWizardStep,
+      });
+      renderWizardChrome();
+    },
+  });
+}
+
+function showWizardStep(step) {
+  wizardNav.showStep(step, { onEnter: onEnterWizardStep });
   renderWizardChrome();
+}
+
+function readCompareBlockFromForm() {
+  if (!$("fCompareEnabled")?.checked) {
+    return { enabled: false };
+  }
+  const cmp = { enabled: true };
+  const mode = ($("fCompareMode")?.value || "").trim();
+  if (mode) cmp.mode = mode;
+  if ($("fCompareTemporalEnable")?.checked) {
+    const from = ($("fCompareTemporalFrom")?.value || "").trim();
+    const to = ($("fCompareTemporalTo")?.value || "").trim();
+    if (from && to) cmp.temporal = { from, to };
+  }
+  if ($("fCompareHabxpolFallback")?.checked) {
+    cmp.habxpol_fallback = true;
+  }
+  return cmp;
+}
+
+function writeCompareBlockToForm(compare) {
+  const c = compare && typeof compare === "object" ? compare : {};
+  if ($("fCompareEnabled")) $("fCompareEnabled").checked = c.enabled === true;
+  if ($("fCompareMode")) $("fCompareMode").value = c.mode || "";
+  const temporal = c.temporal && typeof c.temporal === "object" ? c.temporal : {};
+  const hasTemporal = Boolean(temporal.from && temporal.to);
+  if ($("fCompareTemporalEnable")) $("fCompareTemporalEnable").checked = hasTemporal;
+  if ($("fCompareHabxpolFallback")) {
+    $("fCompareHabxpolFallback").checked = c.habxpol_fallback === true;
+  }
+  refreshFieldKeySelects(true);
+  if ($("fCompareTemporalFrom") && temporal.from) {
+    $("fCompareTemporalFrom").value = temporal.from;
+  }
+  if ($("fCompareTemporalTo") && temporal.to) {
+    $("fCompareTemporalTo").value = temporal.to;
+  }
+  syncCompareAdvancedUi(Boolean(hasTemporal || c.mode || c.habxpol_fallback));
+}
+
+function syncCompareAdvancedUi(expandAdvanced = false) {
+  const on = Boolean($("fCompareEnabled")?.checked);
+  $("indStudioCompareAdvancedWrap")?.classList.toggle("d-none", !on);
+  const temporalOn = Boolean($("fCompareTemporalEnable")?.checked);
+  $("fCompareTemporalFromWrap")?.classList.toggle("d-none", !temporalOn);
+  $("fCompareTemporalToWrap")?.classList.toggle("d-none", !temporalOn);
+  const body = $("indStudioCompareAdvancedBody");
+  const btn = $("fCompareAdvancedToggle");
+  if (expandAdvanced && on && body) {
+    body.classList.remove("d-none");
+    btn?.setAttribute("aria-expanded", "true");
+  }
+}
+
+function toggleCompareAdvancedPanel() {
+  const body = $("indStudioCompareAdvancedBody");
+  const btn = $("fCompareAdvancedToggle");
+  if (!body || !btn) return;
+  body.classList.toggle("d-none");
+  btn.setAttribute("aria-expanded", String(!body.classList.contains("d-none")));
+}
+
+function compareAdvancedReviewHtml() {
+  if (!$("fCompareEnabled")?.checked) return "No";
+  const parts = ["Habilitado (Analítica)"];
+  const mode = ($("fCompareMode")?.value || "").trim();
+  if (mode) parts.push(`modo ${mode}`);
+  if ($("fCompareTemporalEnable")?.checked) {
+    const from = ($("fCompareTemporalFrom")?.value || "").trim();
+    const to = ($("fCompareTemporalTo")?.value || "").trim();
+    if (from && to) parts.push(`variación ${from} → ${to}`);
+  }
+  if ($("fCompareHabxpolFallback")?.checked) parts.push("fallback hab/policía");
+  return escapeHtml(parts.join(" · "));
 }
 
 function validateWizardStep(step) {
@@ -165,22 +325,184 @@ function validateWizardStep(step) {
     if (!($("fGroup")?.value || "").trim()) return "Seleccione un grupo del menú.";
   }
   if (step === 2) {
-    syncFieldsTextareaFromEditor();
-    const fields = parseFieldsText($("fFields")?.value || "");
-    if (!fields.length) return "Añada al menos un campo en el constructor.";
+    let key = ($("fCorePick")?.value || "").trim();
+    if (!key) {
+      key = inferCoreClaveFromPublication(
+        (_catalog?.indicators || []).find((x) => x.id === _editingId)
+      );
+      if (key) fillCorePickSelect(key);
+    }
+    if (!key) return "Seleccione un indicador CORE. Créelo antes en Indicadores (CORE).";
+    return "";
   }
   if (step === 3) {
+    syncFieldsTextareaFromEditor();
+    const fields = parseFieldsText($("fFields")?.value || "");
+    if (!fields.length) return "Añada al menos un campo en el constructor (o use «Sincronizar → Datos»).";
+  }
+  if (step === 4) {
     if (!($("fPreset")?.value || "").trim()) return "Seleccione el tipo de gráfica o tabla.";
     const metrics = ensurePresetMetricDefaults();
     if (!metrics.ok) return metrics.error;
+    if ($("fCompareEnabled")?.checked) {
+      const sortBy = ($("fSortBy")?.value || "").trim();
+      if (!sortBy) {
+        return "Para el comparador municipal indique «Ordenar el ranking por» (métrica principal).";
+      }
+      const coreKey = ($("fCorePick")?.value || "").trim();
+      if (!coreKey) {
+        return "Para el comparador municipal seleccione un indicador CORE (paso Indicador).";
+      }
+      if ($("fCompareTemporalEnable")?.checked) {
+        const from = ($("fCompareTemporalFrom")?.value || "").trim();
+        const to = ($("fCompareTemporalTo")?.value || "").trim();
+        if (!from || !to) {
+          return "Indique métricas «desde» y «hasta» para la variación temporal del comparador.";
+        }
+        if (from === to) {
+          return "Las métricas de variación temporal deben ser distintas.";
+        }
+      }
+    }
+  }
+  if (step === 6 && $("fCompareEnabled")?.checked) {
+    syncFieldsTextareaFromEditor();
+    const fields = parseFieldsText($("fFields")?.value || "");
+    if (!fields.length) {
+      return "El comparador requiere al menos un campo de datos publicado.";
+    }
   }
   return "";
+}
+
+function fillCorePickSelect(selected) {
+  const sel = $("fCorePick");
+  if (!sel) return;
+  const cur = selected || sel.value || "";
+  const items = [...(_coreList || [])].sort((a, b) =>
+    String(a.clave || "").localeCompare(String(b.clave || ""), "es")
+  );
+  sel.innerHTML = '<option value="">— Elegir indicador CORE —</option>';
+  for (const c of items) {
+    const opt = document.createElement("option");
+    opt.value = c.clave;
+    const n = c.n_metricas != null ? ` (${c.n_metricas} métr.)` : "";
+    opt.textContent = `${c.nombre || c.clave} — ${c.clave}${n}`;
+    sel.append(opt);
+  }
+  if (cur && ![...sel.options].some((o) => o.value === cur)) {
+    const opt = document.createElement("option");
+    opt.value = cur;
+    opt.textContent = `${cur} (vinculado a esta publicación)`;
+    sel.append(opt);
+  }
+  if (cur) sel.value = cur;
+}
+
+function coreSummaryHtml(bundle) {
+  const ind = bundle?.indicator || {};
+  const rows = metricsFromCoreBundle(bundle);
+  if (!ind.clave && !rows.length) {
+    return "No se pudo leer el indicador CORE.";
+  }
+  const mList = rows
+    .map(
+      (m) =>
+        `<li><code>${escapeHtml(m.clave)}</code> ${escapeHtml(m.nombre || "")} · ${(m.niveles || []).join(", ")}${
+          m.periodo ? ` · ${escapeHtml(m.periodo)}` : ""
+        }</li>`
+    )
+    .join("");
+  return `<div><strong>${escapeHtml(ind.nombre || ind.clave || "")}</strong> · <code>${escapeHtml(
+    ind.clave || ""
+  )}</code> · ${rows.length} métrica(s)<ul class="mb-0 ps-3">${mList || "<li class='text-muted'>Sin métricas</li>"}</ul></div>`;
+}
+
+async function refreshCorePickSummary() {
+  const host = $("indStudioCorePickSummary");
+  const key = ($("fCorePick")?.value || "").trim();
+  if (!host) return;
+  if (!key) {
+    _pickedCoreBundle = null;
+    host.textContent = "Seleccione un indicador para ver sus métricas.";
+    return;
+  }
+  host.textContent = "Cargando métricas…";
+  const { res, data } = await adminFetch(`/api/amigo/admin/indicators/${encodeURIComponent(key)}`, {
+    clearOn401: false,
+  });
+  if (!res?.ok) {
+    _pickedCoreBundle = null;
+    host.textContent = data?.detail?.message || `No hay indicador «${key}» en CORE.`;
+    return;
+  }
+  _pickedCoreBundle = data;
+  host.innerHTML = coreSummaryHtml(data);
+}
+
+function applyWorkspace() {
+  const isCore = _workspace === "core";
+  $("indStudioWsCore")?.classList.toggle("btn-primary", isCore);
+  $("indStudioWsCore")?.classList.toggle("btn-outline-secondary", !isCore);
+  $("indStudioWsMenu")?.classList.toggle("btn-primary", !isCore);
+  $("indStudioWsMenu")?.classList.toggle("btn-outline-secondary", isCore);
+  if ($("indStudioListTitle")) {
+    $("indStudioListTitle").textContent = isCore ? "Indicadores" : "Publicaciones";
+  }
+  if ($("indStudioNewBtn")) {
+    $("indStudioNewBtn").textContent = isCore ? "+ Nuevo indicador" : "+ Nueva publicación";
+  }
+  $("indStudioCopyBtn")?.classList.toggle("d-none", isCore || !_editingId);
+  if (isCore) {
+    $("indStudioForm")?.classList.add("d-none");
+    const hasCore = Boolean(_editingCoreClave) || $("fCoreClave")?.value;
+    const showingCore = !$("indStudioCoreForm")?.classList.contains("d-none");
+    if (!showingCore && !hasCore) {
+      $("indStudioCoreForm")?.classList.add("d-none");
+      $("indStudioFormEmpty")?.classList.remove("d-none");
+      if ($("indStudioFormEmpty")) {
+        $("indStudioFormEmpty").textContent =
+          "Seleccione un indicador CORE o cree uno nuevo. Las publicaciones del menú están en el otro espacio.";
+      }
+    }
+  } else {
+    $("indStudioCoreForm")?.classList.add("d-none");
+    const showingPub = !$("indStudioForm")?.classList.contains("d-none");
+    if (!showingPub) {
+      $("indStudioFormEmpty")?.classList.remove("d-none");
+      if ($("indStudioFormEmpty")) {
+        $("indStudioFormEmpty").textContent =
+          "Seleccione una publicación del menú o cree una nueva a partir de un indicador CORE.";
+      }
+    }
+  }
+  renderList();
+}
+
+function setWorkspace(mode) {
+  _workspace = mode === "menu" ? "menu" : "core";
+  applyWorkspace();
+}
+
+function showCoreEditor() {
+  $("indStudioFormEmpty")?.classList.add("d-none");
+  $("indStudioForm")?.classList.add("d-none");
+  $("indStudioCoreForm")?.classList.remove("d-none");
+  showErr($("indStudioCoreFormError"));
+  showOk($("indStudioCoreFormOk"));
+}
+
+function hideEditors() {
+  $("indStudioForm")?.classList.add("d-none");
+  $("indStudioCoreForm")?.classList.add("d-none");
+  $("indStudioFormEmpty")?.classList.remove("d-none");
 }
 
 function renderReviewSummary() {
   const host = $("indStudioReviewSummary");
   if (!host) return;
   syncFieldsTextareaFromEditor();
+  syncMetricsFromDom();
   ensurePresetMetricDefaults();
   const fields = parseFieldsText($("fFields")?.value || "");
   const fieldList = fields
@@ -188,12 +510,22 @@ function renderReviewSummary() {
     .join("");
   const bars = getMultiSelectValues($("fBarMetrics"));
   const charts = getMultiSelectValues($("fChartMetrics"));
+  let coreBlock = "<span class='text-muted'>Sin indicador CORE enlazado</span>";
+  const pickKey = ($("fCorePick")?.value || "").trim();
+  if (pickKey) {
+    if (_pickedCoreBundle?.indicator) {
+      coreBlock = coreSummaryHtml(_pickedCoreBundle);
+    } else {
+      coreBlock = `Clave <code>${escapeHtml(pickKey)}</code>`;
+    }
+  }
   host.innerHTML = `
     <dl class="row mb-0">
-      <dt class="col-sm-3">Id</dt><dd class="col-sm-9"><code>${escapeHtml($("fId")?.value || "")}</code></dd>
+      <dt class="col-sm-3">Id menú</dt><dd class="col-sm-9"><code>${escapeHtml($("fId")?.value || "")}</code></dd>
       <dt class="col-sm-3">Etiqueta</dt><dd class="col-sm-9">${escapeHtml($("fLabel")?.value || "")}</dd>
       <dt class="col-sm-3">Grupo</dt><dd class="col-sm-9">${escapeHtml($("fGroup")?.value || "")}</dd>
       <dt class="col-sm-3">Visible</dt><dd class="col-sm-9">${$("fEnabled")?.value === "false" ? "No" : "Sí"}</dd>
+      <dt class="col-sm-3">Indicador CORE</dt><dd class="col-sm-9">${coreBlock}</dd>
       <dt class="col-sm-3">Perfil</dt><dd class="col-sm-9">${escapeHtml($("fProfile")?.value || "")}</dd>
       <dt class="col-sm-3">Tabla</dt><dd class="col-sm-9">${escapeHtml($("fTable")?.value || "")}</dd>
       <dt class="col-sm-3">Preset</dt><dd class="col-sm-9">${escapeHtml($("fPreset")?.value || "")}</dd>
@@ -202,6 +534,7 @@ function renderReviewSummary() {
       <dt class="col-sm-3">Eje X</dt><dd class="col-sm-9">${charts.length ? escapeHtml(charts.join(", ")) : "—"}</dd>
       <dt class="col-sm-3">Campos (${fields.length})</dt><dd class="col-sm-9"><ul class="mb-0 ps-3">${fieldList || "<li class='text-muted'>Ninguno</li>"}</ul></dd>
       <dt class="col-sm-3">Metadatos</dt><dd class="col-sm-9">${$("fMetaEnabled")?.value === "false" ? "Botón oculto" : "Botón visible"}</dd>
+      <dt class="col-sm-3">Comparador</dt><dd class="col-sm-9">${compareAdvancedReviewHtml()}</dd>
     </dl>`;
 }
 
@@ -359,31 +692,6 @@ function showOk(el, msg) {
   el.classList.remove("d-none");
 }
 
-async function ensureSession() {
-  if (!isVisorAdminLoggedIn()) return false;
-  try {
-    await verifyAdminSession();
-    return isVisorAdminLoggedIn();
-  } catch {
-    return false;
-  }
-}
-
-function showLogin() {
-  $("indStudioLoginView")?.classList.remove("d-none");
-  $("indStudioDashboard")?.classList.add("d-none");
-}
-
-function showDashboard() {
-  $("indStudioLoginView")?.classList.add("d-none");
-  $("indStudioDashboard")?.classList.remove("d-none");
-  const u = getAdminUser();
-  $("indStudioWelcome").textContent = u?.username
-    ? `Sesión: ${u.username}`
-    : "Sesión admin activa";
-  mountStudioNav($("indStudioNav"), { active: "indicators" });
-}
-
 async function loadMetaAndCatalog() {
   const metaRes = await adminFetch("/api/indicators/admin/meta");
   if (!metaRes.res?.ok) throw new Error(metaRes.data?.detail?.message || "No se pudo cargar meta");
@@ -393,8 +701,21 @@ async function loadMetaAndCatalog() {
   if (!catRes.res?.ok) throw new Error(catRes.data?.detail?.message || "No se pudo cargar catálogo");
   _catalog = catRes.data.catalog;
 
+  try {
+    const coreRes = await adminFetch("/api/amigo/admin/indicators", {
+      clearOn401: false,
+    });
+    if (coreRes.res?.ok) {
+      _coreList = coreRes.data?.indicators || [];
+    } else {
+      _coreList = [];
+    }
+  } catch {
+    _coreList = [];
+  }
+
   fillSelects();
-  renderList();
+  applyWorkspace();
   void loadAuditLog();
 }
 
@@ -572,6 +893,8 @@ function refreshFieldKeySelects(preserve = true) {
   const sortPrev = preserve ? $("fSortBy")?.value : "";
   const barPrev = preserve ? getMultiSelectValues($("fBarMetrics")) : [];
   const chartPrev = preserve ? getMultiSelectValues($("fChartMetrics")) : [];
+  const temporalFromPrev = preserve ? $("fCompareTemporalFrom")?.value : "";
+  const temporalToPrev = preserve ? $("fCompareTemporalTo")?.value : "";
 
   const fillSingle = (sel, selected) => {
     if (!sel) return;
@@ -608,25 +931,152 @@ function refreshFieldKeySelects(preserve = true) {
   fillSingle($("fSortBy"), sortPrev);
   fillMulti($("fBarMetrics"), barPrev);
   fillMulti($("fChartMetrics"), chartPrev);
+  fillSingle($("fCompareTemporalFrom"), temporalFromPrev);
+  fillSingle($("fCompareTemporalTo"), temporalToPrev);
 }
 
 function renderList() {
   const root = $("indStudioList");
+  if (!root) return;
   root.innerHTML = "";
+
+  if (_workspace === "core") {
+    const items = [...(_coreList || [])].sort((a, b) =>
+      String(a.clave || "").localeCompare(String(b.clave || ""), "es")
+    );
+    if (!items.length) {
+      root.innerHTML =
+        '<p class="small text-muted mb-0 px-1">Sin indicadores en CORE aún, o AMIGO no disponible.</p>';
+      return;
+    }
+    for (const c of items) {
+      const row = document.createElement("div");
+      row.className = "d-flex gap-1 mb-1 align-items-stretch";
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const active = c.clave === _editingCoreClave;
+      btn.className =
+        "btn btn-sm flex-grow-1 text-start " +
+        (active ? "btn-primary" : "btn-outline-secondary");
+      const n = c.n_metricas != null ? ` · ${c.n_metricas} métr.` : "";
+      btn.innerHTML = `<span class="badge text-bg-primary me-1">CORE</span>${escapeHtml(
+        c.nombre || c.clave
+      )}<span class="text-muted small"> (${escapeHtml(c.clave)}${escapeHtml(n)})</span>`;
+      btn.title = c.clave;
+      btn.addEventListener("click", () => void openCoreEditor(c.clave));
+      row.append(btn);
+      root.append(row);
+    }
+    return;
+  }
+
   const items = [...(_catalog?.indicators || [])].sort((a, b) =>
     String(a.label || a.id).localeCompare(String(b.label || b.id), "es")
   );
   for (const ind of items) {
+    const row = document.createElement("div");
+    row.className = "d-flex gap-1 mb-1 align-items-stretch";
+
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className =
-      "btn btn-sm w-100 text-start mb-1 " +
+      "btn btn-sm flex-grow-1 text-start " +
       (ind.id === _editingId ? "btn-primary" : "btn-outline-secondary");
-    btn.textContent = `${ind.enabled === false ? "⏸ " : ""}${ind.label || ind.id}`;
+    const coreKey =
+      publicationCoreKey(ind) ||
+      matchCoreClaveInList([ind.id, String(ind.id || "").replace(/^[a-z]+_/, "")]);
+    const coreBadge = coreKey
+      ? `<span class="badge text-bg-primary me-1" title="CORE ${escapeHtml(coreKey)}">AMIGO</span>`
+      : "";
+    btn.innerHTML = `${coreBadge}${ind.enabled === false ? "⏸ " : ""}${escapeHtml(
+      ind.label || ind.id
+    )}`;
     btn.title = ind.id;
     btn.addEventListener("click", () => openIndicator(ind.id));
-    root.append(btn);
+
+    const copyBtn = document.createElement("button");
+    copyBtn.type = "button";
+    copyBtn.className = "btn btn-sm btn-outline-secondary px-2";
+    copyBtn.title = "Copiar como nuevo";
+    copyBtn.setAttribute("aria-label", `Copiar ${ind.label || ind.id}`);
+    copyBtn.textContent = "⧉";
+    copyBtn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      copyIndicatorAsNew(ind.id);
+    });
+
+    row.append(btn, copyBtn);
+    root.append(row);
   }
+}
+
+function suggestCopyId(baseId) {
+  const base = String(baseId || "ind")
+    .replace(/_copia\d*$/, "")
+    .slice(0, 40);
+  const existing = new Set((_catalog?.indicators || []).map((i) => i.id));
+  let candidate = `${base}_copia`;
+  let n = 2;
+  while (existing.has(candidate)) {
+    candidate = `${base}_copia${n}`;
+    n += 1;
+  }
+  return candidate;
+}
+
+function setCopyHint(msg) {
+  const el = $("indStudioCopyHint");
+  if (!el) return;
+  if (!msg) {
+    el.classList.add("d-none");
+    el.textContent = "";
+    return;
+  }
+  el.textContent = msg;
+  el.classList.remove("d-none");
+}
+
+function updateCopyButtonVisibility() {
+  const canCopy = Boolean(_editingId);
+  $("indStudioCopyBtn")?.classList.toggle("d-none", !canCopy);
+  $("indStudioCopyBtnReview")?.classList.toggle("d-none", !canCopy);
+}
+
+/**
+ * Duplica un indicador del catálogo como borrador nuevo (mismo espíritu que INV Studio).
+ * Conserva fields, presentación, metadatos y perfil; el usuario revisa Id y publica.
+ */
+function copyIndicatorAsNew(sourceId) {
+  const sid = sourceId || _editingId;
+  const src = (_catalog?.indicators || []).find((x) => x.id === sid);
+  if (!src) {
+    showErr($("indStudioFormError"), "Seleccione un indicador para copiar.");
+    return;
+  }
+
+  const clone = JSON.parse(JSON.stringify(src));
+  const newId = suggestCopyId(src.id);
+  clone.id = newId;
+  clone.label = `${src.label || src.id} (copia)`;
+  if (!clone.export || typeof clone.export !== "object") clone.export = {};
+  clone.export.filename_prefix = newId;
+  if (clone.api && typeof clone.api === "object") {
+    delete clone.api.legacy_paths;
+  }
+
+  _editingId = null;
+  fillForm(clone);
+  $("fId").readOnly = false;
+  setCopyHint(
+    `Copia de «${src.label || src.id}». Id sugerido editable; fields, presentación y metadatos se conservaron. Publique cuando esté listo.`
+  );
+  showOk(
+    $("indStudioFormOk"),
+    "Borrador de copia listo: revise el Id y publique."
+  );
+  updateCopyButtonVisibility();
+  renderList();
+  $("fId")?.focus();
 }
 
 /**
@@ -798,6 +1248,15 @@ function preserveIndicatorConfig(existing, built) {
     exp.target_selector = prevExp.target_selector;
   }
   built.export = exp;
+  if (existing.compare && built.compare) {
+    for (const key of ["temporal", "habxpol_fallback", "metric_keys", "mode", "sort_key"]) {
+      if (existing.compare[key] != null && built.compare[key] == null) {
+        built.compare[key] = existing.compare[key];
+      }
+    }
+  } else if (existing.compare && !built.compare) {
+    built.compare = existing.compare;
+  }
   return built;
 }
 
@@ -1295,12 +1754,32 @@ function buildIndicatorFromForm() {
   if (existing?.api?.legacy_paths?.length) {
     ind.api.legacy_paths = [...existing.api.legacy_paths];
   }
+
+  // Publicación: enlaza un indicador CORE ya guardado (no upsert de métricas).
+  const coreKey = ($("fCorePick")?.value || "").trim();
+  if (!coreKey) {
+    throw new Error("Seleccione un indicador CORE (paso Indicador).");
+  }
+  let contract = _pickedCoreBundle ? coreContractFromBundle(_pickedCoreBundle) : null;
+  if (!contract?.clave) {
+    contract = { clave: coreKey, nombre: coreKey, metrics: [] };
+  }
+  ind.core_indicator_key = coreKey;
+  ind.refresh_mold = contract.metrics?.length
+    ? buildRefreshMold(contract)
+    : existing?.refresh_mold;
+  if (!ind.amigo || typeof ind.amigo !== "object") ind.amigo = {};
+  ind.amigo.core_clave = coreKey;
+
+  ind.compare = readCompareBlockFromForm();
+
   return preserveIndicatorConfig(existing, ind);
 }
 
 function fillForm(ind) {
-  $("indStudioFormEmpty").classList.add("d-none");
-  $("indStudioForm").classList.remove("d-none");
+  $("indStudioFormEmpty")?.classList.add("d-none");
+  $("indStudioCoreForm")?.classList.add("d-none");
+  $("indStudioForm")?.classList.remove("d-none");
   showErr($("indStudioFormError"));
   showOk($("indStudioFormOk"));
   $("indStudioPreview").classList.add("d-none");
@@ -1346,6 +1825,7 @@ function fillForm(ind) {
   setMultiSelectValues($("fBarMetrics"), ind.presentation?.bar_metrics || []);
   setMultiSelectValues($("fChartMetrics"), ind.presentation?.chart_metrics || []);
   renderSeriesColorPickers();
+  writeCompareBlockToForm(ind.compare);
 
   const md = normalizeMetadataFromCatalog(ind.metadata, ind);
   $("fMetaEnabled").value = md.enabled === false ? "false" : "true";
@@ -1360,11 +1840,27 @@ function fillForm(ind) {
   $("fMetaUltimaAct").value = md.ultima_actualizacion || "";
   renderMetaNotasEditor(md.notas);
   renderMetaShowToggles(md.show);
+
+  const coreKey = inferCoreClaveFromPublication(ind);
+  fillCorePickSelect(coreKey);
+  void refreshCorePickSummary();
+
   showWizardStep(1);
+  updateCopyButtonVisibility();
 }
 
 function openNew() {
+  if (_workspace === "menu") {
+    openNewPublication();
+    return;
+  }
+  openNewCore();
+}
+
+function openNewPublication() {
   _editingId = null;
+  _workspace = "menu";
+  setCopyHint("");
   fillForm({
     id: "",
     group_id: "socio",
@@ -1387,15 +1883,165 @@ function openNew() {
     export: { filename_prefix: "" },
   });
   $("fId").readOnly = false;
-  renderList();
+  fillCorePickSelect("");
+  void refreshCorePickSummary();
+  updateCopyButtonVisibility();
+  applyWorkspace();
 }
 
-function openIndicator(id) {
+function openNewCore() {
+  _editingCoreClave = null;
+  _workspace = "core";
+  showCoreEditor();
+  if ($("fCoreClave")) {
+    $("fCoreClave").value = "";
+    $("fCoreClave").readOnly = false;
+  }
+  if ($("fCoreNombre")) $("fCoreNombre").value = "";
+  if ($("fCoreTema")) $("fCoreTema").value = "";
+  if ($("fCoreDescripcion")) $("fCoreDescripcion").value = "";
+  renderMetricsEditor($("indStudioMetricsHost"), {
+    replaceState: [emptyMetricRow()],
+  });
+  if ($("indStudioCoreStatus")) {
+    $("indStudioCoreStatus").textContent =
+      "Al guardar se escribe solo CORE. Luego puede crear una publicación o cargar datos en Refresh.";
+  }
+  applyWorkspace();
+}
+
+async function openCoreEditor(clave) {
+  const key = (clave || "").trim();
+  if (!key) return;
+  _workspace = "core";
+  _editingCoreClave = key;
+  showCoreEditor();
+  if ($("indStudioCoreStatus")) $("indStudioCoreStatus").textContent = "Cargando…";
+  const { res, data } = await adminFetch(
+    `/api/amigo/admin/indicators/${encodeURIComponent(key)}`,
+    { clearOn401: false }
+  );
+  if (!res?.ok) {
+    showErr(
+      $("indStudioCoreFormError"),
+      data?.detail?.message || `No hay indicador «${key}» en CORE.`
+    );
+    applyWorkspace();
+    return;
+  }
+  if ($("fCoreClave")) {
+    $("fCoreClave").value = data.indicator?.clave || key;
+    $("fCoreClave").readOnly = true;
+  }
+  if ($("fCoreNombre")) $("fCoreNombre").value = data.indicator?.nombre || "";
+  if ($("fCoreTema")) $("fCoreTema").value = data.indicator?.tema || "";
+  if ($("fCoreDescripcion")) $("fCoreDescripcion").value = data.indicator?.descripcion || "";
+  const rows = metricsFromCoreBundle(data);
+  renderMetricsEditor($("indStudioMetricsHost"), {
+    replaceState: rows.length ? rows : [emptyMetricRow()],
+  });
+  if ($("indStudioCoreStatus")) {
+    $("indStudioCoreStatus").textContent = `CORE «${key}»: ${rows.length} métrica(s).`;
+  }
+  applyWorkspace();
+}
+
+async function saveCoreIndicator() {
+  showErr($("indStudioCoreFormError"));
+  showOk($("indStudioCoreFormOk"));
+  let contract;
+  try {
+    contract = buildCoreContractFromForm(coreFormIds());
+  } catch (e) {
+    showErr($("indStudioCoreFormError"), e.message || String(e));
+    return;
+  }
+  const { res, data } = await adminFetch("/api/amigo/admin/indicators", {
+    method: "POST",
+    body: JSON.stringify(contract),
+  });
+  if (!res?.ok) {
+    showErr(
+      $("indStudioCoreFormError"),
+      data?.detail?.message || data?.message || `Error HTTP ${res?.status}`
+    );
+    return;
+  }
+  _editingCoreClave = contract.clave;
+  if ($("fCoreClave")) $("fCoreClave").readOnly = true;
+  await loadMetaAndCatalog();
+  await openCoreEditor(contract.clave);
+  showOk(
+    $("indStudioCoreFormOk"),
+    `Indicador «${contract.clave}» guardado en CORE. Ya puede generar el molde en Data Refresh Studio o crear una publicación.`
+  );
+}
+
+function startPublicationFromCore() {
+  const key = ($("fCoreClave")?.value || _editingCoreClave || "").trim();
+  if (!key) {
+    showErr($("indStudioCoreFormError"), "Guarde el indicador CORE antes de publicar el menú.");
+    return;
+  }
+  _workspace = "menu";
+  const existing = (_catalog?.indicators || []).find(
+    (x) =>
+      x.id === key ||
+      x.core_indicator_key === key ||
+      x.amigo?.core_clave === key
+  );
+  if (existing) {
+    openIndicator(existing.id);
+    showWizardStep(2);
+    return;
+  }
+  openNewPublication();
+  if ($("fId")) $("fId").value = key;
+  if ($("fLabel") && !$("fLabel").value) $("fLabel").value = $("fCoreNombre")?.value || key;
+  fillCorePickSelect(key);
+  void refreshCorePickSummary();
+  showWizardStep(2);
+}
+
+function syncCoreMetricsToDataFields() {
+  try {
+    const bundle = _pickedCoreBundle;
+    const cc = bundle
+      ? coreContractFromBundle(bundle)
+      : { clave: ($("fCorePick")?.value || "").trim(), metrics: [] };
+    if (!cc.clave) throw new Error("Seleccione un indicador CORE.");
+    if (!cc.metrics?.length) throw new Error("Ese indicador CORE no tiene métricas.");
+    const table = $("fTable")?.value || "tab_municipal";
+    const fields = fieldsFromCoreMetrics(cc, table);
+    if ($("fFields")) $("fFields").value = fieldsToText(fields);
+    renderFieldsEditor(fields);
+    refreshFieldKeySelects(true);
+    const sort = $("fSortBy");
+    if (sort && fields[0]) sort.value = fields[0].key;
+    setMultiSelectValues(
+      $("fBarMetrics"),
+      fields.map((f) => f.key)
+    );
+    showOk(
+      $("indStudioFormOk"),
+      `Sincronizados ${fields.length} campos desde métricas CORE. Revise el paso Datos.`
+    );
+    showWizardStep(3);
+  } catch (e) {
+    showErr($("indStudioFormError"), e.message || String(e));
+  }
+}
+
+async function openIndicator(id) {
   const ind = (_catalog.indicators || []).find((x) => x.id === id);
   if (!ind) return;
   _editingId = id;
+  _workspace = "menu";
+  setCopyHint("");
   fillForm(ind);
-  renderList();
+  await hydratePublicationCoreLink(ind);
+  updateCopyButtonVisibility();
+  applyWorkspace();
 }
 
 async function onPublish(ev) {
@@ -1427,7 +2073,11 @@ async function onPublish(ev) {
   openIndicator(ind.id);
   showOk(
     $("indStudioFormOk"),
-    `Publicado «${ind.id}». Recargue el Atlas (Ctrl+F5) para ver el menú actualizado.`
+    data?.core?.ok
+      ? `Publicado «${ind.id}» en el menú, enlazado a CORE «${data.core.clave}». Siguiente: Data Refresh Studio → molde → cargar → Ctrl+F5 en el Atlas.`
+      : data?.core_error
+        ? `Publicado «${ind.id}» en el menú; aviso CORE: ${data.core_error}`
+        : `Publicado «${ind.id}» en el menú. Recargue el Atlas (Ctrl+F5). Cargue valores en Data Refresh Studio.`
   );
 }
 
@@ -1613,45 +2263,52 @@ async function onLoadCols() {
   renderColsPicker(table, data.columns || []);
 }
 
-function bindLogin() {
-  $("indStudioLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("indStudioError"));
-    try {
-      await loginAdmin($("indStudioUser").value.trim(), $("indStudioPass").value);
-      await bootApp();
-    } catch (e) {
-      showErr($("indStudioError"), e.message || String(e));
-    }
-  });
-  $("indStudioLogoutBtn")?.addEventListener("click", () => {
-    clearAdminSession();
-    showLogin();
-  });
-}
-
 function bindForm() {
   $("indStudioForm")?.addEventListener("submit", onPublish);
   $("indStudioNewBtn")?.addEventListener("click", openNew);
+  $("indStudioCopyBtn")?.addEventListener("click", () => {
+    if (_editingId) copyIndicatorAsNew(_editingId);
+  });
+  $("indStudioCopyBtnReview")?.addEventListener("click", () => {
+    if (_editingId) copyIndicatorAsNew(_editingId);
+  });
   $("indStudioDeleteBtn")?.addEventListener("click", () => void onDelete());
   $("indStudioPreviewBtn")?.addEventListener("click", () => void onPreview());
   $("indStudioLoadColsBtn")?.addEventListener("click", () => void onLoadCols());
   $("indStudioAuditRefreshBtn")?.addEventListener("click", () => void loadAuditLog());
   $("indStudioFieldAddBtn")?.addEventListener("click", () => addEmptyFieldRow());
+  $("indStudioMetricAddBtn")?.addEventListener("click", () =>
+    addMetricRow($("indStudioMetricsHost"))
+  );
+  $("indStudioCoreSaveBtn")?.addEventListener("click", () => void saveCoreIndicator());
+  $("indStudioCoreToPubBtn")?.addEventListener("click", () => startPublicationFromCore());
+  $("indStudioCoreOpenEditorBtn")?.addEventListener("click", () => {
+    const key = ($("fCorePick")?.value || "").trim();
+    if (key) void openCoreEditor(key);
+  });
+  $("indStudioCoreSyncFieldsBtn")?.addEventListener("click", () =>
+    syncCoreMetricsToDataFields()
+  );
+  $("indStudioWsCore")?.addEventListener("click", () => setWorkspace("core"));
+  $("indStudioWsMenu")?.addEventListener("click", () => setWorkspace("menu"));
+  $("fCorePick")?.addEventListener("change", () => void refreshCorePickSummary());
   $("indStudioWizardBack")?.addEventListener("click", () => {
     showErr($("indStudioFormError"));
-    showWizardStep(_wizardStep - 1);
+    showWizardStep(wizardNav.getStep() - 1);
   });
   $("indStudioWizardNext")?.addEventListener("click", () => {
-    const err = validateWizardStep(_wizardStep);
+    const err = validateWizardStep(wizardNav.getStep());
     if (err) {
       showErr($("indStudioFormError"), err);
       return;
     }
     showErr($("indStudioFormError"));
-    showWizardStep(_wizardStep + 1);
+    showWizardStep(wizardNav.getStep() + 1);
   });
   $("fPreset")?.addEventListener("change", () => applyPresetFormVisibility());
+  $("fCompareEnabled")?.addEventListener("change", () => syncCompareAdvancedUi());
+  $("fCompareTemporalEnable")?.addEventListener("change", () => syncCompareAdvancedUi());
+  $("fCompareAdvancedToggle")?.addEventListener("click", () => toggleCompareAdvancedPanel());
   $("fTable")?.addEventListener("change", () => {
     $("indStudioColsPicker")?.classList.add("d-none");
     if ($("indStudioColsHint")) $("indStudioColsHint").textContent = "";
@@ -1670,27 +2327,30 @@ function bindForm() {
   });
 }
 
-async function bootApp() {
-  showDashboard();
-  await loadMetaAndCatalog();
-}
-
 async function main() {
-  bindLogin();
-  bindForm();
-  if (await ensureSession()) {
-    try {
-      await bootApp();
-    } catch (e) {
-      console.warn(e);
-      clearAdminSession();
-      showLogin();
-      showErr($("indStudioError"), e.message || String(e));
+  const errBox = $("indStudioError");
+  try {
+    const shell = createStudioShell(
+      studioIdsFromPrefix("indStudio", { loginError: "indStudioError" }),
+      {
+        activeNav: "indicators",
+        onEnterDashboard: () => loadMetaAndCatalog(),
+        onDashboardError: (err) =>
+          showErr($("indStudioError"), err?.message || String(err)),
+      }
+    );
+    await shell.boot();
+  } catch (err) {
+    console.error(err);
+    if (errBox) {
+      errBox.classList.remove("d-none");
+      errBox.textContent = err?.message || String(err);
     }
-  } else {
-    const footer = $("indStudioLoginFooter");
-    if (footer) footer.innerHTML = studioLoginFooterHtml("indicators");
-    showLogin();
+  }
+  try {
+    bindForm();
+  } catch (err) {
+    console.error("bindForm", err);
   }
 }
 

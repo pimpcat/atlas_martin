@@ -14,8 +14,14 @@
       <div class="card shadow-sm visor-studio-card">
         <div class="card-body p-4">
           <h1 class="h5 mb-1">Indicators Studio</h1>
-          <p class="small text-muted mb-3">Administración del catálogo de indicadores (misma sesión admin que Visor Studio).</p>
-          <form id="indStudioLoginForm" class="d-grid gap-3">
+          <p class="small text-muted mb-3">Indicadores (métricas en CORE) y publicaciones del menú Atlas, por separado. Misma sesión admin que Visor Studio.</p>
+          <form id="indStudioLoginForm" class="d-grid gap-3" method="post" action="#" onsubmit="return false;">
+            <div>
+              <label class="form-label small" for="indStudioEntidad">Entidad</label>
+              <select id="indStudioEntidad" class="form-select form-select-sm" required>
+                <option value="">Cargando instancias…</option>
+              </select>
+            </div>
             <div>
               <label class="form-label small" for="indStudioUser">Usuario</label>
               <input id="indStudioUser" class="form-control form-control-sm" autocomplete="username" required />
@@ -45,11 +51,20 @@
       <div class="row g-3">
         <div class="col-lg-4 d-flex flex-column gap-3">
           <div class="card shadow-sm visor-studio-card">
-            <div class="card-header d-flex align-items-center justify-content-between">
-              <span class="fw-semibold">Indicadores</span>
-              <button type="button" class="btn btn-sm btn-primary" id="indStudioNewBtn">+ Nuevo</button>
+            <div class="card-header d-flex align-items-center justify-content-between gap-2">
+              <span class="fw-semibold" id="indStudioListTitle">Indicadores</span>
+              <div class="d-flex flex-wrap gap-1">
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="indStudioCopyBtn" title="Duplicar la publicación abierta como borrador nuevo">Copiar</button>
+                <button type="button" class="btn btn-sm btn-primary" id="indStudioNewBtn">+ Nuevo indicador</button>
+              </div>
             </div>
-            <div class="card-body p-2" id="indStudioList" style="max-height:42vh;overflow:auto"></div>
+            <div class="card-body p-2">
+              <div class="d-flex flex-wrap gap-1 mb-2" role="group" aria-label="Espacio de trabajo">
+                <button type="button" class="btn btn-sm btn-primary" id="indStudioWsCore">Indicadores (CORE)</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioWsMenu">Publicaciones (menú)</button>
+              </div>
+              <div id="indStudioList" style="max-height:42vh;overflow:auto"></div>
+            </div>
           </div>
           <div class="card shadow-sm visor-studio-card flex-grow-1">
             <div class="card-header d-flex align-items-center justify-content-between gap-2">
@@ -64,10 +79,54 @@
         <div class="col-lg-8">
           <div class="card shadow-sm visor-studio-card">
             <div class="card-body p-3 p-md-4">
-              <div id="indStudioFormEmpty" class="text-muted small">Seleccione un indicador o cree uno nuevo.</div>
+              <div id="indStudioFormEmpty" class="text-muted small">Seleccione un indicador CORE o cree uno nuevo. Las publicaciones del menú están en el otro espacio.</div>
+              <form id="indStudioCoreForm" class="d-none d-grid gap-3" onsubmit="return false;">
+                <div>
+                  <span class="badge text-bg-primary">Indicador CORE</span>
+                  <span class="small text-muted ms-1">Métricas en AMIGO-00-CORE. Independiente del menú del Atlas.</span>
+                </div>
+                <p class="small text-muted mb-0">
+                  Guardar escribe solo el contrato (clave + métricas). Con eso ya hay molde para
+                  <a href="./data-refresh-studio.html" target="_blank" rel="noopener">Data Refresh Studio</a>.
+                  La gráfica y el menú se configuran después, en Publicaciones.
+                </p>
+                <div class="row g-2">
+                  <div class="col-md-4">
+                    <label class="form-label small" for="fCoreClave">Clave</label>
+                    <input id="fCoreClave" class="form-control form-control-sm" pattern="[a-z][a-z0-9_]*" placeholder="caracteristicas_economicas" />
+                    <div class="form-text">No se cambia después de guardar.</div>
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small" for="fCoreNombre">Nombre</label>
+                    <input id="fCoreNombre" class="form-control form-control-sm" placeholder="Características económicas" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small" for="fCoreTema">Tema</label>
+                    <input id="fCoreTema" class="form-control form-control-sm" placeholder="economia" />
+                  </div>
+                  <div class="col-12">
+                    <label class="form-label small" for="fCoreDescripcion">Descripción</label>
+                    <textarea id="fCoreDescripcion" class="form-control form-control-sm" rows="2" placeholder="Qué mide este indicador…"></textarea>
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                  <div class="fw-semibold small mb-0">Métricas</div>
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="indStudioMetricAddBtn">+ Métrica</button>
+                </div>
+                <div id="indStudioMetricsHost"></div>
+                <div class="form-text">Niveles = cobertura territorial. Periodo molde = año sugerido al cargar XLSX en Refresh.</div>
+                <div id="indStudioCoreStatus" class="small text-muted"></div>
+                <div id="indStudioCoreFormError" class="small text-danger d-none"></div>
+                <div id="indStudioCoreFormOk" class="small text-success d-none"></div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-sm btn-primary" id="indStudioCoreSaveBtn">Guardar en CORE</button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" id="indStudioCoreToPubBtn">Crear publicación en el menú</button>
+                </div>
+              </form>
               <form id="indStudioForm" class="d-none d-grid gap-3">
                 <div class="d-flex flex-wrap gap-2 small" id="indStudioSteps" aria-label="Pasos del asistente"></div>
                 <p class="small text-muted mb-0" id="indStudioStepHint"></p>
+                <div id="indStudioCopyHint" class="small border rounded p-2 d-none text-primary" role="status"></div>
 
                 <div class="border rounded p-3" data-wizard-step="1">
                   <div class="fw-semibold small mb-2">1. Identidad en el menú</div>
@@ -107,8 +166,31 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3 d-none" data-wizard-step="2">
-                  <div class="fw-semibold small mb-2">2. Datos y columnas</div>
+                <div class="border rounded p-3 d-none" data-wizard-step="2" style="border-color: rgba(13,110,253,0.35) !important">
+                  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                    <div>
+                      <span class="badge text-bg-primary">2. Indicador CORE</span>
+                      <span class="small text-muted ms-1">Solo se enlaza; las métricas se editan en Indicadores</span>
+                    </div>
+                    <div class="d-flex flex-wrap gap-1">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioCoreOpenEditorBtn" title="Abrir el indicador en el editor CORE">Editar métricas</button>
+                      <button type="button" class="btn btn-sm btn-outline-primary" id="indStudioCoreSyncFieldsBtn" title="Copiar métricas al constructor de campos (paso Datos)">Sincronizar → Datos</button>
+                    </div>
+                  </div>
+                  <p class="small text-muted mb-2">
+                    Elija un indicador ya guardado en CORE. Si aún no existe, créelo en el espacio <strong>Indicadores (CORE)</strong>.
+                  </p>
+                  <div class="row g-2 mb-2">
+                    <div class="col-md-6">
+                      <label class="form-label small" for="fCorePick">Indicador</label>
+                      <select id="fCorePick" class="form-select form-select-sm"></select>
+                    </div>
+                  </div>
+                  <div id="indStudioCorePickSummary" class="small ind-studio-hint-box border rounded p-2">Seleccione un indicador para ver sus métricas.</div>
+                </div>
+
+                <div class="border rounded p-3 d-none" data-wizard-step="3">
+                  <div class="fw-semibold small mb-2">3. Datos y columnas</div>
                   <div class="row g-2">
                     <div class="col-md-4">
                       <label class="form-label small">Qué información incluye</label>
@@ -147,8 +229,8 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3 d-none" data-wizard-step="3">
-                  <div class="fw-semibold small mb-2">3. Cómo se ve en el Atlas</div>
+                <div class="border rounded p-3 d-none" data-wizard-step="4">
+                  <div class="fw-semibold small mb-2">4. Cómo se ve en el Atlas</div>
                   <div class="row g-2">
                     <div class="col-md-6">
                       <label class="form-label small">Tipo de gráfica o tabla</label>
@@ -207,10 +289,65 @@
                       <textarea id="fFooter" class="form-control form-control-sm" rows="4" placeholder="Nota: …&#10;Fuente: INEGI. …"></textarea>
                       <div class="form-text">Puede incluir varias líneas (Nota y Fuente). Se muestra tal cual bajo la gráfica. El panel Metadatos es aparte.</div>
                     </div>
+                    <div class="col-12">
+                      <div class="form-check mt-1">
+                        <input type="checkbox" class="form-check-input" id="fCompareEnabled" />
+                        <label class="form-check-label small" for="fCompareEnabled">Habilitar comparador municipal (Analítica)</label>
+                      </div>
+                      <div class="form-text">Compara hasta 5 municipios con las mismas métricas. Requiere indicador CORE con datos municipales en AMIGO y «Ordenar por» definido.</div>
+                    </div>
+                    <div class="col-12 d-none" id="indStudioCompareAdvancedWrap">
+                      <div class="border rounded p-2 mt-2 ind-studio-compare-advanced">
+                        <button
+                          type="button"
+                          class="btn btn-sm btn-link p-0 text-decoration-none small"
+                          id="fCompareAdvancedToggle"
+                          aria-expanded="false"
+                          aria-controls="indStudioCompareAdvancedBody"
+                        >
+                          Opciones avanzadas del comparador ▾
+                        </button>
+                        <div id="indStudioCompareAdvancedBody" class="d-none mt-2">
+                          <div class="row g-2">
+                            <div class="col-md-6">
+                              <label class="form-label small" for="fCompareMode">Modo de vista en compare</label>
+                              <select id="fCompareMode" class="form-select form-select-sm">
+                                <option value="">Automático (según número de métricas)</option>
+                                <option value="SIMPLE">Simple — 1 métrica</option>
+                                <option value="MULTI_METRIC">Multi-métrica — 2 a 4</option>
+                                <option value="TABLE">Tabla — 5 o más</option>
+                              </select>
+                            </div>
+                            <div class="col-12">
+                              <div class="form-check mt-1">
+                                <input type="checkbox" class="form-check-input" id="fCompareTemporalEnable" />
+                                <label class="form-check-label small" for="fCompareTemporalEnable">Variación temporal (pestaña Variación en Analítica)</label>
+                              </div>
+                              <div class="form-text">Compara evolución entre dos métricas del mismo municipio (p. ej. población 2010 → 2020).</div>
+                            </div>
+                            <div class="col-md-6 d-none" id="fCompareTemporalFromWrap">
+                              <label class="form-label small" for="fCompareTemporalFrom">Métrica inicial (desde)</label>
+                              <select id="fCompareTemporalFrom" class="form-select form-select-sm"></select>
+                            </div>
+                            <div class="col-md-6 d-none" id="fCompareTemporalToWrap">
+                              <label class="form-label small" for="fCompareTemporalTo">Métrica final (hasta)</label>
+                              <select id="fCompareTemporalTo" class="form-select form-select-sm"></select>
+                            </div>
+                            <div class="col-12">
+                              <div class="form-check mt-1">
+                                <input type="checkbox" class="form-check-input" id="fCompareHabxpolFallback" />
+                                <label class="form-check-label small" for="fCompareHabxpolFallback">Calcular «habitantes por policía» si falta (población ÷ policías)</label>
+                              </div>
+                              <div class="form-text">Solo si el indicador expone <code>habxpol</code>, <code>pob_tot</code> y <code>pol_prev</code>.</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
-                <div class="border rounded p-3 d-none" data-studio-field="bar_colors" id="indStudioColorsBlock" data-wizard-step="3">
+                <div class="border rounded p-3 d-none" data-studio-field="bar_colors" id="indStudioColorsBlock" data-wizard-step="4">
                   <div class="fw-semibold small mb-2">Colores de las barras</div>
                   <p class="small text-muted mb-2">Opcional. Se aplican según el tema claro u oscuro del Atlas.</p>
                   <div class="row g-2" data-studio-field="bar_colors_simple">
@@ -264,9 +401,9 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3 d-none" data-wizard-step="4" style="border-color: rgba(245,158,11,0.35) !important">
+                <div class="border rounded p-3 d-none" data-wizard-step="5" style="border-color: rgba(245,158,11,0.35) !important">
                   <div class="d-flex align-items-center gap-2 mb-2">
-                    <span class="badge text-bg-warning">4. Metadatos</span>
+                    <span class="badge text-bg-warning">5. Metadatos</span>
                     <span class="small text-muted">Formato INEGI · botón «Metadatos» en el Atlas</span>
                   </div>
                   <div class="row g-2">
@@ -339,13 +476,26 @@
                   </div>
                 </div>
 
-                <div class="border rounded p-3 d-none" data-wizard-step="5">
-                  <div class="fw-semibold small mb-2">5. Revisar y publicar</div>
-                  <p class="small text-muted mb-2">Confirme el resumen. Puede volver atrás para ajustar. El contrato JSON del catálogo no cambia.</p>
+                <div class="border rounded p-3 d-none" data-wizard-step="6">
+                  <div class="fw-semibold small mb-2">6. Revisar y publicar</div>
+                  <p class="small text-muted mb-2">
+                    Publicar escribe la entrada del menú y la enlaza al indicador CORE (no crea ni modifica métricas).
+                    Los datos se cargan en Data Refresh Studio; luego recargue el Atlas.
+                  </p>
                   <div id="indStudioReviewSummary" class="small ind-studio-review mb-3"></div>
+                  <div id="indStudioLifecycleHint" class="small border rounded p-2 mb-3 ind-studio-hint-box">
+                    <ol class="mb-0 ps-3">
+                      <li>Tener el <strong>indicador</strong> guardado en CORE (métricas).</li>
+                      <li><strong>Publicar</strong> esta vista en el menú.</li>
+                      <li>Abrir <a href="./data-refresh-studio.html" target="_blank" rel="noopener">Data Refresh Studio</a> → molde XLSX → cargar valores.</li>
+                      <li>Recargar el Atlas (Ctrl+F5) si «Visible» = Sí.</li>
+                    </ol>
+                  </div>
                   <div class="d-flex flex-wrap gap-2">
                     <button type="submit" class="btn btn-sm btn-primary">Publicar</button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="indStudioCopyBtnReview">Copiar como nuevo</button>
                     <button type="button" class="btn btn-sm btn-outline-primary" id="indStudioPreviewBtn">Vista previa JSON</button>
+                    <a class="btn btn-sm btn-outline-success" href="./data-refresh-studio.html" target="_blank" rel="noopener">Ir a Refresh Studio</a>
                     <button type="button" class="btn btn-sm btn-outline-danger" id="indStudioDeleteBtn">Eliminar</button>
                   </div>
                   <pre id="indStudioPreview" class="small bg-dark text-light p-2 rounded d-none mt-2" style="max-height:240px;overflow:auto"></pre>
@@ -365,6 +515,16 @@
       </div>
     </section>
   </main>
-  <script type="module" src="./js/indicatorsStudioApp.js"></script>
+  <script type="module">
+    import("./js/indicatorsStudioApp.js").catch((err) => {
+      const el = document.getElementById("indStudioError");
+      const msg = err && err.message ? err.message : String(err);
+      if (el) {
+        el.classList.remove("d-none");
+        el.textContent = "No se pudo cargar el studio: " + msg;
+      }
+      console.error(err);
+    });
+  </script>
 </body>
 </html>

@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="oscuro">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nodo Studio — SuperAdmin</title>
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+</head>
+<body class="visor-studio-page">
+  <main class="container py-4 visor-studio-shell">
+    <section id="nodoLoginView" class="visor-studio-card-wrap">
+      <div class="card shadow-sm visor-studio-card" style="max-width:28rem;margin:2rem auto">
+        <div class="card-body p-4">
+          <h1 class="h5 mb-1">Nodo Studio</h1>
+          <p class="small text-muted mb-3">
+            SuperAdmin de federación (CORE). No es el administrador de Guerrero.
+          </p>
+          <form id="nodoLoginForm" class="d-grid gap-3">
+            <div>
+              <label class="form-label small" for="nodoUser">Usuario</label>
+              <input id="nodoUser" class="form-control form-control-sm" autocomplete="username" required />
+            </div>
+            <div>
+              <label class="form-label small" for="nodoPass">Contraseña</label>
+              <input id="nodoPass" type="password" class="form-control form-control-sm" autocomplete="current-password" required />
+            </div>
+            <div id="nodoLoginError" class="small text-danger d-none" role="alert"></div>
+            <button type="submit" class="btn btn-primary btn-sm">Entrar</button>
+          </form>
+        </div>
+      </div>
+    </section>
+
+    <section id="nodoDashboard" class="d-none">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <div>
+          <h1 class="h5 mb-0">Nodo Studio</h1>
+          <p class="small text-muted mb-0" id="nodoWelcome"></p>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="nodoLogoutBtn">Cerrar sesión</button>
+      </div>
+
+      <ul class="nav nav-tabs nodo-main-tabs mb-3" id="nodoMainTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="nodoTabAnaliticaBtn" type="button" role="tab" aria-selected="true" data-nodo-tab="analitica">Analítica</button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="nodoTabInstanciasBtn" type="button" role="tab" aria-selected="false" data-nodo-tab="instancias">Instancias</button>
+        </li>
+      </ul>
+
+      <div id="nodoPaneAnalitica">
+      <div class="card shadow-sm visor-studio-card mb-3">
+        <div class="card-body p-3">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <h2 class="h6 mb-0">Analítica</h2>
+            <div class="d-flex flex-wrap align-items-end gap-2">
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="nodoAnalyticsDateFilter" />
+                <label class="form-check-label small" for="nodoAnalyticsDateFilter">Delimitar fechas</label>
+              </div>
+              <div id="nodoAnalyticsDateWrap" class="d-flex flex-wrap align-items-end gap-2 opacity-50">
+                <div>
+                  <label class="form-label small mb-0" for="nodoAnalyticsFrom">Desde</label>
+                  <input type="date" id="nodoAnalyticsFrom" class="form-control form-control-sm nodo-date-input" disabled lang="es" />
+                </div>
+                <div>
+                  <label class="form-label small mb-0" for="nodoAnalyticsTo">Hasta</label>
+                  <input type="date" id="nodoAnalyticsTo" class="form-control form-control-sm nodo-date-input" disabled lang="es" />
+                </div>
+              </div>
+              <div>
+                <label class="form-label small mb-0" for="nodoAnalyticsEnt">Entidad</label>
+                <select id="nodoAnalyticsEnt" class="form-select form-select-sm" style="min-width:10rem">
+                  <option value="">Nacional (todas)</option>
+                </select>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary" id="nodoAnalyticsRefresh">Actualizar</button>
+              <button type="button" class="btn btn-sm btn-outline-success" id="nodoAnalyticsExport">Exportar XLSX</button>
+            </div>
+          </div>
+          <p class="small text-muted mb-2" id="nodoAnalyticsPeriod">Histórico completo · uso del portal (CORE)</p>
+          <div id="nodoAnalyticsError" class="small text-danger d-none mb-2"></div>
+          <div class="row g-2 mb-3" id="nodoAnalyticsKpis">
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Sesiones</div><div class="fs-5" id="nodoKpiSessions">—</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Indicadores</div><div class="fs-5" id="nodoKpiIndicators">—</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Capas</div><div class="fs-5" id="nodoKpiLayers">—</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Exportaciones</div><div class="fs-5" id="nodoKpiExports">—</div></div></div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <h3 class="h6 small text-muted">Top indicadores</h3>
+              <div class="table-responsive">
+                <table class="table table-sm mb-0 visor-studio-users-table">
+                  <thead><tr><th>Nombre</th><th class="text-muted">Clave</th><th class="text-end">N</th></tr></thead>
+                  <tbody id="nodoTopIndicadores"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <h3 class="h6 small text-muted">Top capas</h3>
+              <div class="table-responsive">
+                <table class="table table-sm mb-0 visor-studio-users-table">
+                  <thead><tr><th>Nombre</th><th class="text-muted">Clave</th><th class="text-end">N</th></tr></thead>
+                  <tbody id="nodoTopCapas"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </div>
+
+      <div id="nodoPaneInstancias" class="d-none">
+      <div class="card shadow-sm visor-studio-card mb-3">
+        <div class="card-body p-3">
+          <h2 class="h6">Instancias</h2>
+          <p class="small text-muted mb-2">
+            <strong>Kit XLSX</strong> = marco municipal + contrato de indicadores para que el estado llene valores y contexto.
+            No incluye capas ni geometrías.
+          </p>
+          <div class="table-responsive">
+            <table class="table table-sm mb-0 visor-studio-users-table">
+              <thead>
+                <tr>
+                  <th>Ent</th>
+                  <th>Clave</th>
+                  <th>Estado</th>
+                  <th>Base</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="nodoInstanciasBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm visor-studio-card">
+        <div class="card-body p-3 p-md-4">
+          <h2 class="h6 mb-3">Alta de instancia (5 pasos)</h2>
+          <p class="small text-muted" id="nodoStepHint">1 / 5 — Entidad</p>
+          <div id="nodoWizardError" class="small text-danger d-none mb-2"></div>
+
+          <div id="nodoStep1">
+            <label class="form-label small" for="nodoEnt">Entidad</label>
+            <select id="nodoEnt" class="form-select form-select-sm"></select>
+          </div>
+          <div id="nodoStep2" class="d-none">
+            <div class="row g-2">
+              <div class="col-md-4">
+                <label class="form-label small" for="nodoClave">Clave</label>
+                <input id="nodoClave" class="form-control form-control-sm" maxlength="5" />
+              </div>
+              <div class="col-md-8">
+                <label class="form-label small" for="nodoNombre">Nombre</label>
+                <input id="nodoNombre" class="form-control form-control-sm" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="nodoDb">Base</label>
+                <input id="nodoDb" class="form-control form-control-sm" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="nodoKey">connection_key</label>
+                <input id="nodoKey" class="form-control form-control-sm" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="nodoModo">Modo</label>
+                <select id="nodoModo" class="form-select form-select-sm">
+                  <option value="FEDERADA">FEDERADA</option>
+                  <option value="ESTATAL">ESTATAL</option>
+                </select>
+              </div>
+              <p class="small text-muted mb-0">Estado inicial: PILOTO. No se pide host ni contraseña de Postgres.</p>
+            </div>
+          </div>
+          <div id="nodoStep3" class="d-none">
+            <p class="small mb-2">El pipeline creará, en este orden:</p>
+            <ul class="small mb-0">
+              <li>Base de datos</li>
+              <li>Esquema mínimo (sin copiar Guerrero)</li>
+              <li>Registro en CORE</li>
+              <li>Paquete P4 inicial</li>
+              <li>Admin estatal</li>
+              <li>Smoke del resolver</li>
+              <li class="text-muted">Martin: diferido (2.0.1)</li>
+            </ul>
+          </div>
+          <div id="nodoStep4" class="d-none">
+            <div class="row g-2">
+              <div class="col-md-6">
+                <label class="form-label small" for="nodoAdminUser">Usuario admin estatal</label>
+                <input id="nodoAdminUser" class="form-control form-control-sm" autocomplete="off" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="nodoAdminDisplay">Nombre</label>
+                <input id="nodoAdminDisplay" class="form-control form-control-sm" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="nodoAdminPass">Contraseña</label>
+                <input id="nodoAdminPass" type="password" class="form-control form-control-sm" autocomplete="new-password" />
+              </div>
+            </div>
+          </div>
+          <div id="nodoStep5" class="d-none">
+            <pre id="nodoResumen" class="small visor-studio-pre p-3 rounded mb-0"></pre>
+          </div>
+
+          <div id="nodoChecks" class="small mt-3 d-none"></div>
+
+          <div class="d-flex gap-2 mt-3">
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="nodoPrevBtn">Atrás</button>
+            <button type="button" class="btn btn-sm btn-primary" id="nodoNextBtn">Siguiente</button>
+          </div>
+        </div>
+      </div>
+      </div>
+    </section>
+  </main>
+  <style>
+    .nodo-date-input {
+      min-width: 11.5rem;
+      cursor: pointer;
+    }
+    .nodo-date-input:disabled {
+      cursor: not-allowed;
+    }
+  </style>
+  <script type="module" src="./js/nodoStudioApp.js"></script>
+</body>
+</html>

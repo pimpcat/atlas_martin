@@ -242,6 +242,19 @@ function applyContext(ctx) {
   foot.textContent = `Entre los ${n} municipios del Estado de ${ent}.`;
 }
 
+function applyAmigoStatusBanner(data) {
+  const emptyEl = document.getElementById("homeMunEmpty");
+  if (!emptyEl) return;
+  if (data && data.amigo_status === "NO_INSTANCE") {
+    emptyEl.textContent =
+      data.message ||
+      "Esta entidad no tiene instancia AMIGO; solo catálogo territorial (CORE).";
+    emptyEl.classList.remove("d-none");
+  } else if (!data?.selected) {
+    emptyEl.textContent = "Selecciona un municipio para ver sus indicadores.";
+  }
+}
+
 function renderEmptyState() {
   const nameEl = document.getElementById("homeMunNombre");
   const cveEl = document.getElementById("homeMunClave");
@@ -283,6 +296,12 @@ function renderEmptyState() {
 }
 
 function renderFromPayload(data, municipio) {
+  applyAmigoStatusBanner(data);
+  if (data && data.amigo_status === "NO_INSTANCE") {
+    renderEmptyState();
+    if (data.context) applyContext(data.context);
+    return;
+  }
   const sel = data && data.selected;
   const hasMun = Boolean(sel && sel.cve_mun);
   const nom = hasMun ? sel.nom_mun || municipio?.nomgeo || "Municipio" : "Selecciona un municipio";
@@ -448,6 +467,7 @@ export async function loadHomeContext() {
       lastContext = data.context;
       applyContext(data.context);
     }
+    applyAmigoStatusBanner(data);
   } catch (err) {
     console.warn("[home] context:", err);
   }

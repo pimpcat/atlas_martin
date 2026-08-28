@@ -94,11 +94,17 @@ export function fitMapToMartinSource(map, sourceId, sourceLayer, options = {}) {
   }
 }
 
-/** Encuadre con bbox PostGIS (polígono completo, no fragmentos de tesela). */
+/** Encuadre con bbox PostGIS CORE (amigo) o legacy atlas. */
 export async function fitMapToMunicipioExtent(map, cve_mun, options = {}) {
   if (!map || !cve_mun) return false;
   try {
-    const data = await fetchMunicipioExtent(cve_mun);
+    let data;
+    try {
+      const { fetchAmigoMunicipioExtent, getActiveCveEnt } = await import("./amigoDeployment.js");
+      data = await fetchAmigoMunicipioExtent(cve_mun, options.cve_ent || getActiveCveEnt());
+    } catch {
+      data = await fetchMunicipioExtent(cve_mun);
+    }
     const b = data.bbox;
     if (!b || b.west == null) return false;
     const {

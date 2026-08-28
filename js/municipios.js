@@ -9,6 +9,11 @@ function padCve3(cve) {
   return ("000" + s).slice(-3);
 }
 
+function padCve2(cve) {
+  const d = String(cve ?? "").replace(/\D/g, "");
+  return d.length >= 2 ? d.slice(-2) : ("00" + d).slice(-2);
+}
+
 /**
  * Texto de opción: Nombre de municipio (cve_mun).
  */
@@ -16,6 +21,77 @@ export function formatMunicipioLabel(nomgeo, cve_mun) {
   const nom = nomgeo != null ? String(nomgeo) : "";
   const cve = padCve3(cve_mun != null ? cve_mun : "");
   return `${nom} (${cve})`;
+}
+
+export function formatEntidadLabel(nomgeo, cve_ent) {
+  const nom = nomgeo != null ? String(nomgeo) : "";
+  const cve = padCve2(cve_ent);
+  return `${nom} (${cve})`;
+}
+
+/**
+ * Desplegable de entidades (modo nacional).
+ */
+export function renderEntidadesSelect(selectEl, statusEl, rows, { onSelect, selected } = {}) {
+  if (!selectEl) return;
+
+  selectEl.innerHTML = "";
+  selectEl.disabled = true;
+
+  const placeholder = document.createElement("option");
+  placeholder.value = "";
+  placeholder.textContent = "— Selecciona entidad —";
+  selectEl.append(placeholder);
+
+  if (!rows || !rows.length) {
+    if (statusEl) statusEl.textContent = "Sin datos de entidades.";
+    return;
+  }
+
+  const unique = [];
+  const seen = new Set();
+  for (const r of rows) {
+    const cve = padCve2(r.cve_ent);
+    if (!cve || seen.has(cve)) continue;
+    seen.add(cve);
+    unique.push({ cve_ent: cve, nomgeo: r.nomgeo != null ? String(r.nomgeo) : "" });
+  }
+
+  for (const r of unique) {
+    const opt = document.createElement("option");
+    opt.value = r.cve_ent;
+    opt.textContent = formatEntidadLabel(r.nomgeo, r.cve_ent);
+    selectEl.append(opt);
+  }
+
+  selectEl.disabled = false;
+  if (statusEl) statusEl.textContent = `${unique.length} entidades cargadas`;
+
+  const sel = selected ? padCve2(selected) : "";
+  if (sel) {
+    for (let i = 0; i < selectEl.options.length; i++) {
+      if (selectEl.options[i].value === sel) {
+        selectEl.value = sel;
+        break;
+      }
+    }
+  }
+
+  selectEl.onchange = () => {
+    const v = selectEl.value;
+    if (!v) {
+      if (typeof onSelect === "function") onSelect(null);
+      return;
+    }
+    const found = unique.find((u) => u.cve_ent === padCve2(v));
+    if (typeof onSelect === "function") {
+      onSelect(
+        found
+          ? { cve_ent: found.cve_ent, nomgeo: found.nomgeo }
+          : { cve_ent: padCve2(v), nomgeo: "" },
+      );
+    }
+  };
 }
 
 /**
@@ -46,15 +122,14 @@ export function renderMunicipiosSelect(selectEl, statusEl, rows, { onSelect } = 
     unique.push({
       cve_mun: cve,
       nomgeo: r.nomgeo != null ? String(r.nomgeo) : "",
+      cve_ent: r.cve_ent != null ? padCve2(r.cve_ent) : undefined,
     });
   }
 
   for (const r of unique) {
-    const cve = r.cve_mun;
-    const nom = r.nomgeo;
     const opt = document.createElement("option");
-    opt.value = cve;
-    opt.textContent = formatMunicipioLabel(nom, cve);
+    opt.value = r.cve_mun;
+    opt.textContent = formatMunicipioLabel(r.nomgeo, r.cve_mun);
     selectEl.append(opt);
   }
 
@@ -80,8 +155,12 @@ export function renderMunicipiosSelect(selectEl, statusEl, rows, { onSelect } = 
     if (typeof onSelect === "function") {
       onSelect(
         found
-          ? { cve_mun: String(found.cve_mun), nomgeo: String(found.nomgeo != null ? found.nomgeo : "") }
-          : { cve_mun: v, nomgeo: "" }
+          ? {
+              cve_mun: String(found.cve_mun),
+              nomgeo: String(found.nomgeo != null ? found.nomgeo : ""),
+              cve_ent: found.cve_ent,
+            }
+          : { cve_mun: v, nomgeo: "" },
       );
     }
   };
@@ -113,4 +192,19 @@ export function setMunicipioSelectValue(selectEl, m) {
     }
   }
   selectEl.value = raw;
+}
+
+export function setEntidadSelectValue(selectEl, cve_ent) {
+  if (!selectEl) return;
+  if (cve_ent == null || cve_ent === "") {
+    selectEl.value = "";
+    return;
+  }
+  const padded = padCve2(cve_ent);
+  for (let i = 0; i < selectEl.options.length; i++) {
+    if (padCve2(selectEl.options[i].value) === padded) {
+      selectEl.value = selectEl.options[i].value;
+      return;
+    }
+  }
 }

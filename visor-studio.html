@@ -17,6 +17,12 @@
           <p class="small text-muted mb-3">Acceso restringido para administración del catálogo de capas.</p>
           <form id="visorStudioLoginForm" class="d-grid gap-3">
             <div>
+              <label class="form-label small" for="visorStudioEntidad">Entidad</label>
+              <select id="visorStudioEntidad" class="form-select form-select-sm" required>
+                <option value="">Cargando instancias…</option>
+              </select>
+            </div>
+            <div>
               <label class="form-label small" for="visorStudioUser">Usuario</label>
               <input id="visorStudioUser" class="form-control form-control-sm" autocomplete="username" required />
             </div>

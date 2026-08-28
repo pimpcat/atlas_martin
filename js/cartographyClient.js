@@ -11,6 +11,7 @@ import {
   probeCartographyEngine,
   probeCartographyHealth,
 } from "./cartographyHealth.js";
+import { getAdminToken, isVisorAdminLoggedIn } from "./visorAdminAuth.js";
 
 export { getCartographyHealth, isCartographyEnabled, probeCartographyEngine, probeCartographyHealth };
 
@@ -89,6 +90,13 @@ export async function generateAndDownload(opts) {
   const template_id = String(opts.template_id || "").trim();
   if (!template_id) throw new Error("Falta plantilla de cartografía.");
 
+  const token = getAdminToken();
+  if (!token) {
+    throw new Error(
+      "Se requiere sesión admin (Visor Studio) para generar cartografía."
+    );
+  }
+
   const accept = FORMAT_ACCEPT[format] || "application/pdf";
   const body = {
     template_id,
@@ -103,6 +111,8 @@ export async function generateAndDownload(opts) {
     headers: {
       Accept: accept,
       "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+      "X-Atlas-Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify(body),
   });
@@ -523,7 +533,8 @@ function _setCartographyBusy(host, busy, message) {
 }
 
 /**
- * Muestra el botón Cartografía en el Visor si el engine está activo.
+ * Muestra el botón Cartografía en el Visor si el engine está activo
+ * y hay sesión admin (ciudadano no genera; la dependencia sí).
  * @param {{ getCveMun: () => string | null, getNomgeo?: () => string | null }} options
  */
 export async function attachCartographyUi(options) {
@@ -531,16 +542,34 @@ export async function attachCartographyUi(options) {
   const toggleBtn = document.getElementById("btnVisorCartography");
   if (!host) return;
 
-  const ok = await probeCartographyEngine();
+  const engineOk = await probeCartographyEngine();
 
-  host.hidden = true;
-  host.setAttribute("aria-hidden", "true");
-  host.classList.remove("is-open");
+  const setToggleVisible = (visible) => {
+    host.hidden = true;
+    host.setAttribute("aria-hidden", "true");
+    host.classList.remove("is-open");
+    if (toggleBtn) {
+      toggleBtn.hidden = !visible;
+      toggleBtn.setAttribute("aria-hidden", visible ? "false" : "true");
+      toggleBtn.setAttribute("aria-expanded", "false");
+      toggleBtn.classList.remove("is-active");
+    }
+  };
 
-  if (toggleBtn) {
-    toggleBtn.hidden = !ok;
-    toggleBtn.setAttribute("aria-hidden", ok ? "false" : "true");
-    toggleBtn.setAttribute("aria-expanded", "false");
+  const adminOk = isVisorAdminLoggedIn();
+  const ok = engineOk && adminOk;
+  setToggleVisible(ok);
+
+  if (!document.documentElement.dataset.cartographyAuthBound) {
+    document.documentElement.dataset.cartographyAuthBound = "1";
+    document.addEventListener("atlasgro-visor-admin-auth-change", () => {
+      const show = engineOk && isVisorAdminLoggedIn();
+      setToggleVisible(show);
+      if (!show) return;
+      if (host.dataset.bound !== "1") {
+        void attachCartographyUi(options);
+      }
+    });
   }
 
   if (!ok) return;

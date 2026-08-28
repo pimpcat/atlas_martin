@@ -58,7 +58,7 @@ export function hasTemplateRenderer(templateOrId) {
 }
 
 /**
- * Fetch unificado: GET /api/indicators/{id}?cve_mun=&nom_mun=
+ * Fetch unificado: GET /api/indicators/{id}?cve_mun=&nom_mun=&cve_ent=
  */
 export async function fetchIndicatorData(indicatorId, selected = null) {
   const url = new URL(
@@ -68,6 +68,16 @@ export async function fetchIndicatorData(indicatorId, selected = null) {
   if (selected?.cve_mun) {
     url.searchParams.set("cve_mun", String(selected.cve_mun));
     if (selected.nomgeo) url.searchParams.set("nom_mun", String(selected.nomgeo));
+  }
+  const ent = selected?.cve_ent;
+  if (ent) url.searchParams.set("cve_ent", String(ent));
+  else {
+    try {
+      const { getActiveCveEnt } = await import("./amigoDeployment.js");
+      url.searchParams.set("cve_ent", getActiveCveEnt());
+    } catch {
+      /* ignore */
+    }
   }
   const res = await fetch(url.toString(), { cache: "no-store" });
   let json = null;

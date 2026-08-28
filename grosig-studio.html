@@ -25,6 +25,12 @@
           </p>
           <form id="grosigLoginForm" class="d-grid gap-3">
             <div>
+              <label class="form-label small" for="grosigEntidad">Entidad</label>
+              <select id="grosigEntidad" class="form-select form-select-sm" required>
+                <option value="">Cargando instancias…</option>
+              </select>
+            </div>
+            <div>
               <label class="form-label small" for="grosigUser">Usuario</label>
               <input id="grosigUser" class="form-control form-control-sm" autocomplete="username" required />
             </div>
@@ -59,7 +65,74 @@
         </div>
       </div>
 
+      <div class="card shadow-sm visor-studio-card mb-3">
+        <div class="card-body p-3">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+            <div>
+              <h2 class="h6 mb-0">Analítica de uso</h2>
+              <p class="small text-muted mb-0" id="grosigAnalyticsScope">Solo la entidad de esta sesión</p>
+            </div>
+            <div class="d-flex flex-wrap align-items-end gap-2">
+              <div class="form-check mb-1">
+                <input class="form-check-input" type="checkbox" id="grosigAnalyticsDateFilter" />
+                <label class="form-check-label small" for="grosigAnalyticsDateFilter">Delimitar fechas</label>
+              </div>
+              <div id="grosigAnalyticsDateWrap" class="d-flex flex-wrap align-items-end gap-2 opacity-50">
+                <div>
+                  <label class="form-label small mb-0" for="grosigAnalyticsFrom">Desde</label>
+                  <input type="date" id="grosigAnalyticsFrom" class="form-control form-control-sm nodo-date-input" disabled lang="es" />
+                </div>
+                <div>
+                  <label class="form-label small mb-0" for="grosigAnalyticsTo">Hasta</label>
+                  <input type="date" id="grosigAnalyticsTo" class="form-control form-control-sm nodo-date-input" disabled lang="es" />
+                </div>
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary" id="grosigAnalyticsRefresh">Actualizar</button>
+              <button type="button" class="btn btn-sm btn-outline-success" id="grosigAnalyticsExport">Exportar XLSX</button>
+            </div>
+          </div>
+          <p class="small text-muted mb-2" id="grosigAnalyticsPeriod">Histórico · uso del portal (CORE)</p>
+          <div id="grosigAnalyticsError" class="small text-danger d-none mb-2"></div>
+          <div class="row g-2 mb-3">
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Sesiones</div><div class="fs-5" id="grosigKpiSessions">—</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Indicadores</div><div class="fs-5" id="grosigKpiIndicators">—</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Capas</div><div class="fs-5" id="grosigKpiLayers">—</div></div></div>
+            <div class="col-6 col-md-3"><div class="border rounded p-2 small"><div class="text-muted">Exportaciones</div><div class="fs-5" id="grosigKpiExports">—</div></div></div>
+          </div>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <h3 class="h6 small text-muted">Top indicadores</h3>
+              <div class="table-responsive">
+                <table class="table table-sm mb-0 visor-studio-users-table">
+                  <thead><tr><th>Nombre</th><th class="text-muted">Clave</th><th class="text-end">N</th></tr></thead>
+                  <tbody id="grosigTopIndicadores"></tbody>
+                </table>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <h3 class="h6 small text-muted">Top capas</h3>
+              <div class="table-responsive">
+                <table class="table table-sm mb-0 visor-studio-users-table">
+                  <thead><tr><th>Nombre</th><th class="text-muted">Clave</th><th class="text-end">N</th></tr></thead>
+                  <tbody id="grosigTopCapas"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div class="row g-3" id="grosigCards">
+        <div class="col-md-6 col-xl-4">
+          <a href="./nodo-studio.html" class="text-decoration-none text-reset">
+            <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
+              <div class="card-body">
+                <div class="fw-semibold">Nodo Studio</div>
+                <p class="small text-muted mb-0">SuperAdmin: altas de entidades AMIGO-NN (login distinto).</p>
+              </div>
+            </div>
+          </a>
+        </div>
         <div class="col-md-6 col-xl-4">
           <a href="./visor-studio.html" class="text-decoration-none text-reset">
             <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
@@ -165,7 +238,7 @@
             <div class="card shadow-sm visor-studio-card grosig-hub-card h-100">
               <div class="card-body">
                 <div class="fw-semibold">Atlas</div>
-                <p class="small text-muted mb-0">Portal de consulta pública.</p>
+                <p class="small text-muted mb-0">Portal de consulta pública (no eleva a Capas/Cartografía; use Abrir visor).</p>
               </div>
             </div>
           </a>

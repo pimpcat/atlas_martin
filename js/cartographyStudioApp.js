@@ -2,17 +2,11 @@
  * Cartography Studio — branding 1.0 (tiras / logo / institución / advertencias / fechas).
  * Gate: mismo contrato Core GET /api/cartography/health.
  */
+import { adminFetch } from "./visorAdminAuth.js";
 import {
-  adminFetch,
-  clearAdminSession,
-  getAdminUser,
-  getAdminToken,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
-} from "./visorAdminAuth.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
-import { apiUrl } from "./atlasConfig.js";
+  createStudioShell,
+  studioIdsFromPrefix,
+} from "./studioShell.js";
 import {
   probeCartographyHealth,
   summarizeCartographyHealth,
@@ -48,23 +42,6 @@ function escapeHtml(value) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function showLogin() {
-  $("cartoStudioLoginView")?.classList.remove("d-none");
-  $("cartoStudioDashboard")?.classList.add("d-none");
-}
-
-function showDashboard() {
-  $("cartoStudioLoginView")?.classList.add("d-none");
-  $("cartoStudioDashboard")?.classList.remove("d-none");
-  const u = getAdminUser();
-  if ($("cartoStudioWelcome")) {
-    $("cartoStudioWelcome").textContent = u?.username
-      ? `Sesión: ${u.username}`
-      : "Sesión admin activa";
-  }
-  mountStudioNav($("cartoStudioNav"), { active: "cartography" });
 }
 
 function renderPhase0(health, brandingMeta) {
@@ -162,17 +139,13 @@ async function onUploadLogo() {
   }
   const fd = new FormData();
   fd.append("file", file);
-  const token = getAdminToken();
-  const res = await fetch(apiUrl("/api/cartography/admin/logos"), {
+  const { res, data, networkError } = await adminFetch("/api/cartography/admin/logos", {
     method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
     body: fd,
   });
-  let data = null;
-  try {
-    data = await res.json();
-  } catch {
-    data = null;
+  if (networkError || !res) {
+    showErr($("cartoStudioFormError"), "No se pudo contactar al API");
+    return;
   }
   if (!res.ok) {
     showErr(
@@ -187,20 +160,6 @@ async function onUploadLogo() {
 }
 
 function bindUi() {
-  $("cartoStudioLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("cartoStudioLoginError"));
-    try {
-      await loginAdmin($("cartoStudioUser").value.trim(), $("cartoStudioPass").value);
-      await bootApp();
-    } catch (e) {
-      showErr($("cartoStudioLoginError"), e.message || String(e));
-    }
-  });
-  $("cartoStudioLogoutBtn")?.addEventListener("click", () => {
-    clearAdminSession();
-    showLogin();
-  });
   $("cartoStudioForm")?.addEventListener("submit", (ev) => void onSave(ev));
   $("cartoStudioReloadBtn")?.addEventListener("click", () => {
     void bootOnline().catch((e) =>
@@ -210,27 +169,15 @@ function bindUi() {
   $("cartoStudioUploadLogoBtn")?.addEventListener("click", () => void onUploadLogo());
 }
 
-async function bootApp() {
-  showDashboard();
-  await bootOnline();
-}
-
 async function main() {
   bindUi();
-  if (isVisorAdminLoggedIn()) {
-    try {
-      await verifyAdminSession();
-      await bootApp();
-    } catch (e) {
-      clearAdminSession();
-      showLogin();
-      showErr($("cartoStudioLoginError"), e.message || String(e));
-    }
-  } else {
-    const footer = $("cartoStudioLoginFooter");
-    if (footer) footer.innerHTML = studioLoginFooterHtml("cartography");
-    showLogin();
-  }
+  const shell = createStudioShell(studioIdsFromPrefix("cartoStudio"), {
+    activeNav: "cartography",
+    onEnterDashboard: () => bootOnline(),
+    onDashboardError: (err) =>
+      showErr($("cartoStudioLoginError"), err?.message || String(err)),
+  });
+  await shell.boot();
 }
 
 main();

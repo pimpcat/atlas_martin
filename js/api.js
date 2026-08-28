@@ -239,6 +239,19 @@ export function getMenuModel() {
       ],
     },
     {
+      id: "analitica",
+      title: "Analítica",
+      items: [
+        {
+          id: "analitica_comparador",
+          title: "Comparador municipal",
+          subtitle: "Municipio A vs B · indicadores",
+          unit: "",
+          analiticaCompare: true,
+        },
+      ],
+    },
+    {
       id: "sitios_interes",
       title: "Sitios de interés",
       items: [
@@ -306,6 +319,20 @@ const MENU_SECTION_GEO = {
       geoContext: true,
     },
     ...MENU_GEO_STATIC_ITEMS,
+  ],
+};
+
+const MENU_SECTION_ANALITICA = {
+  id: "analitica",
+  title: "Analítica",
+  items: [
+    {
+      id: "analitica_comparador",
+      title: "Comparador municipal",
+      subtitle: "Municipio A vs B · indicadores",
+      unit: "",
+      analiticaCompare: true,
+    },
   ],
 };
 
@@ -421,6 +448,7 @@ export function buildMenuModelFromCatalog(catalog, opts = {}) {
     });
   }
 
+  sections.push(MENU_SECTION_ANALITICA);
   sections.push(MENU_SECTION_SITIOS);
   return sections;
 }
@@ -805,50 +833,111 @@ export async function fetchGeoContexto(cve_mun) {
 }
 
 /**
- * Explorador municipal (Inicio): panel + KPI 1–5.
+ * Explorador municipal (Inicio): panel + KPI 1–5 (AMIGO o legacy).
+ * Cache clave = entidad:municipio.
  * @param {string} [cve_mun]
- * @param {{ signal?: AbortSignal }} [opts]
+ * @param {{ signal?: AbortSignal, cve_ent?: string }} [opts]
  */
 const _exploradorCache = new Map();
 let _exploradorBulkPromise = null;
+let _exploradorBulkEnt = null;
 
-/** @param {string} cve_mun */
-export function getExploradorCached(cve_mun) {
-  const cve = normCveMun3(cve_mun);
-  return _exploradorCache.has(cve) ? _exploradorCache.get(cve) : undefined;
+function _exploradorEntKey(cve_ent) {
+  const d = String(cve_ent ?? "").replace(/\D/g, "");
+  return d.length >= 2 ? d.slice(-2) : "";
 }
 
-/** Precarga panel + KPIs de los ~85 municipios en una sola petición. */
-export async function ensureExploradorBulk() {
-  const hasMunData = [..._exploradorCache.keys()].some((k) => k !== "__ctx__");
-  if (hasMunData) return _exploradorCache;
-  if (!_exploradorBulkPromise) {
-    _exploradorBulkPromise = (async () => {
-      const url = new URL(`${API_EXPLORADOR_MUNICIPAL_URL}/all`, window.location.href);
-      const res = await fetch(url.toString(), { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json || !json.ok) {
-        throw new Error(json && json.message ? String(json.message) : "Respuesta inválida");
-      }
-      if (json.context) {
-        _exploradorCache.set("__ctx__", { ok: true, context: json.context, selected: null });
-      }
-      const selected = json.selected || {};
-      for (const [cve, payload] of Object.entries(selected)) {
-        const key = normCveMun3(cve);
-        _exploradorCache.set(key, {
-          ok: true,
-          context: json.context,
-          selected: payload,
-        });
-      }
-      return _exploradorCache;
-    })().catch((err) => {
-      _exploradorBulkPromise = null;
-      throw err;
-    });
+function _exploradorCacheKey(cve_mun, cve_ent) {
+  const ent = _exploradorEntKey(cve_ent) || "_";
+  if (!cve_mun) return `${ent}:__ctx__`;
+  return `${ent}:${normCveMun3(cve_mun)}`;
+}
+
+async function _activeEntForExplorador(explicit) {
+  if (explicit != null && String(explicit).trim() !== "") {
+    return _exploradorEntKey(explicit);
   }
+  try {
+    const { getActiveCveEnt } = await import("./amigoDeployment.js");
+    return _exploradorEntKey(getActiveCveEnt());
+  } catch {
+    return "";
+  }
+}
+
+/** @param {string} cve_mun @param {string} [cve_ent] */
+export function getExploradorCached(cve_mun, cve_ent) {
+  const key = _exploradorCacheKey(cve_mun, cve_ent);
+  return _exploradorCache.has(key) ? _exploradorCache.get(key) : undefined;
+}
+
+/** Limpia cache al cambiar entidad (modo nacional). */
+export function invalidateExploradorCache(cve_ent) {
+  if (cve_ent == null || cve_ent === "") {
+    _exploradorCache.clear();
+    _exploradorBulkPromise = null;
+    _exploradorBulkEnt = null;
+    return;
+  }
+  const prefix = `${_exploradorEntKey(cve_ent)}:`;
+  for (const k of [..._exploradorCache.keys()]) {
+    if (k.startsWith(prefix)) _exploradorCache.delete(k);
+  }
+  if (_exploradorBulkEnt === _exploradorEntKey(cve_ent)) {
+    _exploradorBulkPromise = null;
+    _exploradorBulkEnt = null;
+  }
+}
+
+/** Precarga panel + KPIs de la entidad activa. */
+export async function ensureExploradorBulk(opts = {}) {
+  const ent = await _activeEntForExplorador(opts.cve_ent);
+  const prefix = `${ent || "_"}:`;
+  const hasMunData = [..._exploradorCache.keys()].some(
+    (k) => k.startsWith(prefix) && !k.endsWith(":__ctx__"),
+  );
+  if (hasMunData) return _exploradorCache;
+  if (_exploradorBulkPromise && _exploradorBulkEnt === ent) {
+    return _exploradorBulkPromise;
+  }
+  _exploradorBulkEnt = ent;
+  _exploradorBulkPromise = (async () => {
+    const url = new URL(`${API_EXPLORADOR_MUNICIPAL_URL}/all`, window.location.href);
+    if (ent) url.searchParams.set("cve_ent", ent);
+    const res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json || !json.ok) {
+      throw new Error(json && json.message ? String(json.message) : "Respuesta inválida");
+    }
+    const ctxKey = _exploradorCacheKey(null, ent);
+    if (json.context) {
+      _exploradorCache.set(ctxKey, {
+        ok: true,
+        context: json.context,
+        selected: null,
+        amigo_status: json.amigo_status,
+        message: json.message,
+        source: json.source,
+      });
+    }
+    const selected = json.selected || {};
+    for (const [cve, payload] of Object.entries(selected)) {
+      _exploradorCache.set(_exploradorCacheKey(cve, ent), {
+        ok: true,
+        context: json.context,
+        selected: payload,
+        amigo_status: json.amigo_status,
+        message: json.message,
+        source: json.source,
+      });
+    }
+    return _exploradorCache;
+  })().catch((err) => {
+    _exploradorBulkPromise = null;
+    _exploradorBulkEnt = null;
+    throw err;
+  });
   return _exploradorBulkPromise;
 }
 
@@ -856,36 +945,41 @@ export async function ensureExploradorBulk() {
 export function prefetchMunicipioData(cve_mun) {
   const cve = normCveMun3(cve_mun);
   if (!cve) return;
-  if (!getExploradorCached(cve)) {
-    void ensureExploradorBulk().catch(() => {
-      void fetchExploradorMunicipal(cve).catch(() => {});
-    });
-  }
+  void (async () => {
+    const ent = await _activeEntForExplorador();
+    if (!getExploradorCached(cve, ent)) {
+      void ensureExploradorBulk({ cve_ent: ent }).catch(() => {
+        void fetchExploradorMunicipal(cve, { cve_ent: ent }).catch(() => {});
+      });
+    }
+  })();
   if (!_geoContextoCache.has(cve)) {
     void ensureGeoContextoBulk().catch(() => {});
   }
 }
 
 export async function fetchExploradorMunicipal(cve_mun, opts = {}) {
+  const ent = await _activeEntForExplorador(opts.cve_ent);
   const url = new URL(API_EXPLORADOR_MUNICIPAL_URL, window.location.href);
-  let cacheKey = "__ctx__";
+  if (ent) url.searchParams.set("cve_ent", ent);
+  let cacheKey = _exploradorCacheKey(null, ent);
   if (cve_mun) {
     const cve = normCveMun3(cve_mun);
     url.searchParams.set("cve_mun", cve);
-    cacheKey = cve;
+    cacheKey = _exploradorCacheKey(cve, ent);
     if (!opts.signal) {
-      const hit = getExploradorCached(cve);
+      const hit = getExploradorCached(cve, ent);
       if (hit !== undefined) return hit;
       try {
-        await ensureExploradorBulk();
-        const bulkHit = getExploradorCached(cve);
+        await ensureExploradorBulk({ cve_ent: ent });
+        const bulkHit = getExploradorCached(cve, ent);
         if (bulkHit !== undefined) return bulkHit;
       } catch {
         /* fallback a consulta individual */
       }
     }
-  } else if (!opts.signal && _exploradorCache.has("__ctx__")) {
-    return _exploradorCache.get("__ctx__");
+  } else if (!opts.signal && _exploradorCache.has(cacheKey)) {
+    return _exploradorCache.get(cacheKey);
   }
   const res = await fetch(url.toString(), { cache: "no-store", signal: opts.signal });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);

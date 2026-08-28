@@ -10,6 +10,21 @@ import {
   collectLabelFieldColumns,
   normalizeLabelParts,
 } from "./visorLabelRegistry.js";
+import {
+  bindIdentifyFieldEditors,
+  defaultFieldLabel,
+  defaultIdentifyFields,
+  identifyFieldsEditorHtml,
+  normalizeIdentifyFieldObjects,
+  readIdentifyFieldsFromDom as readIdentifyFieldsFromDomCore,
+} from "./visorCatalogAdminIdentifyFields.js";
+import {
+  buildClassesFromDistinctValues,
+  defaultStyleClasses,
+  distinctValuesChipsHtml,
+  normalizeStyleClasses,
+  styleClassRowsHtml,
+} from "./visorCatalogAdminStyleClasses.js";
 
 let _publishBtn = null;
 let _manageBtn = null;
@@ -927,65 +942,6 @@ function isByAttributePreset(presetId) {
 
 function isDenueTable(table) {
   return String(table || "").toLowerCase() === "c_denue";
-}
-
-function defaultStyleClasses() {
-  return [
-    { value: "A", color: "#ef4444", label: "Clase A" },
-    { value: "B", color: "#3b82f6", label: "Clase B" },
-  ];
-}
-
-/** Paleta para autoclasificar (hasta 32 clases). */
-const AUTO_CLASS_COLORS = [
-  "#ef4444",
-  "#f97316",
-  "#ca8a04",
-  "#22c55e",
-  "#14b8a6",
-  "#0ea5e9",
-  "#3b82f6",
-  "#6366f1",
-  "#8b5cf6",
-  "#ec4899",
-  "#78716c",
-  "#0d9488",
-  "#dc2626",
-  "#2563eb",
-  "#7c3aed",
-  "#db2777",
-];
-
-function normalizeStyleClasses(list) {
-  return (list || [])
-    .map((c) => ({
-      value: String(c?.value ?? "").trim(),
-      color: String(c?.color ?? "#94a3b8").trim(),
-      label: String(c?.label ?? c?.value ?? "").trim(),
-    }))
-    .filter((c) => c.value);
-}
-
-function styleClassRowsHtml(classes, keepEmpty = false) {
-  const rows = keepEmpty
-    ? (classes || []).map((c) => ({
-        value: String(c?.value ?? ""),
-        color: String(c?.color ?? "#94a3b8").trim(),
-        label: String(c?.label ?? c?.value ?? ""),
-      }))
-    : normalizeStyleClasses(classes);
-  const list = rows.length ? rows : defaultStyleClasses();
-  return list
-    .map(
-      (cls, idx) => `
-      <div class="visor-admin-class-row" data-idx="${idx}">
-        <input type="text" class="form-control form-control-sm visor-admin-cls-value" placeholder="Valor" value="${escapeHtml(cls.value)}" />
-        <input type="color" class="form-control form-control-color form-control-sm visor-admin-cls-color" value="${escapeHtml(cls.color)}" />
-        <input type="text" class="form-control form-control-sm visor-admin-cls-label" placeholder="Leyenda" value="${escapeHtml(cls.label || cls.value)}" />
-        <button type="button" class="btn btn-sm btn-outline-danger visor-admin-cls-remove" title="Quitar">×</button>
-      </div>`,
-    )
-    .join("");
 }
 
 function readStyleClassesFromDom(keepEmpty = false) {
@@ -1935,26 +1891,6 @@ async function fetchDistinctFieldValues(table, column) {
   return data;
 }
 
-function buildClassesFromDistinctValues(values) {
-  return (values || []).map((val, i) => {
-    const text = String(val);
-    return {
-      value: text,
-      color: AUTO_CLASS_COLORS[i % AUTO_CLASS_COLORS.length],
-      label: text.length > 48 ? `${text.slice(0, 45)}…` : text,
-    };
-  });
-}
-
-function distinctValuesChipsHtml(values) {
-  return (values || [])
-    .map(
-      (v) =>
-        `<span class="visor-admin-distinct-chip" title="${escapeHtml(String(v))}">${escapeHtml(String(v))}</span>`,
-    )
-    .join("");
-}
-
 function applyStyleClassesToDom(body, classes, previewHost) {
   const attrWrap = body?.querySelector("#visorAdminStyleAttrPanel");
   const listRoot = body?.querySelector("#visorAdminStyleClasses");
@@ -2038,213 +1974,12 @@ function runAutoclassify(body, previewHost) {
   applyStyleClassesToDom(body, buildClassesFromDistinctValues(wizard.distinct_values), previewHost);
 }
 
-function defaultIdentifyFields(cols) {
-  const preferred = ["gid", "cvegeo", "cve_mun", "cve_ent", "nomgeo", "nom_loc", "nom_mun", "nombre"];
-  const picked = preferred.filter((p) => cols.map((c) => c.toLowerCase()).includes(p));
-  return picked.length ? picked : cols.slice(0, Math.min(6, cols.length));
-}
-
-function defaultFieldLabel(col) {
-  const key = String(col || "").toLowerCase();
-  const defaults = {
-    gid: "Identificador",
-    nombre: "Nombre",
-    nomgeo: "Nombre geoestadístico",
-    nom_loc: "Localidad",
-    nom_mun: "Municipio",
-    cvegeo: "Clave geoestadística",
-    cve_ent: "Clave entidad",
-    cve_mun: "Clave municipio",
-    cve_loc: "Clave localidad",
-    tipo: "Tipo",
-    ent: "Entidad",
-  };
-  if (defaults[key]) return defaults[key];
-  return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function normalizeIdentifyFieldObjects(fields) {
-  const list = fields?.length ? fields : [{ column: "gid", label: defaultFieldLabel("gid") }];
-  return list
-    .map((f) => {
-      if (typeof f === "string") {
-        const col = f.trim();
-        return col ? { column: col, label: defaultFieldLabel(col) } : null;
-      }
-      if (f && typeof f === "object") {
-        const col = String(f.column || f.field || f.name || "").trim();
-        if (!col) return null;
-        const label = String(f.label || "").trim() || defaultFieldLabel(col);
-        return { column: col, label };
-      }
-      return null;
-    })
-    .filter(Boolean);
-}
-
-/** @deprecated use normalizeIdentifyFieldObjects — solo nombres de columna. */
-function normalizeIdentifyFieldNames(fields) {
-  return normalizeIdentifyFieldObjects(fields).map((f) => f.column);
-}
-
-/** Columnas del editor: primero las ya elegidas (en su orden), luego el resto de la tabla. */
-function orderedIdentifyEditorColumns(cols, selected) {
-  const all = Array.isArray(cols) ? cols.filter(Boolean).map((c) => String(c)) : [];
-  const selectedObjs = normalizeIdentifyFieldObjects(selected);
-  const seen = new Set();
-  const ordered = [];
-  for (const f of selectedObjs) {
-    const match = all.find((c) => c.toLowerCase() === f.column.toLowerCase());
-    const name = match || f.column;
-    const key = name.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    ordered.push(name);
-  }
-  for (const c of all) {
-    const key = c.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    ordered.push(c);
-  }
-  return ordered;
-}
-
-function identifyFieldsEditorHtml(cols, selected, idPrefix = "idf") {
-  const map = new Map(normalizeIdentifyFieldObjects(selected).map((f) => [f.column.toLowerCase(), f]));
-  const prefix = String(idPrefix || "idf").replace(/[^a-z0-9_-]/gi, "") || "idf";
-  return orderedIdentifyEditorColumns(cols, selected)
-    .map((col) => {
-      const saved = map.get(col.toLowerCase());
-      const checked = saved ? "checked" : "";
-      const labelVal = escapeHtml(saved?.label || defaultFieldLabel(col));
-      const disabled = saved ? "" : "disabled";
-      const cid = `${prefix}_${escapeHtml(col)}`;
-      return `<div class="visor-admin-identify-row">
-        <div class="visor-admin-idf-move" role="group" aria-label="Orden">
-          <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1 visor-admin-idf-grip" draggable="true" title="Arrastrar para reordenar" aria-label="Arrastrar">☰</button>
-          <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" data-idf-move="up" title="Subir" aria-label="Subir">▲</button>
-          <button type="button" class="btn btn-outline-secondary btn-sm py-0 px-1" data-idf-move="down" title="Bajar" aria-label="Bajar">▼</button>
-        </div>
-        <div class="form-check form-check-sm mb-0">
-          <input class="form-check-input visor-admin-idf-check" type="checkbox" id="${cid}" value="${escapeHtml(col)}" ${checked} />
-          <label class="form-check-label small font-monospace" for="${cid}">${escapeHtml(col)}</label>
-        </div>
-        <input type="text" class="form-control form-control-sm visor-admin-idf-label" data-for="${escapeHtml(col)}" placeholder="Etiqueta visible" value="${labelVal}" ${disabled} />
-      </div>`;
-    })
-    .join("");
-}
-
-function moveIdentifyRow(row, direction) {
-  if (!row) return;
-  const parent = row.parentElement;
-  if (!parent) return;
-  if (direction === "up") {
-    const prev = row.previousElementSibling;
-    if (prev) parent.insertBefore(row, prev);
-  } else if (direction === "down") {
-    const next = row.nextElementSibling;
-    if (next) parent.insertBefore(next, row);
-  }
-}
-
-function bindIdentifyFieldEditors(root) {
-  if (!root) return;
-  root.querySelectorAll(".visor-admin-idf-check").forEach((cb) => {
-    cb.addEventListener("change", () => {
-      const row = cb.closest(".visor-admin-identify-row");
-      const labelInput = row?.querySelector(".visor-admin-idf-label");
-      if (!labelInput) return;
-      labelInput.disabled = !cb.checked;
-      if (cb.checked && !labelInput.value.trim()) {
-        labelInput.value = defaultFieldLabel(cb.value);
-      }
-    });
-  });
-  root.querySelectorAll("[data-idf-move]").forEach((btn) => {
-    btn.addEventListener("click", (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      const row = btn.closest(".visor-admin-identify-row");
-      moveIdentifyRow(row, btn.getAttribute("data-idf-move"));
-    });
-  });
-  let dragRow = null;
-  root.querySelectorAll(".visor-admin-idf-grip").forEach((grip) => {
-    grip.addEventListener("dragstart", (ev) => {
-      const row = grip.closest(".visor-admin-identify-row");
-      if (!row) {
-        ev.preventDefault();
-        return;
-      }
-      dragRow = row;
-      row.classList.add("is-dragging");
-      try {
-        ev.dataTransfer.effectAllowed = "move";
-        ev.dataTransfer.setData("text/plain", row.querySelector(".visor-admin-idf-check")?.value || "");
-      } catch {
-        /* ignore */
-      }
-    });
-    grip.addEventListener("dragend", () => {
-      const row = grip.closest(".visor-admin-identify-row");
-      row?.classList.remove("is-dragging");
-      root.querySelectorAll(".visor-admin-identify-row.is-drag-over").forEach((el) => {
-        el.classList.remove("is-drag-over");
-      });
-      dragRow = null;
-    });
-  });
-  root.querySelectorAll(".visor-admin-identify-row").forEach((row) => {
-    row.addEventListener("dragover", (ev) => {
-      if (!dragRow || dragRow === row) return;
-      ev.preventDefault();
-      row.classList.add("is-drag-over");
-      try {
-        ev.dataTransfer.dropEffect = "move";
-      } catch {
-        /* ignore */
-      }
-    });
-    row.addEventListener("dragleave", () => {
-      row.classList.remove("is-drag-over");
-    });
-    row.addEventListener("drop", (ev) => {
-      ev.preventDefault();
-      row.classList.remove("is-drag-over");
-      if (!dragRow || dragRow === row) return;
-      const parent = row.parentElement;
-      if (!parent || dragRow.parentElement !== parent) return;
-      const rows = [...parent.querySelectorAll(".visor-admin-identify-row")];
-      const from = rows.indexOf(dragRow);
-      const to = rows.indexOf(row);
-      if (from < 0 || to < 0) return;
-      if (from < to) parent.insertBefore(dragRow, row.nextElementSibling);
-      else parent.insertBefore(dragRow, row);
-    });
-  });
-}
-
+/* Fase 4.1: identify helpers viven en visorCatalogAdminIdentifyFields.js (imports arriba). */
 
 function readIdentifyFieldsFromDom(rootId = "visorAdminIdentifyCols") {
-  const root = document.getElementById(rootId);
-  if (!root) {
-    if (rootId === "visorAdminHoverCols") {
-      return normalizeIdentifyFieldObjects(wizard.hover_fields);
-    }
-    return normalizeIdentifyFieldObjects(wizard.identify_fields);
-  }
-  const out = [];
-  root.querySelectorAll(".visor-admin-identify-row").forEach((row) => {
-    const cb = row.querySelector(".visor-admin-idf-check");
-    if (!cb?.checked) return;
-    const col = cb.value;
-    const labelInput = row.querySelector(".visor-admin-idf-label");
-    const label = labelInput?.value?.trim() || defaultFieldLabel(col);
-    out.push({ column: col, label });
-  });
-  return out;
+  const fallback =
+    rootId === "visorAdminHoverCols" ? wizard.hover_fields : wizard.identify_fields;
+  return readIdentifyFieldsFromDomCore(rootId, fallback);
 }
 
 /**
@@ -4623,30 +4358,40 @@ async function renderManageLayersTab(host) {
     return;
   }
   const layers = data?.layers || [];
-  if (!layers.length) {
+    if (!layers.length) {
     host.innerHTML =
-      '<p class="small text-muted mb-0">No hay capas publicadas desde Visor Studio. Use el botón <strong>+</strong> para agregar una.</p>';
+      '<p class="small text-muted mb-0">No hay capas en el catálogo.</p>';
     return;
   }
   host.innerHTML = `
-    <p class="small text-muted mb-2">Capas publicadas con Visor Studio.
-      <strong>Despublicar</strong> quita del visor y conserva la tabla;
-      <strong>Borrar tabla</strong> despublica y elimina la tabla de la base de datos.</p>
+    <p class="small text-muted mb-2">
+      <span class="badge text-bg-info">Kit Guerrero</span> kit de la entidad: se edita y se despublica; la tabla no se borra.
+      <span class="badge text-bg-success">Studio</span> publicadas aquí: se pueden borrar.
+      <strong>Despublicar</strong> quita del visor y conserva los datos.
+    </p>
     <ul class="list-group list-group-flush visor-admin-manage-list">
       ${layers
         .map(
-          (layer) => `
+          (layer) => {
+            const badge = layer.badge
+              ? `<span class="badge ${layer.seed ? "text-bg-info" : "text-bg-success"} ms-1">${escapeHtml(layer.badge)}</span>`
+              : "";
+            const dropBtn = layer.can_drop
+              ? `<button type="button" class="btn btn-sm btn-outline-danger" data-drop="${escapeHtml(layer.layer_id)}" data-label="${escapeHtml(layer.label)}" data-table="${escapeHtml(layer.table || "")}">Borrar tabla</button>`
+              : "";
+            return `
         <li class="list-group-item px-0 py-2 d-flex align-items-start justify-content-between gap-2">
           <div class="min-w-0">
-            <div class="fw-semibold small">${escapeHtml(layer.label)}</div>
+            <div class="fw-semibold small">${escapeHtml(layer.label)}${badge}</div>
             <div class="text-muted small"><code>${escapeHtml(layer.layer_id)}</code> · ${escapeHtml(layer.table || "")}</div>
           </div>
           <div class="d-flex gap-1 flex-shrink-0 flex-wrap justify-content-end">
             <button type="button" class="btn btn-sm btn-outline-primary" data-edit="${escapeHtml(layer.layer_id)}">Editar</button>
             <button type="button" class="btn btn-sm btn-outline-warning" data-unpublish="${escapeHtml(layer.layer_id)}" data-label="${escapeHtml(layer.label)}" data-table="${escapeHtml(layer.table || "")}">Despublicar</button>
-            <button type="button" class="btn btn-sm btn-outline-danger" data-drop="${escapeHtml(layer.layer_id)}" data-label="${escapeHtml(layer.label)}" data-table="${escapeHtml(layer.table || "")}">Borrar tabla</button>
+            ${dropBtn}
           </div>
-        </li>`,
+        </li>`;
+          },
         )
         .join("")}
     </ul>`;

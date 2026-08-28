@@ -1,11 +1,16 @@
 /**
  * Orquestador principal del Atlas Gro (SPA en index.html).
+ * GroSIG — front Atlas
+ * Copyright (c) 2025–2026 Víctor Alfonso Jorge Navarro
+ * Autoría: Víctor Alfonso Jorge Navarro — para INEGI Coordinación Estatal Guerrero.
+ * Ver /NOTICE y /LICENSE en la raíz del stack.
+ *
  * Enlaza menú lateral, selección de municipio, mapa Leaflet y paneles por indicador.
  *
  * Dependencias principales: map.js, api.js, dashboard.js, indicatorShell.js,
  * geoContext.js, homeView.js, visorLayers.js, invViv.js y theme.js.
  */
-import { createMenu, collapseAllMenuSections, clearActiveMenuItem } from "./menu.js";
+import { createMenu, collapseAllMenuSections, clearActiveMenuItem, activateMenuItemById } from "./menu.js";
 import { purgeOrphanModalBackdrops } from "./atlasModalCleanup.js";
 import {
   setMapView,
@@ -27,6 +32,7 @@ import {
   restoreMapZoomControls,
   bindMapResizeHandler,
   invalidateMunicipioMapFocus,
+  setHomeEntidadClickHandler,
 } from "./map.js";
 import {
   getIndicatorData,
@@ -35,7 +41,24 @@ import {
   ensureGeoContextoBulk,
   ensureExploradorBulk,
   prefetchMunicipioData,
+  invalidateExploradorCache,
 } from "./api.js";
+import {
+  loadAmigoConfig,
+  isNationalMode,
+  getDefaultEnt,
+  getActiveCveEnt,
+  setActiveCveEnt,
+  clearNationalEntityPick,
+  fetchEntidadesAmigo,
+  fetchMunicipiosAmigo,
+  getEntidadNombre,
+  rememberEntidadNombre,
+  isEntityPicked,
+  onAmigoTerritoryChange,
+} from "./amigoDeployment.js";
+import { setBrandEntity } from "./brandIdentity.js";
+import { trackEvent, trackSessionStart } from "./telemetry.js";
 import {
   attachIndicatorShellExport,
   isCatalogTabularIndicator,
@@ -43,7 +66,12 @@ import {
   setIndicatorShellLayout,
   showCatalogIndicator,
 } from "./indicatorShell.js";
-import { renderMunicipiosSelect, setMunicipioSelectValue } from "./municipios.js";
+import {
+  renderMunicipiosSelect,
+  setMunicipioSelectValue,
+  renderEntidadesSelect,
+  setEntidadSelectValue,
+} from "./municipios.js";
 import { loadAndRenderHomePanels, loadHomeContext } from "./homeView.js";
 import { attachCartographyUi } from "./cartographyClient.js";
 import { resolveVisorLayerBinding } from "./visorLayerBindings.js";
@@ -56,9 +84,13 @@ import {
   setVisorLayout,
   setInvVivLayout,
   setSitiosInteresLayout,
+  setAnaliticaLayout,
   setHomeLayout,
 } from "./dashboard.js";
 import { renderSitiosInteresView } from "./sitiosInteresView.js";
+import { renderAnaliticaCompareView } from "./analiticaCompareView.js";
+import { consumePendingAnaliticaCompareSeed } from "./analiticaCompareSeed.js";
+import { registerAnaliticaCompareNav } from "./analiticaCompareNav.js";
 import {
   renderVisorLayerPanel,
   clearVisorThematicLayers,
@@ -220,6 +252,10 @@ function isGeoContextIndicator(indicator) {
 
 function isSitiosInteresIndicator(indicator) {
   return indicator && indicator.sitiosInteres === true;
+}
+
+function isAnaliticaCompareIndicator(indicator) {
+  return indicator && indicator.analiticaCompare === true;
 }
 
 // --- Visor geográfico e inventario: panel de capas ---
@@ -506,6 +542,13 @@ async function applyMunicipioSelection(m) {
   const munSelect = document.getElementById("selectMunicipio");
   setMunicipioSelectValue(munSelect, m);
 
+  if (m?.cve_mun) {
+    trackEvent("MUNICIPIO_SELECCIONADO", {
+      cve_ent: m.cve_ent || getActiveCveEnt(),
+      cve_mun: m.cve_mun,
+    });
+  }
+
   if (state.viewMode === "home") {
     setHomeMunicipioHighlight(m && m.cve_mun ? m.cve_mun : null);
     void loadAndRenderHomePanels(m, { optimistic: true });
@@ -655,9 +698,17 @@ async function onIndicatorSelected(indicator) {
   if (isVisorIndicator(indicator)) {
     purgeOrphanModalBackdrops();
     setIndicatorShellLayout(false);
+    setAnaliticaLayout(false);
+    setSitiosInteresLayout(false);
     setVisorLayout(true);
     setMarcoWmsVisible(true);
     updateVisorMunicipioLabel();
+    trackEvent("VISOR_ABIERTO", {
+      cve_ent: getActiveCveEnt(),
+      cve_mun: state.selectedMunicipio?.cve_mun,
+      resourceType: "INDICADOR",
+      resourceKey: indicator.id || "geo_visor",
+    });
     const layerHost = document.getElementById("visorLayerList");
     if (layerHost) {
       void renderVisorLayerPanel(layerHost, visorLayerPanelOptions());
@@ -730,6 +781,7 @@ async function onIndicatorSelected(indicator) {
     setGeoLayout(false);
     setInvVivLayout(false);
     setSitiosInteresLayout(false);
+    setAnaliticaLayout(false);
     setMarcoWmsVisible(false);
     setLocsAtlasLayerActive(false, null);
     setIndicatorShellLayout(true);
@@ -753,9 +805,34 @@ async function onIndicatorSelected(indicator) {
 
   if (isSitiosInteresIndicator(indicator)) {
     setIndicatorShellLayout(false);
+    setAnaliticaLayout(false);
     setSitiosInteresLayout(true);
     setLocsAtlasLayerActive(false, null);
     renderSitiosInteresView(document.getElementById("sitiosInteresRoot"));
+    setActivePill(indicator.title);
+    setTableMeta("—");
+    return;
+  }
+
+  if (isAnaliticaCompareIndicator(indicator)) {
+    setIndicatorShellLayout(false);
+    setSitiosInteresLayout(false);
+    setVisorLayout(false);
+    setGeoLayout(false);
+    setInvVivLayout(false);
+    setAnaliticaLayout(true);
+    setLocsAtlasLayerActive(false, null);
+    const pending = consumePendingAnaliticaCompareSeed();
+    void renderAnaliticaCompareView(document.getElementById("analiticaRoot"), {
+      cve_ent: pending?.cve_ent || state.selectedMunicipio?.cve_ent || getActiveCveEnt(),
+      cve_mun: pending?.cve_mun || state.selectedMunicipio?.cve_mun || "",
+      nomgeo: pending?.nomgeo || state.selectedMunicipio?.nomgeo || "",
+      cve_ent_b: pending?.cve_ent_b,
+      cve_mun_b: pending?.cve_mun_b,
+      nomgeo_b: pending?.nomgeo_b,
+      indicatorId: pending?.indicatorId || "socio_poblacion",
+      autoCompare: pending?.autoCompare,
+    });
     setActivePill(indicator.title);
     setTableMeta("—");
     return;
@@ -765,6 +842,7 @@ async function onIndicatorSelected(indicator) {
   setVisorLayout(false);
   setGeoLayout(false);
   setSitiosInteresLayout(false);
+  setAnaliticaLayout(false);
   setLocsAtlasLayerActive(false, null);
 
   // 1) Mapa: si hay municipio seleccionado, el foco lo lleva setMunicipioMapFocus (no recentrar al indicador).
@@ -865,23 +943,114 @@ async function bootstrap() {
   });
   setupSidebarToggle();
   attachIndicatorShellExport();
+  registerAnaliticaCompareNav({ activateMenuItem: activateMenuItemById });
+
+  await loadAmigoConfig();
+
+  function syncBrandFromTerritory() {
+    const countryView = isNationalMode() && !isEntityPicked();
+    const cve = getActiveCveEnt();
+    setBrandEntity({
+      cve_ent: cve,
+      nom_ent: countryView ? "" : getEntidadNombre(cve),
+      nationalCountryView: countryView,
+    });
+  }
+
+  onAmigoTerritoryChange(() => {
+    syncBrandFromTerritory();
+  });
 
   const munSelect = document.getElementById("selectMunicipio");
   const munStatus = document.getElementById("municipiosStatus");
-  if (munSelect && munStatus) {
+  const entSelect = document.getElementById("selectEntidad");
+  const entWrap = document.getElementById("entidadSelectWrap");
+
+  async function reloadMunicipiosForEnt(cve_ent) {
+    if (!munSelect || !munStatus) return;
     munStatus.textContent = "Cargando municipios…";
+    const munRows = await fetchMunicipiosAmigo(cve_ent).catch(async () => {
+      if (String(cve_ent) === String(getDefaultEnt())) {
+        return fetchMunicipios();
+      }
+      throw new Error("municipios AMIGO");
+    });
+    state.municipiosRows = munRows;
+    renderMunicipiosSelect(munSelect, munStatus, munRows, {
+      onSelect: async (m) => {
+        try {
+          await applyMunicipioSelection(m);
+        } catch (err) {
+          console.warn("[municipio] selection:", err);
+        }
+      },
+    });
+  }
+
+  async function applyEntidadSelection(ent) {
+    if (!ent?.cve_ent) {
+      clearNationalEntityPick();
+      invalidateExploradorCache();
+      if (munSelect) {
+        munSelect.innerHTML = "";
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "— Primero elige entidad —";
+        munSelect.append(opt);
+        munSelect.disabled = true;
+      }
+      await applyMunicipioSelection(null);
+      await goToHomeView();
+      return;
+    }
+    setActiveCveEnt(ent.cve_ent, { picked: true });
+    if (ent.nomgeo) rememberEntidadNombre(ent.cve_ent, ent.nomgeo);
+    trackEvent("ENTIDAD_SELECCIONADA", { cve_ent: ent.cve_ent });
+    invalidateExploradorCache();
+    setEntidadSelectValue(entSelect, ent.cve_ent);
+    await reloadMunicipiosForEnt(ent.cve_ent);
+    await applyMunicipioSelection(null);
+    void ensureExploradorBulk({ cve_ent: ent.cve_ent }).catch(() => {});
+    await goToHomeView();
+  }
+
+  if (munSelect && munStatus) {
+    munStatus.textContent = "Cargando territorio…";
     try {
-      const munRows = await fetchMunicipios();
-      state.municipiosRows = munRows;
-      renderMunicipiosSelect(munSelect, munStatus, munRows, {
-        onSelect: async (m) => {
-          try {
-            await applyMunicipioSelection(m);
-          } catch (err) {
-            console.warn("[municipio] selection:", err);
-          }
-        },
-      });
+      if (isNationalMode() && entWrap && entSelect) {
+        entWrap.classList.remove("d-none");
+        const entRows = await fetchEntidadesAmigo();
+        syncBrandFromTerritory();
+        renderEntidadesSelect(entSelect, munStatus, entRows, {
+          selected: "",
+          onSelect: async (e) => {
+            try {
+              await applyEntidadSelection(e);
+            } catch (err) {
+              console.warn("[entidad] selection:", err);
+            }
+          },
+        });
+        munSelect.innerHTML = "";
+        const opt = document.createElement("option");
+        opt.value = "";
+        opt.textContent = "— Primero elige entidad —";
+        munSelect.append(opt);
+        munSelect.disabled = true;
+        munStatus.textContent = "Selecciona una entidad para ver municipios";
+      } else {
+        entWrap?.classList.add("d-none");
+        // Estatal: cargar nombres CORE para branding de default_ent
+        try {
+          await fetchEntidadesAmigo();
+        } catch (e) {
+          console.warn("[amigo] entidades para branding:", e);
+        }
+        setActiveCveEnt(getDefaultEnt(), { picked: true });
+        syncBrandFromTerritory();
+        await reloadMunicipiosForEnt(getActiveCveEnt());
+      }
+
       purgeOrphanModalBackdrops();
       void ensureGeoContextoBulk().catch(() => {});
       void ensureExploradorBulk().catch(() => {});
@@ -889,8 +1058,24 @@ async function bootstrap() {
       setHomeMunicipioClickHandler(async (m) => {
         await applyMunicipioSelection(m);
       });
+      setHomeEntidadClickHandler(async (ent) => {
+        await applyEntidadSelection(ent);
+      });
 
       document.getElementById("btnInicio")?.addEventListener("click", () => {
+        if (isNationalMode()) {
+          clearNationalEntityPick();
+          setEntidadSelectValue(entSelect, "");
+          if (munSelect) {
+            munSelect.innerHTML = "";
+            const opt = document.createElement("option");
+            opt.value = "";
+            opt.textContent = "— Primero elige entidad —";
+            munSelect.append(opt);
+            munSelect.disabled = true;
+          }
+          void applyMunicipioSelection(null);
+        }
         void goToHomeView();
       });
 
@@ -909,12 +1094,13 @@ async function bootstrap() {
       munSelect.append(opt);
       munSelect.disabled = true;
       munStatus.textContent =
-        "No se pudo cargar desde PostgreSQL. Revisa el API /municipios y la tabla atlas.c_mun.";
+        "No se pudo cargar territorio. Revisa /api/amigo/config y geo.c_mun en CORE.";
       console.warn(e);
     }
   }
 
   // Menú: catálogo data-driven (Fase 1.5) con fallback estático en api.js
+  trackSessionStart();
   const model = await getMenuModelAsync();
   const menuRoot = document.getElementById("menuRoot");
 

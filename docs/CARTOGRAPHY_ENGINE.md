@@ -176,6 +176,9 @@ Config: `assets/branding.json` (`advertencia`, `fecha_actualizacion`, …). Fall
 
 ### `POST /api/cartography/generate`
 
+**Política de auth (1.0 / Fase 0 refactor):** el endpoint permanece **público** (sin JWT) a propósito: el panel Cartografía del Visor lo llama desde el portal. Mitigación: **rate-limit por IP** (`CARTOGRAPHY_GENERATE_RATE_LIMIT`, default 30 / `CARTOGRAPHY_GENERATE_RATE_WINDOW_SEC`, default 60 s) → HTTP 429. En despliegues expuestos a Internet, preferir además restricción de red / reverse-proxy. No se exige login admin para generar PDF/SVG.
+
+
 Cuerpo típico:
 
 ```json

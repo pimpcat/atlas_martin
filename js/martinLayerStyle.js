@@ -601,10 +601,14 @@ export const RNC_LINE_COLOR = [
   "rgb(140, 95, 55)",
 ];
 export const MARTIN_TABLES = {
-  entidad: "c_ent",
+  /** Marco territorial desde AMIGO-00-CORE (Martin amigo_c_*). */
+  entidad: "amigo_c_ent",
   entidadDisp: "v_c_ent_disp",
-  municipios: "c_mun",
+  municipios: "amigo_c_mun",
   municipiosDisp: "v_c_mun_disp",
+  /** Alias explícitos (mismo ID publicado). */
+  amigoEntidad: "amigo_c_ent",
+  amigoMunicipios: "amigo_c_mun",
   locsAtlas: "c_l",
   locsPunto: "c_loc_punto",
   colonias: "c_col_ase",

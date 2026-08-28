@@ -5,6 +5,13 @@
 import { createExportController } from "./chartExport.js";
 import { runIndicatorView } from "./indicatorEngine.js";
 import { getIndicatorById, loadIndicatorsCatalog } from "./indicatorCatalog.js";
+import { loadCompareEnabledIds } from "./compareIndicators.js";
+import {
+  attachIndicatorCompareUi,
+  isCompareEnabled,
+  openIndicatorCompare,
+} from "./comparisonView.js";
+import { openCompareInAnalitica } from "./analiticaCompareNav.js";
 
 const SHELL_IDS_KEEP = new Set([
   "dashboardHome",
@@ -13,6 +20,7 @@ const SHELL_IDS_KEEP = new Set([
   "dashboardVisor",
   "dashboardInvViv",
   "dashboardSitiosInteres",
+  "dashboardAnalitica",
   "dashboardIndicator",
 ]);
 
@@ -20,6 +28,10 @@ const SHELL_IDS_KEEP = new Set([
 let _currentIndicatorId = null;
 /** @type {object|null} */
 let _exportController = null;
+/** @type {{ cve_mun?: string, nomgeo?: string, cve_ent?: string }|null} */
+let _lastSelected = null;
+/** @type {boolean} */
+let _compareUiBound = false;
 
 function shellEls() {
   return {
@@ -215,7 +227,7 @@ export function setIndicatorShellLayout(active) {
   });
 
   // Especiales siempre ocultos al entrar a un indicador tabular
-  for (const id of ["dashboardNormal", "dashboardGeo", "dashboardVisor", "dashboardInvViv", "dashboardSitiosInteres", "dashboardHome"]) {
+  for (const id of ["dashboardNormal", "dashboardGeo", "dashboardVisor", "dashboardInvViv", "dashboardSitiosInteres", "dashboardAnalitica", "dashboardHome"]) {
     const el = document.getElementById(id);
     if (!el) continue;
     if (active) {
@@ -233,7 +245,8 @@ export function setIndicatorShellLayout(active) {
       "geo-mode",
       "visor-mode",
       "invviv-mode",
-      "sitios-interes-mode"
+      "sitios-interes-mode",
+      "analitica-mode"
     );
   } else {
     closeMetadataPanel();
@@ -279,8 +292,22 @@ function ensureExportController() {
  * @param {object} menuItem — ítem del menú (id = indicator.id)
  * @param {{ cve_mun?: string, nomgeo?: string }|null} selected
  */
+function syncCompareButton() {
+  const btn = document.getElementById("btnIndicatorCompare");
+  if (!btn) return;
+  const on = isCompareEnabled(_currentIndicatorId);
+  btn.classList.toggle("d-none", !on);
+  btn.disabled = !on;
+  if (on) {
+    btn.title = "Abrir comparador en Analítica (Shift+clic: modal hasta 5 municipios)";
+  } else {
+    btn.removeAttribute("title");
+  }
+}
+
 export async function showCatalogIndicator(menuItem, selected) {
   await loadIndicatorsCatalog();
+  await loadCompareEnabledIds();
   const ind = getIndicatorById(menuItem.id);
   const { title, meta, viz } = shellEls();
   if (!ind || !viz) {
@@ -288,9 +315,11 @@ export async function showCatalogIndicator(menuItem, selected) {
   }
 
   _currentIndicatorId = ind.id;
+  _lastSelected = selected || null;
   bindMetadataUi();
   closeMetadataPanel();
   renderMetadataPanel(ind);
+  syncCompareButton();
   if (title) title.textContent = ind.label || menuItem.title || ind.id;
   if (meta) {
     meta.textContent = selected?.nomgeo
@@ -309,6 +338,22 @@ export async function showCatalogIndicator(menuItem, selected) {
 export function attachIndicatorShellExport() {
   ensureExportController().attach();
   ensureExportController().setData(null, null);
+  if (!_compareUiBound) {
+    _compareUiBound = true;
+    attachIndicatorCompareUi();
+    document.getElementById("btnIndicatorCompare")?.addEventListener("click", (ev) => {
+      if (ev.shiftKey) {
+        void openIndicatorCompare(_currentIndicatorId, _lastSelected);
+        return;
+      }
+      void openCompareInAnalitica({
+        indicatorId: _currentIndicatorId,
+        cve_ent: _lastSelected?.cve_ent,
+        cve_mun: _lastSelected?.cve_mun,
+        nomgeo: _lastSelected?.nomgeo || _lastSelected?.nom_mun,
+      });
+    });
+  }
 }
 
 /** Evita respuestas fuera de orden al cambiar de municipio rápido. */
@@ -323,6 +368,9 @@ export async function refreshCatalogIndicator(selected) {
   const ind = getIndicatorById(_currentIndicatorId);
   const { meta, viz } = shellEls();
   if (!ind || !viz) return null;
+
+  _lastSelected = selected || null;
+  syncCompareButton();
 
   const seq = ++_refreshSeq;
   if (meta) {

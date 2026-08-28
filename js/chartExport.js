@@ -133,6 +133,16 @@ export function createExportController(opts) {
           url.searchParams.set("nom_mun", String(lastSelected.nomgeo));
         }
       }
+      if (lastSelected?.cve_ent) {
+        url.searchParams.set("cve_ent", String(lastSelected.cve_ent));
+      } else {
+        try {
+          const { getActiveCveEnt } = await import("./amigoDeployment.js");
+          url.searchParams.set("cve_ent", getActiveCveEnt());
+        } catch {
+          /* ignore */
+        }
+      }
       const res = await fetch(url.toString(), { cache: "no-store" });
       if (!res.ok) {
         let msg = `HTTP ${res.status}`;

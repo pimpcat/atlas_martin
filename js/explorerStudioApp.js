@@ -1,16 +1,13 @@
 /**
  * Explorer Studio — estilos mínimos del Explorador Municipal.
- * Reutiliza sesión JWT de Visor Studio.
+ * Reutiliza sesión JWT de Visor Studio (studioShell).
  */
+import { adminFetch } from "./visorAdminAuth.js";
 import {
-  adminFetch,
-  clearAdminSession,
-  getAdminUser,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
-} from "./visorAdminAuth.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+  createStudioShell,
+  setStudioStatus,
+  studioIdsFromPrefix,
+} from "./studioShell.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -25,27 +22,8 @@ const FALLBACK_DEFAULTS = {
 let _catalog = null;
 let _defaults = FALLBACK_DEFAULTS;
 
-function showErr(el, msg) {
-  if (!el) return;
-  if (!msg) {
-    el.classList.add("d-none");
-    el.textContent = "";
-    return;
-  }
-  el.textContent = msg;
-  el.classList.remove("d-none");
-}
-
 function setMsg(msg, ok = true) {
-  const el = $("explorerStudioMsg");
-  if (!el) return;
-  el.textContent = msg || "";
-  el.className = `small ${ok ? "text-success" : "text-danger"}`;
-}
-
-function showLogin(show) {
-  $("explorerStudioLoginView")?.classList.toggle("d-none", !show);
-  $("explorerStudioDashboard")?.classList.toggle("d-none", show);
+  setStudioStatus("explorerStudioMsg", msg, ok);
 }
 
 function fillForm(cat) {
@@ -149,37 +127,7 @@ function restoreDefaults() {
   setMsg("Defaults cargados en el formulario (aún no publicados).", true);
 }
 
-async function bootDashboard() {
-  const user = getAdminUser();
-  if ($("explorerStudioWelcome")) {
-    $("explorerStudioWelcome").textContent = user?.username
-      ? `Sesión: ${user.username}`
-      : "Sesión admin activa";
-  }
-  mountStudioNav($("explorerStudioNav"), { active: "explorer" });
-  showLogin(false);
-  await loadCatalog();
-}
-
 async function init() {
-  $("explorerStudioLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("explorerStudioError"), "");
-    try {
-      await loginAdmin(
-        $("explorerStudioUser").value.trim(),
-        $("explorerStudioPass").value
-      );
-      await bootDashboard();
-    } catch (err) {
-      showErr($("explorerStudioError"), err.message || String(err));
-    }
-  });
-
-  $("explorerStudioLogoutBtn")?.addEventListener("click", () => {
-    clearAdminSession();
-    showLogin(true);
-  });
   $("explorerStudioForm")?.addEventListener("submit", (ev) => void publish(ev));
   $("explorerStudioResetBtn")?.addEventListener("click", restoreDefaults);
   ["fEstadoColor", "fEstadoWidth", "fMunColor", "fMunWidth", "fSelFill"].forEach(
@@ -188,19 +136,17 @@ async function init() {
     }
   );
 
-  if (isVisorAdminLoggedIn()) {
-    try {
-      await verifyAdminSession();
-      await bootDashboard();
-    } catch {
-      clearAdminSession();
-      showLogin(true);
+  const shell = createStudioShell(
+    studioIdsFromPrefix("explorerStudio", {
+      loginError: "explorerStudioError",
+    }),
+    {
+      activeNav: "explorer",
+      onEnterDashboard: () => loadCatalog(),
+      onDashboardError: (err) => setMsg(err?.message || String(err), false),
     }
-  } else {
-    const footer = $("explorerStudioLoginFooter");
-    if (footer) footer.innerHTML = studioLoginFooterHtml("explorer");
-    showLogin(true);
-  }
+  );
+  await shell.boot();
 }
 
 void init();

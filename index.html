@@ -1,6 +1,6 @@
 <!doctype html>
 <!--
-  Atlas Municipal de Indicadores de Guerrero (SPA).
+  Atlas Municipal de Indicadores (SPA). Título dinámico por entidad (brandIdentity.js).
 
   Estructura:
     - Cabecera INEGI / CEIEG / SNIEG
@@ -26,7 +26,7 @@
   </script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Atlas Municipal de Indicadores de Guerrero</title>
+  <title>Atlas Municipal de Indicadores</title>
 
   <link rel="icon" href="./icon.png" type="image/png" />
   <link rel="shortcut icon" href="./icon.png" type="image/png" />
@@ -83,14 +83,16 @@
         />
         <div class="header-ceieg d-none d-sm-block">
           <div>CEIEG</div>
-          <div>GUERRERO</div>
+          <div id="appCeiegEnt">—</div>
         </div>
       </div>
 
       <div class="header-title-block order-2 order-lg-2 flex-grow-1">
         <div class="app-title">
-          <span class="app-title__main">Atlas Municipal de Indicadores de Guerrero</span>
-          <span class="app-title__subtitle">Plataforma interactiva para consulta territorial y análisis municipal</span>
+          <span id="appTitleMain" class="app-title__main">Atlas Municipal de Indicadores</span>
+          <span id="appTitleSubtitle" class="app-title__subtitle"
+            >Plataforma interactiva para consulta territorial y análisis municipal</span
+          >
         </div>
       </div>
 
@@ -111,7 +113,7 @@
       <div class="row g-0 app-shell__row app-shell__row--home flex-grow-1 min-h-0">
     <aside id="sidebar" class="app-sidebar border-end col-12 col-md-3 col-lg-2 col-xl-2" aria-label="Menú de temáticas">
       <div class="sidebar-inner">
-        <section class="sidebar-municipios border-bottom" aria-label="Municipios de Guerrero">
+        <section class="sidebar-municipios border-bottom" data-brand-ent="sidebarMuns" aria-label="Municipios">
           <div class="menu-inicio-wrap px-3 pt-3 pb-2">
             <section class="menu-section menu-section--inicio" aria-label="Explorador municipal">
               <button
@@ -136,11 +138,24 @@
             </section>
           </div>
           <div class="municipio-select-wrap px-3 pb-3">
-            <label class="form-label small text-muted mb-1" for="selectMunicipio">Selecciona un municipio</label>
+            <div id="entidadSelectWrap" class="mb-2 d-none">
+              <label class="form-label small text-muted mb-1" for="selectEntidad">Selecciona una entidad</label>
+              <select
+                id="selectEntidad"
+                class="form-select form-select-sm municipio-select"
+                aria-label="Seleccionar entidad federativa"
+                disabled
+              >
+                <option value="">Cargando…</option>
+              </select>
+            </div>
+            <label class="form-label small text-muted mb-1" for="selectMunicipio" id="labelMunicipio"
+              >Selecciona un municipio</label
+            >
             <select
               id="selectMunicipio"
               class="form-select form-select-sm municipio-select"
-              aria-label="Seleccionar municipio de Guerrero"
+              aria-label="Seleccionar municipio"
               disabled
             >
               <option value="">Cargando…</option>
@@ -177,10 +192,16 @@
         <!-- Inicio: mapa + panel municipio arriba; KPI 1–5 en fila inferior (ancho completo) -->
         <div id="dashboardHome" class="dashboard-home h-100" aria-hidden="false">
           <div class="home-layout-grid h-100">
-            <section class="home-map-zone" aria-label="Mapa de Guerrero">
+            <section class="home-map-zone" data-brand-ent="mapZone" aria-label="Mapa">
               <div id="mapa-wrapper" class="home-map-frame-wrap">
                 <div id="mapMountHome" class="h-100 w-100">
-                  <div id="mapFrame" class="map-frame" role="application" aria-label="Mapa de municipios de Guerrero"></div>
+                  <div
+                    id="mapFrame"
+                    class="map-frame"
+                    role="application"
+                    data-brand-ent="mapFrame"
+                    aria-label="Mapa territorial"
+                  ></div>
                 </div>
               </div>
             </section>
@@ -397,7 +418,8 @@
                         id="geoMacroMapMount"
                         class="geo-macro-map-mount"
                         role="img"
-                        aria-label="Mapa del estado de Guerrero con el municipio seleccionado resaltado"
+                        data-brand-ent="macroMap"
+                        aria-label="Mapa del estado con el municipio seleccionado resaltado"
                       ></div>
                     </div>
                   </section>
@@ -447,6 +469,16 @@
                 </button>
                 <button
                   type="button"
+                  id="btnIndicatorCompare"
+                  class="btn btn-sm btn-outline-light poblacion-action-btn d-none"
+                  title="Abrir comparador en Analítica"
+                  aria-label="Comparar municipios en Analítica"
+                >
+                  <span class="poblacion-action-ico" aria-hidden="true">⇄</span>
+                  <span class="poblacion-action-label">Comparar</span>
+                </button>
+                <button
+                  type="button"
                   id="btnIndicatorMetadata"
                   class="btn btn-sm indicator-meta-btn"
                   title="Ver metadatos del indicador"
@@ -481,6 +513,50 @@
                 <div class="indicator-meta-panel-body" id="indicatorMetadataBody"></div>
               </aside>
             </div>
+          </section>
+        </div>
+
+        <!-- Modal Comparador municipal -->
+        <div id="indicatorCompareBackdrop" class="indicator-compare-backdrop d-none" aria-hidden="true"></div>
+        <div
+          id="indicatorCompareModal"
+          class="indicator-compare-modal card shadow d-none"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="indicatorCompareTitle"
+          aria-hidden="true"
+        >
+          <div class="card-header d-flex align-items-center justify-content-between gap-2">
+            <h2 class="h6 mb-0" id="indicatorCompareTitle">Comparación municipal</h2>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCompareClose" aria-label="Cerrar">×</button>
+          </div>
+          <div class="card-body">
+            <p class="small text-muted mb-2">
+              Municipio A (referencia): <strong id="indicatorCompareRef">—</strong>
+            </p>
+            <div id="indicatorCompareList"></div>
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <button type="button" class="btn btn-sm btn-outline-primary" id="btnCompareAddMun">+ Municipio</button>
+              <button type="button" class="btn btn-sm btn-primary" id="btnCompareRun">Comparar</button>
+              <button type="button" class="btn btn-sm btn-outline-success d-none" id="btnCompareExportCsv">CSV</button>
+              <button type="button" class="btn btn-sm btn-outline-success d-none" id="btnCompareExportXlsx">Excel</button>
+            </div>
+            <div id="indicatorCompareError" class="small text-danger d-none mb-2"></div>
+            <div id="indicatorCompareResult"></div>
+          </div>
+        </div>
+
+        <!-- Analítica: Comparador municipal -->
+        <div id="dashboardAnalitica" class="dashboard-analitica d-none" aria-hidden="true">
+          <section class="card shadow-sm analitica-card mb-0">
+            <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+              <img src="./assets/icons/menu/analitica.svg" alt="" width="20" height="20" class="analitica-header-icon" />
+              <div>
+                <div class="fw-semibold" id="analiticaTitle">Comparador municipal</div>
+                <div class="small text-muted" id="analiticaMeta">Compare municipios en los indicadores disponibles</div>
+              </div>
+            </div>
+            <div class="card-body analitica-body atlas-scroll" id="analiticaRoot" aria-live="polite"></div>
           </section>
         </div>
 
@@ -582,8 +658,8 @@
     </div>
   </div>
 
-  <footer class="app-footer--home border-top">
-    INEGI - CEIEG Guerrero. Todos los derechos reservados.
+  <footer id="appFooterBrand" class="app-footer--home border-top">
+    INEGI - SNIEG. Todos los derechos reservados.
   </footer>
 
   <!-- Chart.js (local) -->

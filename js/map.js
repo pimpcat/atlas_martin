@@ -73,6 +73,15 @@ import {
   getTurf,
 } from "./mapGeo.js";
 import {
+  getActiveCveEnt,
+  isEntityPicked,
+  isNationalMode,
+  onAmigoTerritoryChange,
+  fetchExplorerHomeBounds,
+  GRO_FALLBACK_BOUNDS,
+  MX_FALLBACK_BOUNDS,
+} from "./amigoDeployment.js";
+import {
   bindColoniasLabelsSync,
   clearColoniasLabels,
   coloniasLabelLayerIdForOverlay,
@@ -918,11 +927,9 @@ export function getActiveMapBase() {
   return _activeBase;
 }
 
-/** Respaldo WGS84 (Guerrero) si Martin aún no devolvió features. */
-const MXSIG_BOUNDS = [
-  [-102.18435117971923, 16.315952579781328],
-  [-98.00727640026655, 18.88784678039839],
-];
+/** Respaldo WGS84 (Guerrero / México) si Martin o API aún no respondieron. */
+const MXSIG_BOUNDS = GRO_FALLBACK_BOUNDS;
+const MX_NATIONAL_BOUNDS = MX_FALLBACK_BOUNDS;
 
 const HOME_MAP_FIT_PADDING = { top: 36, bottom: 36, left: 36, right: 36 };
 let _baseLayerCtrl = null;
@@ -1187,12 +1194,33 @@ function pad3(cve) {
   return n.length >= 3 ? n.slice(-3) : ("000" + n).slice(-3);
 }
 
-/** Expresión MapLibre: feature del municipio activo (cve_mun, cve_ent+cve_mun, cvegeo). */
+function pad2(cve) {
+  const n = String(cve ?? "").replace(/\D/g, "");
+  return n.length >= 2 ? n.slice(-2) : ("00" + n).slice(-2);
+}
+
+function activeEntPad() {
+  return pad2(getActiveCveEnt() || "12");
+}
+
+/** Filtro MapLibre: features de la entidad activa (capa nacional amigo_c_*). */
+function entFilterExpr(cve_ent) {
+  const e = pad2(cve_ent || activeEntPad());
+  const entStr = ["to-string", ["coalesce", ["get", "cve_ent"], ["get", "CVE_ENT"], ""]];
+  return [
+    "any",
+    ["==", entStr, e],
+    ["==", entStr, String(parseInt(e, 10))],
+  ];
+}
+
+/** Expresión MapLibre: feature del municipio activo (cve_mun + cvegeo con entidad activa). */
 function munFilterExpr(cve) {
   const p = pad3(cve || "001");
   const n = String(parseInt(p, 10));
   const nNum = parseInt(p, 10);
-  const cvegeo5 = `12${p}`;
+  const ent = activeEntPad();
+  const cvegeo5 = `${ent}${p}`;
   const raw = ["coalesce", ["get", "cve_mun"], ["get", "CVE_MUN"]];
   const str = ["to-string", ["coalesce", raw, ""]];
   const munPad = [
@@ -1200,7 +1228,7 @@ function munFilterExpr(cve) {
     ["slice", "000", 0, ["max", 0, ["-", 3, ["length", str]]]],
     str,
   ];
-  const entStr = ["to-string", ["coalesce", ["get", "cve_ent"], ["get", "CVE_ENT"], "12"]];
+  const entStr = ["to-string", ["coalesce", ["get", "cve_ent"], ["get", "CVE_ENT"], ent]];
   return [
     "any",
     ["==", str, p],
@@ -1214,6 +1242,52 @@ function munFilterExpr(cve) {
 
 function munFilter(cve) {
   return munFilterExpr(cve);
+}
+
+/** Filtro de marco amigo_c_mun: entidad activa + municipio (evita choques 001 en otro estado). */
+function marcoMunFilter(cve) {
+  return ["all", entFilterExpr(activeEntPad()), munFilterExpr(cve)];
+}
+
+/** Filtro de capas municipales del marco explorador (toda la entidad o ninguna). */
+function explorerMunTerritoryFilter() {
+  if (!isEntityPicked()) return ["literal", false];
+  return entFilterExpr(activeEntPad());
+}
+
+const MARCO_MUN_LAYER_IDS = () => [
+  LAYER_IDS.munAllFill,
+  LAYER_IDS.munAllLine,
+  LAYER_IDS.munAllLineHalo,
+];
+
+function applyExplorerTerritoryFilters(map) {
+  if (!map) return;
+  const munF = explorerMunTerritoryFilter();
+  for (const id of MARCO_MUN_LAYER_IDS()) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.setFilter(id, munF);
+    } catch {
+      /* capa sin filtro */
+    }
+  }
+  // En nacional sin entidad: contorno de todo el país; con entidad / estatal: solo esa.
+  const entF =
+    isNationalMode() && !isEntityPicked() ? null : entFilterExpr(activeEntPad());
+  for (const id of [
+    LAYER_IDS.entFill,
+    LAYER_IDS.marcoEnt,
+    LAYER_IDS.marcoEntHalo,
+    LAYER_IDS.marcoEntCasing,
+  ]) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.setFilter(id, entF);
+    } catch {
+      /* noop */
+    }
+  }
 }
 
 function resolveVisorOverlayCve(explicitCve) {
@@ -1628,7 +1702,7 @@ function fitToMunicipio(map, cve, opts = {}) {
 }
 
 function setMunicipioHighlightVisible(map, cve, visible) {
-  const f = visible && cve ? munFilter(cve) : ["literal", false];
+  const f = visible && cve ? marcoMunFilter(cve) : ["literal", false];
   [LAYER_IDS.munHiFill, LAYER_IDS.munHiLineHalo, LAYER_IDS.munHiLine].forEach((id) => {
     if (!map.getLayer(id)) return;
     map.setFilter(id, f);
@@ -1641,7 +1715,7 @@ function setMunicipioOutlineOnly(map, cve, visible) {
   setMunicipioHighlightVisible(map, null, false);
   if (!map.getLayer(LAYER_IDS.marcoMun)) return;
   if (visible && cve) {
-    map.setFilter(LAYER_IDS.marcoMun, munFilter(cve));
+    map.setFilter(LAYER_IDS.marcoMun, marcoMunFilter(cve));
     safeSetLayout(map, LAYER_IDS.marcoMun, "visibility", "visible");
   } else {
     map.setFilter(LAYER_IDS.marcoMun, ["literal", false]);
@@ -2122,6 +2196,7 @@ function ensureMarcoLayers(map) {
   [LAYER_IDS.munAllLineHalo, LAYER_IDS.munAllLine, LAYER_IDS.marcoEntCasing, LAYER_IDS.marcoEntHalo, LAYER_IDS.marcoEnt].forEach((id) => {
     if (map.getLayer(id)) map.setLayerZoomRange(id, 0, 24);
   });
+  applyExplorerTerritoryFilters(map);
 }
 
 /** Marco / municipios: nunca encima de capas temáticas de puntos. */
@@ -4040,11 +4115,54 @@ function municipioFromFeature(f) {
   const cve = pad3(p.cve_mun ?? p.CVE_MUN ?? "");
   if (!cve || cve === "000") return null;
   const nomgeo = p.nomgeo || p.NOMGEO || p.nom_mun || p.NOM_MUN || "";
-  return { cve_mun: cve, nomgeo };
+  const cve_ent = pad2(p.cve_ent ?? p.CVE_ENT ?? activeEntPad());
+  return { cve_mun: cve, nomgeo, cve_ent };
+}
+
+function entidadFromFeature(f) {
+  if (!f?.properties) return null;
+  const p = f.properties;
+  const cve_ent = pad2(p.cve_ent ?? p.CVE_ENT ?? "");
+  if (!cve_ent || cve_ent === "00") return null;
+  const nomgeo = p.nomgeo || p.NOMGEO || p.nom_ent || "";
+  return { cve_ent, nomgeo };
+}
+
+function homeEntPickLayers(map) {
+  if (!map) return [];
+  return [LAYER_IDS.entFill, LAYER_IDS.marcoEnt].filter(
+    (id) => map.getLayer(id) && map.getLayoutProperty(id, "visibility") === "visible",
+  );
+}
+
+let _homeEntPickHandler = null;
+
+export function setHomeEntidadClickHandler(fn) {
+  _homeEntPickHandler = typeof fn === "function" ? fn : null;
+}
+
+function handleHomeEntidadPick(e) {
+  if (!_homeMode || typeof _homeEntPickHandler !== "function" || !_map) return false;
+  if (!isNationalMode() || isEntityPicked()) return false;
+  const layers = homeEntPickLayers(_map);
+  if (!layers.length) return false;
+  const feats = _map.queryRenderedFeatures(e.point, { layers });
+  for (const f of feats) {
+    const ent = entidadFromFeature(f);
+    if (ent) {
+      void Promise.resolve(_homeEntPickHandler(ent)).catch((err) => {
+        console.warn("home entidad pick:", err);
+      });
+      return true;
+    }
+  }
+  return false;
 }
 
 function handleHomeMunicipioPick(e) {
   if (!_homeMode || typeof _homePickHandler !== "function" || !_map) return;
+  if (handleHomeEntidadPick(e)) return;
+  if (!isEntityPicked()) return;
   const layers = homeMunPickLayers(_map);
   if (!layers.length) return;
   const feats = _map.queryRenderedFeatures(e.point, { layers });
@@ -4067,6 +4185,14 @@ function bindMapClick() {
   });
   _map.on("mousemove", (e) => {
     if (!_homeMode) return;
+    if (isNationalMode() && !isEntityPicked()) {
+      const elayers = homeEntPickLayers(_map);
+      const hitEnt =
+        elayers.length > 0 &&
+        _map.queryRenderedFeatures(e.point, { layers: elayers }).some((f) => entidadFromFeature(f));
+      _map.getCanvas().style.cursor = hitEnt ? "pointer" : "";
+      return;
+    }
     const layers = homeMunPickLayers(_map);
     if (!layers.length) {
       _map.getCanvas().style.cursor = "";
@@ -4537,9 +4663,11 @@ function applyHomeMapModeLayers(map, homeMode) {
     show(LAYER_IDS.marcoEntHalo, true);
     show(LAYER_IDS.marcoEnt, true);
     show(LAYER_IDS.marcoMun, false);
-    show(LAYER_IDS.munAllFill, true);
-    show(LAYER_IDS.munAllLineHalo, true);
-    show(LAYER_IDS.munAllLine, true);
+    const showMun = isEntityPicked();
+    show(LAYER_IDS.munAllFill, showMun);
+    show(LAYER_IDS.munAllLineHalo, showMun);
+    show(LAYER_IDS.munAllLine, showMun);
+    applyExplorerTerritoryFilters(map);
     stackHomeAdministrativeLayersToFront(map);
     applyHomeVectorRenderQuality(map);
   } else {
@@ -4709,14 +4837,36 @@ export function setHomeMunicipioClickHandler(fn) {
   _homePickHandler = typeof fn === "function" ? fn : null;
 }
 
+/** Reaplica filtros/visibilidad del marco cuando cambia entidad o modo AMIGO. */
+export function syncExplorerTerritoryOnMap() {
+  whenAtlasMapReady((map) => {
+    applyExplorerTerritoryFilters(map);
+    if (_homeMode) {
+      applyHomeMapModeLayers(map, true);
+      void refitHomeMapView();
+    }
+  });
+}
+
+onAmigoTerritoryChange(() => {
+  syncExplorerTerritoryOnMap();
+});
+
 export async function refitHomeMapView() {
   if (!_map || !_homeMode || !_atlasLayersReady) return;
   clearMapViewConstraints();
   setMunicipioOutlineOnly(_map, null, false);
   _map.resize();
-  _map.fitBounds(MXSIG_BOUNDS, {
+  let bounds = MXSIG_BOUNDS;
+  try {
+    bounds = (await fetchExplorerHomeBounds()) || MXSIG_BOUNDS;
+  } catch {
+    bounds = isNationalMode() ? MX_NATIONAL_BOUNDS : MXSIG_BOUNDS;
+  }
+  applyExplorerTerritoryFilters(_map);
+  _map.fitBounds(bounds, {
     padding: HOME_MAP_FIT_PADDING,
-    maxZoom: 8,
+    maxZoom: isNationalMode() && !isEntityPicked() ? 5.5 : 8,
     duration: 0,
     animate: false,
   });
@@ -4732,14 +4882,14 @@ export async function refitHomeMapView() {
   });
   if (!_map || !_homeMode) return;
   const b = _map.getBounds();
-  const bounds = [
+  const lockBounds = [
     [b.getWest(), b.getSouth()],
     [b.getEast(), b.getNorth()],
   ];
   const z = _map.getZoom();
   _map.setMinZoom(z);
   _map.setMaxZoom(z);
-  _map.setMaxBounds(bounds);
+  _map.setMaxBounds(lockBounds);
 }
 
 export function setMapInteractionLocked(locked) {

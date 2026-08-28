@@ -19,6 +19,7 @@ const ACTIVE_DASHBOARDS = [
   "dashboardVisor",
   "dashboardInvViv",
   "dashboardSitiosInteres",
+  "dashboardAnalitica",
   "dashboardIndicator",
 ];
 
@@ -28,6 +29,7 @@ const MAIN_MODE_CLASSES = [
   "visor-mode",
   "invviv-mode",
   "sitios-interes-mode",
+  "analitica-mode",
   "indicator-shell-mode",
 ];
 
@@ -212,6 +214,27 @@ export function setSitiosInteresLayout(active) {
   } else {
     hideEl(sitios);
     main.classList.remove("sitios-interes-mode");
+    revealDashboardNormal();
+  }
+}
+
+/**
+ * Activa el layout Analítica (Comparador municipal).
+ */
+export function setAnaliticaLayout(active) {
+  const dash = document.getElementById("dashboardAnalitica");
+  const main = document.getElementById("main");
+  if (!dash || !main) return;
+
+  if (active) {
+    applyAppShellHomeColumns(false);
+    hideDashboardsExcept(["dashboardAnalitica"]);
+    showEl(dash);
+    clearMainModes(main, ["analitica-mode"]);
+    main.classList.add("analitica-mode");
+  } else {
+    hideEl(dash);
+    main.classList.remove("analitica-mode");
     revealDashboardNormal();
   }
 }

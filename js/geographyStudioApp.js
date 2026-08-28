@@ -1,16 +1,12 @@
 /**
  * Geography Studio — administración del catálogo de Datos Geográficos.
- * Reutiliza la sesión JWT de Visor Studio (visorAdminAuth.js).
+ * Reutiliza la sesión JWT de Visor Studio (studioShell).
  */
+import { adminFetch } from "./visorAdminAuth.js";
 import {
-  adminFetch,
-  clearAdminSession,
-  getAdminUser,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
-} from "./visorAdminAuth.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+  createStudioShell,
+  studioIdsFromPrefix,
+} from "./studioShell.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -35,11 +31,6 @@ function setMsg(el, msg, ok = true) {
   if (!el) return;
   el.textContent = msg || "";
   el.className = `small ${ok ? "text-success" : "text-danger"}`;
-}
-
-function showLogin(show) {
-  $("geoStudioLoginView")?.classList.toggle("d-none", !show);
-  $("geoStudioDashboard")?.classList.toggle("d-none", show);
 }
 
 async function loadMetaAndCatalog() {
@@ -207,9 +198,20 @@ function renderLayersBox(selected) {
   }
   box.innerHTML = layers
     .map((L) => {
-      const badge = L.legacy
-        ? `<span class="badge text-bg-secondary ms-1">Núcleo</span>`
-        : `<span class="badge text-bg-success ms-1">Studio</span>`;
+      const badgeClass =
+        L.origin === "seed" || L.seed
+          ? "text-bg-info"
+          : L.origin === "marco"
+            ? "text-bg-secondary"
+            : "text-bg-success";
+      const badgeText =
+        L.badge ||
+        (L.origin === "seed" || L.legacy
+          ? "Kit Guerrero"
+          : L.origin === "marco"
+            ? "Marco nacional"
+            : "Studio");
+      const badge = `<span class="badge ${badgeClass} ms-1">${escapeHtml(badgeText)}</span>`;
       return `<div class="form-check">
         <input class="form-check-input" type="checkbox" value="${escapeAttr(L.layer_id)}" id="ly_${escapeAttr(L.layer_id)}" ${sel.has(L.layer_id) ? "checked" : ""} />
         <label class="form-check-label small" for="ly_${escapeAttr(L.layer_id)}">${escapeHtml(L.label || L.layer_id)}${badge}</label>
@@ -358,34 +360,7 @@ async function publishCatalog() {
   setMsg($("geoStudioPublishMsg"), "Catálogo publicado. Recargue el Atlas para ver los cambios.", true);
 }
 
-async function bootDashboard() {
-  const user = getAdminUser();
-  if ($("geoStudioWelcome")) {
-    $("geoStudioWelcome").textContent = user?.username
-      ? `Sesión: ${user.username}`
-      : "Sesión admin activa";
-  }
-  mountStudioNav($("geoStudioNav"), { active: "geography" });
-  showLogin(false);
-  await loadMetaAndCatalog();
-}
-
 async function init() {
-  $("geoStudioLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("geoStudioError"), "");
-    try {
-      await loginAdmin($("geoStudioUser").value.trim(), $("geoStudioPass").value);
-      await bootDashboard();
-    } catch (err) {
-      showErr($("geoStudioError"), err.message || String(err));
-    }
-  });
-
-  $("geoStudioLogoutBtn")?.addEventListener("click", () => {
-    clearAdminSession();
-    showLogin(true);
-  });
   $("geoStudioNewBtn")?.addEventListener("click", () => openNew());
   $("geoStudioForm")?.addEventListener("submit", saveTabDraft);
   $("geoStudioDeleteBtn")?.addEventListener("click", deleteTab);
@@ -394,19 +369,20 @@ async function init() {
     void fillFieldSelect($("fTextTable").value, "");
   });
 
-  if (isVisorAdminLoggedIn()) {
-    try {
-      await verifyAdminSession();
-      await bootDashboard();
-    } catch {
-      clearAdminSession();
-      showLogin(true);
+  const shell = createStudioShell(
+    studioIdsFromPrefix("geoStudio", { loginError: "geoStudioError" }),
+    {
+      activeNav: "geography",
+      onEnterDashboard: () => loadMetaAndCatalog(),
+      onDashboardError: (err) =>
+        setMsg(
+          $("geoStudioPublishMsg"),
+          err?.message || "Error al cargar",
+          false
+        ),
     }
-  } else {
-    const footer = $("geoStudioLoginFooter");
-    if (footer) footer.innerHTML = studioLoginFooterHtml("geography");
-    showLogin(true);
-  }
+  );
+  await shell.boot();
 }
 
 void init();

@@ -1,21 +1,18 @@
 /**
  * Theme Studio — identidad de color claro/oscuro (catálogo data-driven).
- * Reutiliza sesión JWT de Visor Studio (visorAdminAuth.js).
+ * Reutiliza sesión JWT de Visor Studio (visorAdminAuth.js + studioShell).
  */
-import {
-  adminFetch,
-  clearAdminSession,
-  getAdminUser,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
-} from "./visorAdminAuth.js";
+import { adminFetch } from "./visorAdminAuth.js";
 import {
   applyCatalogTokens,
   resetThemeCatalogCache,
   setThemeCatalogCache,
 } from "./theme.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+import {
+  createStudioShell,
+  setStudioStatus,
+  studioIdsFromPrefix,
+} from "./studioShell.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,46 +27,8 @@ let _activeTheme = "claro";
 /** Snapshot al cargar (detectar cambios locales). */
 let _loadedJson = "";
 
-function showErr(el, msg) {
-  if (!el) return;
-  if (!msg) {
-    el.classList.add("d-none");
-    el.textContent = "";
-    return;
-  }
-  el.textContent = msg;
-  el.classList.remove("d-none");
-}
-
 function setStatus(msg, ok = true) {
-  const el = $("themeStudioStatus");
-  if (!el) return;
-  if (!msg) {
-    el.classList.add("d-none");
-    el.textContent = "";
-    return;
-  }
-  el.textContent = msg;
-  el.classList.remove("d-none", "text-danger", "text-success");
-  el.classList.add(ok ? "text-success" : "text-danger");
-}
-
-function showLogin() {
-  $("themeStudioLoginView")?.classList.remove("d-none");
-  $("themeStudioDashboard")?.classList.add("d-none");
-}
-
-function showDashboard() {
-  $("themeStudioLoginView")?.classList.add("d-none");
-  $("themeStudioDashboard")?.classList.remove("d-none");
-  const user = getAdminUser();
-  const welcome = $("themeStudioWelcome");
-  if (welcome) {
-    welcome.textContent = user?.username
-      ? `Sesión: ${user.username} (visor_admin)`
-      : "Sesión admin activa";
-  }
-  mountStudioNav($("themeStudioNav"), { active: "theme" });
+  setStudioStatus("themeStudioStatus", msg, ok);
 }
 
 function parseColorToHex(value) {
@@ -312,23 +271,6 @@ async function saveCatalog() {
 }
 
 async function boot() {
-  $("themeStudioLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("themeStudioLoginError"), "");
-    try {
-      await loginAdmin($("themeStudioUser").value.trim(), $("themeStudioPass").value);
-      showDashboard();
-      await loadAll();
-    } catch (err) {
-      showErr($("themeStudioLoginError"), err.message || "Login fallido");
-    }
-  });
-
-  $("themeStudioLogoutBtn")?.addEventListener("click", () => {
-    clearAdminSession();
-    showLogin();
-  });
-
   $("themeStudioTabClaro")?.addEventListener("click", () => setActiveTab("claro"));
   $("themeStudioTabOscuro")?.addEventListener("click", () => setActiveTab("oscuro"));
   $("themeStudioSaveBtn")?.addEventListener("click", () => void saveCatalog());
@@ -340,21 +282,14 @@ async function boot() {
     if (_catalog) _catalog.default_theme = $("themeStudioDefault").value;
   });
 
-  if (isVisorAdminLoggedIn()) {
-    const ok = await verifyAdminSession();
-    if (ok) {
-      showDashboard();
-      try {
-        await loadAll();
-      } catch (err) {
-        setStatus(err.message || "Error al cargar", false);
-      }
-      return;
-    }
-  }
-  const footer = $("themeStudioLoginFooter");
-  if (footer) footer.innerHTML = studioLoginFooterHtml("theme");
-  showLogin();
+  const shell = createStudioShell(studioIdsFromPrefix("themeStudio"), {
+    activeNav: "theme",
+    welcomeSuffix: " (visor_admin)",
+    onEnterDashboard: () => loadAll(),
+    onDashboardError: (err) =>
+      setStatus(err?.message || "Error al cargar", false),
+  });
+  await shell.boot();
 }
 
 void boot();

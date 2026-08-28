@@ -76,23 +76,23 @@
         {
           "key": "pob_tot",
           "column": "pob_tot",
-          "label": "Población 2020",
-          "type": "integer",
-          "source_table": "tab_municipal",
           "column_aliases": [
             "pop_tot",
             "POP_TOT"
-          ]
+          ],
+          "label": "Población 2020",
+          "type": "integer",
+          "source_table": "tab_municipal"
         },
         {
           "key": "pob_tot_2010",
           "column": "pob_tot_2010",
-          "label": "Población 2010",
-          "type": "integer",
-          "source_table": "tab_municipal",
           "column_aliases": [
             "POB_TOT_2010"
-          ]
+          ],
+          "label": "Población 2010",
+          "type": "integer",
+          "source_table": "tab_municipal"
         }
       ],
       "presentation": {
@@ -104,13 +104,17 @@
           "bottom5"
         ],
         "bar_metrics": [
-          "pob_tot",
-          "pob_tot_2010"
+          "pob_tot_2010",
+          "pob_tot"
+        ],
+        "legend_labels": [
+          "2010",
+          "2020"
         ],
         "title": "Población total por municipios seleccionados 2010 y 2020",
+        "root_class": "poblacion-viz",
         "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
         "ranking": true,
-        "ranking_size": 5,
         "style": {
           "colors": {
             "claro": {
@@ -130,12 +134,7 @@
               "serie2": "#3dbdbd"
             }
           }
-        },
-        "root_class": "poblacion-viz",
-        "legend_labels": [
-          "2010",
-          "2020"
-        ]
+        }
       },
       "metadata": {
         "enabled": true,
@@ -160,15 +159,15 @@
       },
       "api": {
         "path": "/api/indicators/socio_poblacion",
+        "legacy_paths": [
+          "/api/comparativas/poblacion",
+          "/api/poblacion_comparativa.php"
+        ],
         "params": [
           "cve_mun",
           "nom_mun"
         ],
-        "response_profile": "ranking_municipal",
-        "legacy_paths": [
-          "/api/comparativas/poblacion",
-          "/api/poblacion_comparativa.php"
-        ]
+        "response_profile": "ranking_municipal"
       },
       "export": {
         "filename_prefix": "poblacion",
@@ -178,49 +177,24 @@
           "xlsx"
         ],
         "target_selector": ".poblacion-viz",
-        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
         "csv_columns": [
           "seccion",
           "cve_mun",
           "nom_mun",
           "pob_tot_2010",
           "pob_tot"
-        ]
-      },
-      "legacy": {
-        "menu_flag": "poblacionComparativa"
-      },
-      "core_indicator_key": "poblacion",
-      "refresh_mold": {
-        "core_clave": "poblacion",
-        "metrics": {
-          "pob_tot": {
-            "periodo": "",
-            "metrica_clave": "pob_tot",
-            "niveles": [
-              "ENTIDAD",
-              "MUNICIPIO"
-            ]
-          },
-          "pob_tot_2010": {
-            "periodo": "",
-            "metrica_clave": "pob_tot_2010",
-            "niveles": [
-              "ENTIDAD",
-              "MUNICIPIO"
-            ]
-          }
-        }
-      },
-      "amigo": {
-        "core_clave": "poblacion"
+        ],
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2."
       },
       "compare": {
-        "enabled": false,
+        "enabled": true,
         "temporal": {
           "from": "pob_tot_2010",
           "to": "pob_tot"
         }
+      },
+      "legacy": {
+        "menu_flag": "poblacionComparativa"
       }
     },
     {

@@ -14,6 +14,8 @@ import {
 } from "./map.js";
 import { downloadVisorLayerExport } from "./visorExport.js";
 import { notifyVisorLayerToggled } from "./visorMapUi.js";
+import { trackEvent } from "./telemetry.js";
+import { getActiveCveEnt } from "./amigoDeployment.js";
 import {
   loadVisorCatalog,
   getVisorCatalogGroups,
@@ -243,6 +245,14 @@ function appendVisorLayerRow(container, def, getCveMun, getMunicipio, getStateWi
     }
     def.setActive(cb.checked, stateWide ? null : cve || undefined);
     notifyVisorLayerToggled();
+    if (cb.checked) {
+      trackEvent("CAPA_ACTIVADA", {
+        cve_ent: getActiveCveEnt(),
+        cve_mun: stateWide ? undefined : cve || undefined,
+        resourceType: "CAPA",
+        resourceKey: def.id,
+      });
+    }
   }
 
   cb.addEventListener("change", applyToggle);

@@ -20,10 +20,20 @@ Tarjetas hacia:
 - **Theme Studio** — colores claro/oscuro
 - **Data Refresh Studio** — ETL espacial (SHP/ZIP)
 - **Cartography Studio** — branding de tiras (logo, institución, advertencias, fechas); solo si `GET /api/cartography/health` indica Engine vivo. La generación de PDF/SVG sigue en el panel Cartografía del Visor
-- **Atlas** — portal público
+- **Generar cartografía** — atajo a `index.html?visor=1` (Visor; Generate solo con JWT)
+- **Atlas** — portal **público** (`index.html`). **No** eleva a Capas admin ni Cartografía. Para eso: Visor Studio → **Abrir visor**
 - **Usuarios** — atajo a Visor Studio
 
 Bloque de estado: health Atlas API, Geography Context, **Cartography Engine** vía el contrato Core `GET /api/cartography/health` (mismo sondeo que el Visor; ver [`cartographyHealth.js`](../js/cartographyHealth.js)).
+
+## Norma canónica — Atlas vs Abrir visor (1.0)
+
+| Acción | Efecto |
+|--------|--------|
+| Nav **Atlas** / tarjeta Atlas | Vista ciudadana. Login en Studios no cambia esta página. |
+| **Abrir visor** (Visor Studio) o tarjeta Generar cartografía | `?visor=1` → Visor geográfico; con JWT → Capas admin + Generate |
+
+Congelado 2026-08-12 (endurecimiento Internet S1). No mezclar portal público con herramientas de dependencia.
 
 ## Navegación
 

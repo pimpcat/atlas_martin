@@ -3,19 +3,19 @@
  */
 import {
   adminFetch,
-  clearAdminSession,
+  adminUpload,
   getAdminToken,
-  getAdminUser,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
 } from "./visorAdminAuth.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+import { createStudioShell } from "./studioShell.js";
 import { apiUrl } from "./atlasConfig.js";
+import {
+  DATA_REFRESH_TERMINAL,
+  pollDataRefreshJobUntilTerminal,
+} from "./dataRefreshJobPoll.js";
 
 const $ = (id) => document.getElementById(id);
 
-const TERMINAL = new Set(["ready", "failed", "cancelled", "applied"]);
+const TERMINAL = DATA_REFRESH_TERMINAL;
 const STATUS_PCT = {
   uploading: 20,
   queued: 25,
@@ -61,11 +61,6 @@ function setMsg(el, msg, ok = true) {
   if (!el) return;
   el.textContent = msg || "";
   el.className = `small ${ok ? "text-success" : "text-danger"}`;
-}
-
-function showLogin(show) {
-  $("drLoginView")?.classList.toggle("d-none", !show);
-  $("drDashboard")?.classList.toggle("d-none", show);
 }
 
 function escapeHtml(s) {
@@ -960,68 +955,18 @@ async function openJob(jobId) {
   renderJob(data.job);
 }
 
-function xhrPostForm(url, formData, { onUploadProgress } = {}) {
-  return new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", url);
-    const token = getAdminToken();
-    if (token) {
-      xhr.setRequestHeader("Authorization", `Bearer ${token}`);
-      xhr.setRequestHeader("X-Atlas-Authorization", `Bearer ${token}`);
-    }
-    xhr.responseType = "json";
-    xhr.upload.onprogress = (ev) => {
-      if (!ev.lengthComputable || typeof onUploadProgress !== "function") return;
-      onUploadProgress(ev.loaded / ev.total);
-    };
-    xhr.onload = () => {
-      resolve({
-        status: xhr.status,
-        data: xhr.response && typeof xhr.response === "object" ? xhr.response : null,
-      });
-    };
-    xhr.onerror = () => reject(new Error("network"));
-    xhr.ontimeout = () => reject(new Error("timeout"));
-    xhr.timeout = 0;
-    xhr.send(formData);
-  });
-}
-
-function sleep(ms) {
-  return new Promise((r) => {
-    _pollTimer = setTimeout(r, ms);
-  });
-}
-
 async function pollUntilTerminal(jobId) {
-  const started = Date.now();
-  const maxMs = 12 * 60 * 1000;
-  let lastStatus = "";
-  let statusSince = Date.now();
-  while (Date.now() - started < maxMs) {
-    const { res, data } = await adminFetch(`/api/data-refresh/jobs/${encodeURIComponent(jobId)}`);
-    if (!res?.ok) {
-      throw new Error(data?.detail?.message || `No se pudo consultar job (${res?.status})`);
-    }
-    const job = data.job;
-    if (job.status !== lastStatus) {
-      lastStatus = job.status;
-      statusSince = Date.now();
-    }
-    setProgress(progressFromJob(job), labelFromJob(job), {
-      indeterminate: ["importing", "comparing"].includes(job.status),
-    });
-    if (TERMINAL.has(job.status)) return job;
-    // comparing no debería pasar de ~1 min con el resumen rápido
-    if (job.status === "comparing" && Date.now() - statusSince > 90_000) {
-      throw new Error(
-        "La comparación lleva demasiado tiempo (posible lock en Postgres). " +
-          "Cancele el job, recree api_backend y vuelva a intentar."
-      );
-    }
-    await sleep(1500);
-  }
-  throw new Error("Tiempo de espera agotado consultando el job. Revise Jobs recientes.");
+  return pollDataRefreshJobUntilTerminal(jobId, {
+    createSleep: (ms) =>
+      new Promise((r) => {
+        _pollTimer = setTimeout(r, ms);
+      }),
+    onTick: (job) => {
+      setProgress(progressFromJob(job), labelFromJob(job), {
+        indeterminate: ["importing", "comparing"].includes(job.status),
+      });
+    },
+  });
 }
 
 async function uploadAndCompare() {
@@ -1051,13 +996,17 @@ async function uploadAndCompare() {
 
   let job = null;
   try {
-    const { status, data } = await xhrPostForm(apiUrl("/api/data-refresh/jobs"), fd, {
-      onUploadProgress: (ratio) => {
-        const pct = Math.round(ratio * 20);
-        setProgress(pct, `Subiendo archivo… ${Math.round(ratio * 100)}%`);
-      },
-    });
-    if (status >= 400 || !data?.job) {
+    const { status, data, networkError } = await adminUpload(
+      "/api/data-refresh/jobs",
+      fd,
+      {
+        onProgress: (ratio) => {
+          const pct = Math.round(ratio * 20);
+          setProgress(pct, `Subiendo archivo… ${Math.round(ratio * 100)}%`);
+        },
+      }
+    );
+    if (networkError || status >= 400 || !data?.job) {
       const msg =
         data?.detail?.message ||
         (typeof data?.detail === "string" ? data.detail : null) ||
@@ -1115,16 +1064,19 @@ async function uploadIndicatorCsv() {
   fd.append("template_id", templateId);
   fd.append("file", file, file.name);
   try {
-    const { status, data } = await xhrPostForm(
-      apiUrl("/api/data-refresh/indicators/jobs"),
+    const { status, data, networkError } = await adminUpload(
+      "/api/data-refresh/indicators/jobs",
       fd,
       {
-        onUploadProgress: (ratio) => {
-          setProgress(Math.round(ratio * 40), `Subiendo archivo… ${Math.round(ratio * 100)}%`);
+        onProgress: (ratio) => {
+          setProgress(
+            Math.round(ratio * 40),
+            `Subiendo archivo… ${Math.round(ratio * 100)}%`
+          );
         },
       }
     );
-    if (status >= 400 || !data?.job) {
+    if (networkError || status >= 400 || !data?.job) {
       const msg =
         data?.detail?.message ||
         (typeof data?.detail === "string" ? data.detail : null) ||
@@ -1298,14 +1250,6 @@ async function refreshMunicipioConteos() {
 }
 
 async function bootDashboard() {
-  const user = getAdminUser();
-  if ($("drWelcome")) {
-    $("drWelcome").textContent = user?.username
-      ? `Sesión: ${user.username}`
-      : "Sesión admin activa";
-  }
-  mountStudioNav($("drStudioNav"), { active: "data-refresh" });
-  showLogin(false);
   setMode(_mode);
 
   const sel = $("drTarget");
@@ -1356,24 +1300,6 @@ async function bootDashboard() {
 }
 
 async function init() {
-  const footer = $("drLoginFooter");
-  if (footer) footer.innerHTML = studioLoginFooterHtml("data-refresh");
-
-  $("drLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("drLoginError"), "");
-    try {
-      await loginAdmin($("drUser").value.trim(), $("drPass").value);
-      await bootDashboard();
-    } catch (err) {
-      showErr($("drLoginError"), err.message || String(err));
-    }
-  });
-  $("drLogoutBtn")?.addEventListener("click", () => {
-    if (_busy) return;
-    clearAdminSession();
-    showLogin(true);
-  });
   $("drUploadBtn")?.addEventListener("click", () => void uploadAndCompare());
   $("drApplyBtn")?.addEventListener("click", () => void applyCurrent());
   $("drCancelBtn")?.addEventListener("click", () => void cancelCurrent());
@@ -1395,18 +1321,27 @@ async function init() {
   $("drVersionsRefresh")?.addEventListener("click", () => void loadVersions());
   $("drDerivedConteosBtn")?.addEventListener("click", () => void refreshMunicipioConteos());
 
-  if (isVisorAdminLoggedIn()) {
-    try {
-      await verifyAdminSession();
-    } catch {
-      clearAdminSession();
-      showLogin(true);
-      return;
+  const shell = createStudioShell(
+    {
+      loginView: "drLoginView",
+      dashboard: "drDashboard",
+      loginForm: "drLoginForm",
+      entidad: "drEntidad",
+      user: "drUser",
+      pass: "drPass",
+      loginError: "drLoginError",
+      loginFooter: "drLoginFooter",
+      logoutBtn: "drLogoutBtn",
+      nav: "drStudioNav",
+      welcome: "drWelcome",
+    },
+    {
+      activeNav: "data-refresh",
+      onEnterDashboard: () => bootDashboard(),
+      onBeforeLogout: () => !_busy,
     }
-    await bootDashboard();
-  } else {
-    showLogin(true);
-  }
+  );
+  await shell.boot();
 }
 
 void init();

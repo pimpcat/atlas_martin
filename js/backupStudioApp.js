@@ -2,15 +2,10 @@
  * Backup Studio — ZIP dumps + config (+ MBTiles opcional).
  */
 import {
+  adminDownloadBlob,
   adminFetch,
-  clearAdminSession,
-  getAdminToken,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
 } from "./visorAdminAuth.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
-import { apiUrl } from "./atlasConfig.js";
+import { createStudioShell } from "./studioShell.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -40,11 +35,6 @@ function setMsg(el, msg, ok = true) {
   if (!el) return;
   el.textContent = msg || "";
   el.className = `small ${ok ? "text-success" : "text-danger"}`;
-}
-
-function showLogin(show) {
-  $("bkLoginView")?.classList.toggle("d-none", !show);
-  $("bkDashboard")?.classList.toggle("d-none", show);
 }
 
 function fmtBytes(n) {
@@ -200,39 +190,20 @@ async function deleteBackup(id) {
 }
 
 async function downloadBackup(id) {
-  const token = getAdminToken();
-  if (!token || !id) return;
+  if (!id) return;
   setMsg($("bkCreateMsg"), "Descargando…", true);
-  try {
-    const res = await fetch(apiUrl(`/api/admin/backups/${encodeURIComponent(id)}/download`), {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "X-Atlas-Authorization": `Bearer ${token}`,
-      },
-    });
-    if (!res.ok) {
-      let detail = "Error al descargar";
-      try {
-        const j = await res.json();
-        detail = j?.detail?.message || detail;
-      } catch {
-        /* ignore */
-      }
-      throw new Error(detail);
-    }
-    const blob = await res.blob();
-    const cd = res.headers.get("Content-Disposition") || "";
-    const m = /filename="?([^"]+)"?/i.exec(cd);
-    const filename = m?.[1] || `grosig_backup_${id}.zip`;
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = filename;
-    a.click();
-    URL.revokeObjectURL(a.href);
-    setMsg($("bkCreateMsg"), "Descarga iniciada.", true);
-  } catch (err) {
-    setMsg($("bkCreateMsg"), err?.message || "Error", false);
+  const result = await adminDownloadBlob(
+    `/api/admin/backups/${encodeURIComponent(id)}/download`
+  );
+  if (!result.ok) {
+    setMsg(
+      $("bkCreateMsg"),
+      result.message || (result.networkError ? "Sin red" : "Error"),
+      false
+    );
+    return;
   }
+  setMsg($("bkCreateMsg"), "Descarga iniciada.", true);
 }
 
 function stopPoll() {
@@ -300,8 +271,6 @@ async function createBackup() {
 }
 
 async function enterApp() {
-  mountStudioNav($("bkStudioNav"), { active: "backup" });
-  showLogin(false);
   try {
     await loadMeta();
   } catch (err) {
@@ -320,38 +289,29 @@ async function enterApp() {
 }
 
 async function init() {
-  const footer = $("bkLoginFooter");
-  if (footer) footer.innerHTML = studioLoginFooterHtml("backup");
-
-  $("bkLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("bkLoginError"), "");
-    try {
-      await loginAdmin($("bkUser").value.trim(), $("bkPass").value);
-      await enterApp();
-    } catch (err) {
-      showErr($("bkLoginError"), err?.message || "Login fallido");
-    }
-  });
-  $("bkLogoutBtn")?.addEventListener("click", () => {
-    stopPoll();
-    clearAdminSession();
-    showLogin(true);
-  });
   $("bkCreateBtn")?.addEventListener("click", () => void createBackup());
   $("bkRefreshBtn")?.addEventListener("click", () => void loadList());
 
-  if (isVisorAdminLoggedIn()) {
-    try {
-      await verifyAdminSession();
-      await enterApp();
-    } catch {
-      clearAdminSession();
-      showLogin(true);
+  const shell = createStudioShell(
+    {
+      loginView: "bkLoginView",
+      dashboard: "bkDashboard",
+      loginForm: "bkLoginForm",
+      entidad: "bkEntidad",
+      user: "bkUser",
+      pass: "bkPass",
+      loginError: "bkLoginError",
+      loginFooter: "bkLoginFooter",
+      logoutBtn: "bkLogoutBtn",
+      nav: "bkStudioNav",
+    },
+    {
+      activeNav: "backup",
+      onEnterDashboard: () => enterApp(),
+      onLogout: () => stopPoll(),
     }
-  } else {
-    showLogin(true);
-  }
+  );
+  await shell.boot();
 }
 
 void init();

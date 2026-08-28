@@ -1,4 +1,6 @@
 import { apiUrl } from "./atlasConfig.js";
+import { trackEvent } from "./telemetry.js";
+import { getActiveCveEnt } from "./amigoDeployment.js";
 
 /**
  * Cliente de descarga KML / SHP del Visor geográfico (GET /api/visor/export).
@@ -74,6 +76,14 @@ export async function downloadVisorLayerExport(
         filename = mName[2] || mName[1] || filename;
       }
     }
+
+    trackEvent("EXPORTACION", {
+      cve_ent: getActiveCveEnt(),
+      cve_mun: cve || undefined,
+      resourceType: "CAPA",
+      resourceKey: layerId,
+      metadata: { formato: format === "shp" ? "shp" : "kml" },
+    });
 
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);

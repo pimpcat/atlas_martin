@@ -76,23 +76,23 @@
         {
           "key": "pob_tot",
           "column": "pob_tot",
-          "label": "Población 2020",
-          "type": "integer",
-          "source_table": "tab_municipal",
           "column_aliases": [
             "pop_tot",
             "POP_TOT"
-          ]
+          ],
+          "label": "Población 2020",
+          "type": "integer",
+          "source_table": "tab_municipal"
         },
         {
           "key": "pob_tot_2010",
           "column": "pob_tot_2010",
-          "label": "Población 2010",
-          "type": "integer",
-          "source_table": "tab_municipal",
           "column_aliases": [
             "POB_TOT_2010"
-          ]
+          ],
+          "label": "Población 2010",
+          "type": "integer",
+          "source_table": "tab_municipal"
         }
       ],
       "presentation": {
@@ -104,13 +104,17 @@
           "bottom5"
         ],
         "bar_metrics": [
-          "pob_tot",
-          "pob_tot_2010"
+          "pob_tot_2010",
+          "pob_tot"
+        ],
+        "legend_labels": [
+          "2010",
+          "2020"
         ],
         "title": "Población total por municipios seleccionados 2010 y 2020",
+        "root_class": "poblacion-viz",
         "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
         "ranking": true,
-        "ranking_size": 5,
         "style": {
           "colors": {
             "claro": {
@@ -130,12 +134,7 @@
               "serie2": "#3dbdbd"
             }
           }
-        },
-        "root_class": "poblacion-viz",
-        "legend_labels": [
-          "2010",
-          "2020"
-        ]
+        }
       },
       "metadata": {
         "enabled": true,
@@ -160,15 +159,15 @@
       },
       "api": {
         "path": "/api/indicators/socio_poblacion",
+        "legacy_paths": [
+          "/api/comparativas/poblacion",
+          "/api/poblacion_comparativa.php"
+        ],
         "params": [
           "cve_mun",
           "nom_mun"
         ],
-        "response_profile": "ranking_municipal",
-        "legacy_paths": [
-          "/api/comparativas/poblacion",
-          "/api/poblacion_comparativa.php"
-        ]
+        "response_profile": "ranking_municipal"
       },
       "export": {
         "filename_prefix": "poblacion",
@@ -178,49 +177,17 @@
           "xlsx"
         ],
         "target_selector": ".poblacion-viz",
-        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2.",
         "csv_columns": [
           "seccion",
           "cve_mun",
           "nom_mun",
           "pob_tot_2010",
           "pob_tot"
-        ]
+        ],
+        "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Población 2."
       },
       "legacy": {
         "menu_flag": "poblacionComparativa"
-      },
-      "core_indicator_key": "poblacion",
-      "refresh_mold": {
-        "core_clave": "poblacion",
-        "metrics": {
-          "pob_tot": {
-            "periodo": "",
-            "metrica_clave": "pob_tot",
-            "niveles": [
-              "ENTIDAD",
-              "MUNICIPIO"
-            ]
-          },
-          "pob_tot_2010": {
-            "periodo": "",
-            "metrica_clave": "pob_tot_2010",
-            "niveles": [
-              "ENTIDAD",
-              "MUNICIPIO"
-            ]
-          }
-        }
-      },
-      "amigo": {
-        "core_clave": "poblacion"
-      },
-      "compare": {
-        "enabled": false,
-        "temporal": {
-          "from": "pob_tot_2010",
-          "to": "pob_tot"
-        }
       }
     },
     {
@@ -352,9 +319,6 @@
           "creci_10_20"
         ]
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "crecimientoComparativa"
       }
@@ -375,7 +339,7 @@
         {
           "key": "edad_mediana",
           "column": "Edad mediana",
-          "label": "Edad mediana",
+          "label": "float",
           "type": "tab_municipal",
           "source_table": "tab_municipal",
           "column_aliases": [
@@ -462,9 +426,6 @@
           "nom_mun",
           "edad_mediana"
         ]
-      },
-      "compare": {
-        "enabled": true
       },
       "legacy": {
         "menu_flag": "edadMedianaComparativa"
@@ -585,9 +546,6 @@
         "target_selector": ".nacimientos-viz",
         "footer": "Fuente: INEGI. Estadísticas de Natalidad 2024. Consulta interactiva de datos."
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "nacimientosVista"
       }
@@ -701,9 +659,6 @@
         ],
         "target_selector": ".defunciones-viz",
         "footer": "Fuente: INEGI. Estadísticas de mortalidad 2024. Consulta interactiva de datos."
-      },
-      "compare": {
-        "enabled": true
       },
       "legacy": {
         "menu_flag": "defuncionesVista"
@@ -823,9 +778,6 @@
         "target_selector": ".um-viz",
         "footer": "Fuente: \"CLUES Secretaría de Salud- Diciembre 2025 (depurando bajas)\"."
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "unidadesMedicasVista"
       },
@@ -858,17 +810,6 @@
           "label": "Grado promedio de escolaridad",
           "type": "float",
           "source_table": "tab_municipal",
-          "column_aliases": [
-            "GRAPROES",
-            "gra_proes"
-          ]
-        },
-        {
-          "key": "graproes",
-          "column": "graproes",
-          "label": "Grado promedio de escolaridad (entidades)",
-          "type": "float",
-          "source_table": "tab_nacional",
           "column_aliases": [
             "GRAPROES",
             "gra_proes"
@@ -937,9 +878,6 @@
         ],
         "target_selector": ".escolaridad-viz",
         "footer": "Fuente: INEGI. Censo de Población y Vivienda 2020. Tabulados del cuestionario básico. Educación 14. Principales resultados por localidad (ITER)."
-      },
-      "compare": {
-        "enabled": true
       },
       "legacy": {
         "menu_flag": "escolaridadVista"
@@ -1066,9 +1004,6 @@
         "target_selector": ".analfabetismo-viz",
         "footer": "Fuente: INEGI. Censos de Población y Vivienda 2010 y 2020. Tabulados del cuestionario básico. Educación 4."
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "analfabetismoVista"
       }
@@ -1166,9 +1101,6 @@
         "fecha_final": "",
         "ultima_actualizacion": ""
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "viviendaParticipacionVista"
       }
@@ -1264,9 +1196,6 @@
         "fecha_inicial": "",
         "fecha_final": "",
         "ultima_actualizacion": ""
-      },
-      "compare": {
-        "enabled": true
       },
       "legacy": {
         "menu_flag": "viviendaServiciosVista"
@@ -1410,9 +1339,6 @@
         "fecha_final": "",
         "ultima_actualizacion": ""
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "poblacionOcupadaVista"
       }
@@ -1514,9 +1440,6 @@
         "fecha_final": "",
         "ultima_actualizacion": ""
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "caracteristicasEconomicasVista"
       }
@@ -1595,9 +1518,6 @@
         "fecha_inicial": "",
         "fecha_final": "",
         "ultima_actualizacion": ""
-      },
-      "compare": {
-        "enabled": true
       },
       "legacy": {
         "menu_flag": "unidadesEconomicasVista"
@@ -1689,9 +1609,6 @@
         "fecha_inicial": "",
         "fecha_final": "",
         "ultima_actualizacion": ""
-      },
-      "compare": {
-        "enabled": true
       },
       "legacy": {
         "menu_flag": "superficieAgriculturaVista"
@@ -1796,9 +1713,6 @@
         "fecha_final": "",
         "ultima_actualizacion": ""
       },
-      "compare": {
-        "enabled": true
-      },
       "legacy": {
         "menu_flag": "inversionPublicaVista"
       }
@@ -1894,9 +1808,6 @@
         "fecha_inicial": "",
         "fecha_final": "",
         "ultima_actualizacion": ""
-      },
-      "compare": {
-        "enabled": true
       },
       "legacy": {
         "menu_flag": "institucionesAdminPublicaMunicipalVista"
@@ -2006,10 +1917,6 @@
         "fecha_final": "",
         "ultima_actualizacion": ""
       },
-      "compare": {
-        "enabled": true,
-        "habxpol_fallback": true
-      },
       "legacy": {
         "menu_flag": "habitantesPorPoliciaVista"
       }
@@ -2081,6 +1988,180 @@
         "fecha_inicial": "",
         "fecha_final": "",
         "ultima_actualizacion": ""
+      }
+    },
+    {
+      "id": "test_nuevo",
+      "group_id": "socio",
+      "label": "TEST refactorizacion",
+      "subtitle": "test_ GRosig 1.0",
+      "unit": "años",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "studio"
+      },
+      "fields": [
+        {
+          "key": "pop_tot",
+          "column": "pop_tot",
+          "label": "Pop Tot",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_dual_bars",
+        "sort_by": "pop_tot",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "pop_tot"
+        ],
+        "title": "test",
+        "footer": "fuente_ test",
+        "ranking": true,
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "series": [
+                "#6342ff"
+              ],
+              "serie1": "#6342ff"
+            },
+            "oscuro": {
+              "series": [
+                "#1a4971"
+              ],
+              "serie1": "#1a4971"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "TEST refactorizacion",
+        "periodicidad": "",
+        "unidad_medida": "Años",
+        "fuente": "fuente_ test",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "api": {
+        "path": "/api/indicators/test_nuevo",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal"
+      },
+      "export": {
+        "filename_prefix": "test por grosig",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": "#indicatorFullVizRoot",
+        "footer": "fuente_ test"
+      },
+      "legacy": {
+        "menu_flag": "test_nuevo"
+      }
+    },
+    {
+      "id": "test_nuevo_copia",
+      "group_id": "socio",
+      "label": "TEST refactorizacion (copia)",
+      "subtitle": "test_ GRosig 1.0",
+      "unit": "años",
+      "enabled": true,
+      "migration_status": "studio",
+      "source": {
+        "primary_table": "atlas.tab_municipal",
+        "scope": "studio"
+      },
+      "fields": [
+        {
+          "key": "pop_tot",
+          "column": "pop_tot",
+          "label": "Pop Tot",
+          "type": "integer",
+          "source_table": "tab_municipal"
+        }
+      ],
+      "presentation": {
+        "template": "ranking_dual_bars",
+        "sort_by": "pop_tot",
+        "sections": [
+          "top5",
+          "middle",
+          "bottom5"
+        ],
+        "bar_metrics": [
+          "pop_tot"
+        ],
+        "title": "test",
+        "footer": "fuente_ test",
+        "ranking": true,
+        "ranking_size": 5,
+        "style": {
+          "colors": {
+            "claro": {
+              "series": [
+                "#a01cba"
+              ],
+              "serie1": "#a01cba"
+            },
+            "oscuro": {
+              "series": [
+                "#bde203"
+              ],
+              "serie1": "#bde203"
+            }
+          }
+        }
+      },
+      "metadata": {
+        "enabled": true,
+        "title": "TEST refactorizacion",
+        "periodicidad": "",
+        "unidad_medida": "Años",
+        "fuente": "fuente_ test",
+        "nota_general": "",
+        "notas": [],
+        "fecha_inicial": "",
+        "fecha_final": "",
+        "ultima_actualizacion": ""
+      },
+      "api": {
+        "path": "/api/indicators/test_nuevo_copia",
+        "params": [
+          "cve_mun",
+          "nom_mun"
+        ],
+        "response_profile": "ranking_municipal"
+      },
+      "export": {
+        "filename_prefix": "test_nuevo_copia",
+        "formats": [
+          "png",
+          "csv",
+          "xlsx"
+        ],
+        "target_selector": "#indicatorFullVizRoot",
+        "footer": "fuente_ test"
+      },
+      "legacy": {
+        "menu_flag": "test_nuevo_copia"
       }
     }
   ]

@@ -7,22 +7,17 @@ import {
   createAdminUserAccount,
   fetchAdminUsers,
   getAdminUser,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  logoutAdmin,
   patchAdminUserAccount,
   resetAdminUserPassword,
-  verifyAdminSession,
 } from "./visorAdminAuth.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+import {
+  createStudioShell,
+  studioIdsFromPrefix,
+} from "./studioShell.js";
 
 document.documentElement.setAttribute("data-theme", readStoredTheme());
 
-const loginView = document.getElementById("visorStudioLoginView");
-const dashboard = document.getElementById("visorStudioDashboard");
-const errEl = document.getElementById("visorStudioError");
 const dashMsg = document.getElementById("visorStudioDashMessage");
-const welcomeEl = document.getElementById("visorStudioWelcome");
 const usersBody = document.getElementById("visorStudioUsersTableBody");
 const usersStatus = document.getElementById("visorStudioUsersStatus");
 
@@ -56,21 +51,6 @@ function showDashMessage(text, kind = "success") {
   dashMsg.className = `small mt-3 ${kind === "danger" ? "text-danger" : "text-success"}`;
   dashMsg.classList.remove("d-none");
   window.setTimeout(() => dashMsg?.classList.add("d-none"), 5000);
-}
-
-function showLogin() {
-  loginView?.classList.remove("d-none");
-  dashboard?.classList.add("d-none");
-}
-
-function showDashboard(user) {
-  loginView?.classList.add("d-none");
-  dashboard?.classList.remove("d-none");
-  if (welcomeEl) {
-    const name = user?.display_name || user?.username || "Administrador";
-    welcomeEl.textContent = `Sesión: ${name}`;
-  }
-  mountStudioNav(document.getElementById("visorStudioNav"), { active: "visor" });
 }
 
 function setStudioTab(tab) {
@@ -170,35 +150,22 @@ async function loadUsersTable() {
   }
 }
 
+async function enterDashboard() {
+  const hash = (window.location.hash || "").replace("#", "");
+  setStudioTab(hash === "password" ? "password" : "users");
+  await loadUsersTable();
+}
+
 async function boot() {
   document.querySelectorAll("[data-studio-tab]").forEach((btn) => {
-    btn.addEventListener("click", () => setStudioTab(btn.getAttribute("data-studio-tab") || "users"));
+    btn.addEventListener("click", () =>
+      setStudioTab(btn.getAttribute("data-studio-tab") || "users")
+    );
   });
 
-  document.getElementById("visorStudioRefreshUsersBtn")?.addEventListener("click", () => void loadUsersTable());
-
-  document.getElementById("visorStudioLogoutBtn")?.addEventListener("click", async () => {
-    await logoutAdmin();
-    showLogin();
-  });
-
-  document.getElementById("visorStudioLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    errEl?.classList.add("d-none");
-    const username = document.getElementById("visorStudioUser")?.value?.trim();
-    const password = document.getElementById("visorStudioPass")?.value || "";
-    try {
-      const user = await loginAdmin(username, password);
-      showDashboard(user);
-      setStudioTab("users");
-      await loadUsersTable();
-    } catch (err) {
-      if (errEl) {
-        errEl.textContent = err?.message || "Error de acceso";
-        errEl.classList.remove("d-none");
-      }
-    }
-  });
+  document
+    .getElementById("visorStudioRefreshUsersBtn")
+    ?.addEventListener("click", () => void loadUsersTable());
 
   document.getElementById("visorStudioCreateUserForm")?.addEventListener("submit", async (ev) => {
     ev.preventDefault();
@@ -244,19 +211,26 @@ async function boot() {
     }
   });
 
-  if (isVisorAdminLoggedIn()) {
-    const user = await verifyAdminSession();
-    if (user) {
-      showDashboard(user);
-      const hash = (window.location.hash || "").replace("#", "");
-      setStudioTab(hash === "password" ? "password" : "users");
-      await loadUsersTable();
-      return;
+  const shell = createStudioShell(
+    studioIdsFromPrefix("visorStudio", { loginError: "visorStudioError" }),
+    {
+      activeNav: "visor",
+      formatWelcome: (user) => {
+        const name = user?.display_name || user?.username || "Administrador";
+        const ent = user?.cve_ent
+          ? ` · ${user.entidad || user.instancia_clave || ""} (${user.cve_ent})`
+          : "";
+        return `Sesión: ${name}${ent}`;
+      },
+      onEnterDashboard: () => enterDashboard(),
+      onDashboardError: (err) => {
+        if (usersStatus) {
+          usersStatus.textContent = err?.message || "Error al cargar usuarios.";
+        }
+      },
     }
-  }
-  const footer = document.getElementById("visorStudioLoginFooter");
-  if (footer) footer.innerHTML = studioLoginFooterHtml("visor");
-  showLogin();
+  );
+  await shell.boot();
 }
 
 void boot();

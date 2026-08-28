@@ -1,16 +1,12 @@
 /**
  * INV Studio — administración del catálogo Inventario Nacional de Viviendas.
- * Reutiliza la sesión JWT de Visor Studio (visorAdminAuth.js).
+ * Reutiliza la sesión JWT de Visor Studio (studioShell).
  */
+import { adminFetch } from "./visorAdminAuth.js";
 import {
-  adminFetch,
-  clearAdminSession,
-  getAdminUser,
-  isVisorAdminLoggedIn,
-  loginAdmin,
-  verifyAdminSession,
-} from "./visorAdminAuth.js";
-import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+  createStudioShell,
+  studioIdsFromPrefix,
+} from "./studioShell.js";
 import { INV_ICON_OPTIONS, invLayerIconSvg } from "./invVivIcons.js";
 
 const $ = (id) => document.getElementById(id);
@@ -35,26 +31,10 @@ let _isNewInd = false;
 /** Id del indicador origen al crear una copia (null si no es copia). */
 let _copySourceId = null;
 
-function showErr(el, msg) {
-  if (!el) return;
-  if (!msg) {
-    el.classList.add("d-none");
-    el.textContent = "";
-    return;
-  }
-  el.textContent = msg;
-  el.classList.remove("d-none");
-}
-
 function setMsg(el, msg, ok = true) {
   if (!el) return;
   el.textContent = msg || "";
   el.className = `small ${ok ? "text-success" : "text-danger"}`;
-}
-
-function showLogin(show) {
-  $("invStudioLoginView")?.classList.toggle("d-none", !show);
-  $("invStudioDashboard")?.classList.toggle("d-none", show);
 }
 
 function escapeHtml(s) {
@@ -635,33 +615,10 @@ async function publishCatalog() {
 }
 
 async function bootDashboard() {
-  const user = getAdminUser();
-  if ($("invStudioWelcome")) {
-    $("invStudioWelcome").textContent = user?.username
-      ? `Sesión: ${user.username}`
-      : "Sesión admin activa";
-  }
-  mountStudioNav($("invStudioNav"), { active: "inv" });
-  showLogin(false);
   await loadMetaAndCatalog();
 }
 
 async function init() {
-  $("invStudioLoginForm")?.addEventListener("submit", async (ev) => {
-    ev.preventDefault();
-    showErr($("invStudioError"), "");
-    try {
-      await loginAdmin($("invStudioUser").value.trim(), $("invStudioPass").value);
-      await bootDashboard();
-    } catch (err) {
-      showErr($("invStudioError"), err.message || String(err));
-    }
-  });
-
-  $("invStudioLogoutBtn")?.addEventListener("click", () => {
-    clearAdminSession();
-    showLogin(true);
-  });
   $("invGroupNewBtn")?.addEventListener("click", () => openNewGroup());
   $("invIndNewBtn")?.addEventListener("click", () => openNewIndicator());
   $("invGroupForm")?.addEventListener("submit", saveGroupDraft);
@@ -682,19 +639,21 @@ async function init() {
     }
   });
 
-  if (isVisorAdminLoggedIn()) {
-    try {
-      await verifyAdminSession();
-      await bootDashboard();
-    } catch {
-      clearAdminSession();
-      showLogin(true);
+  const shell = createStudioShell(
+    studioIdsFromPrefix("invStudio", { loginError: "invStudioError" }),
+    {
+      activeNav: "inv",
+      onEnterDashboard: () => bootDashboard(),
+      onDashboardError: (err) => {
+        setMsg(
+          $("invStudioPublishMsg"),
+          err?.message || "Error al cargar",
+          false
+        );
+      },
     }
-  } else {
-    const footer = $("invStudioLoginFooter");
-    if (footer) footer.innerHTML = studioLoginFooterHtml("inv");
-    showLogin(true);
-  }
+  );
+  await shell.boot();
 }
 
 void init();
