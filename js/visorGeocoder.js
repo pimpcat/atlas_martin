@@ -6,6 +6,8 @@
  * @see app_api/geocoder.py
  */
 import { getLeafletMap, getVisorStateWideMode, whenAtlasMapReady } from "./map.js";
+import { getActiveCveEnt, getEntidadNombre } from "./amigoDeployment.js";
+import { getApiCveEnt } from "./atlasConfig.js";
 import { fetchBuscarGeocoder, fetchBuscarGeometria, geocoderRowsToFeatureCollection } from "./geocoderApi.js";
 import {
   ensureVisorSearchConfig,
@@ -23,6 +25,9 @@ import {
 
 /** @type {import("@maplibre/maplibre-gl-geocoder").MaplibreGeocoder | null} */
 let _geocoder = null;
+/** Epoch: evita que un tryAttach diferido remonte el control tras teardown (mapa compartido). */
+let _attachEpoch = 0;
+let _active = false;
 
 /** @type {{ getCveMun?: () => string | null, getMunicipio?: () => { nomgeo?: string } | null }} */
 let _visorOptions = {};
@@ -70,7 +75,8 @@ function buildPlaceholder() {
     ? buildSearchPlaceholderHint(_searchConfig.sources, { stateWide })
     : "";
   if (stateWide) {
-    return hint ? `Buscar ${hint} en Guerrero…` : "Buscar en Guerrero…";
+    const entNom = getEntidadNombre() || "la entidad";
+    return hint ? `Buscar ${hint} en ${entNom}…` : `Buscar en ${entNom}…`;
   }
   const m = _visorOptions.getMunicipio?.();
   const nom = m?.nomgeo?.trim();
@@ -90,7 +96,14 @@ async function forwardGeocode(config) {
     return { type: "FeatureCollection", features: [] };
   }
   try {
-    const payload = await fetchBuscarGeocoder(q, cveMun);
+    const payload = await fetchBuscarGeocoder(
+      q,
+      cveMun,
+      getApiCveEnt() || getActiveCveEnt(),
+    );
+    if (payload?.aborted) {
+      return { type: "FeatureCollection", features: [] };
+    }
     return geocoderRowsToFeatureCollection(payload.rows);
   } catch (err) {
     console.warn("[visor geocoder]", err);
@@ -125,6 +138,8 @@ function buildGeocoderOptions(maplibregl) {
     flyTo: false,
     marker: false,
     showResultsWhileTyping: true,
+    /** Espera tras teclear antes de disparar forwardGeocode (default lib: 200). */
+    debounceSearch: 300,
     collapsed: false,
     getItemValue: (item) => item.properties?.nombre_busqueda || item.text || "",
     render: renderGeocoderSuggestion,
@@ -307,7 +322,11 @@ async function drawPolygonHighlight(selected, map) {
     return false;
   }
   try {
-    const data = await fetchBuscarGeometria(tabla, cvegeo);
+    const data = await fetchBuscarGeometria(
+      tabla,
+      cvegeo,
+      getApiCveEnt() || getActiveCveEnt(),
+    );
     const feature = {
       ...data.feature,
       properties: {
@@ -420,7 +439,7 @@ function updateGeocoderUi() {
   if (input) {
     input.disabled = !stateWide && !cve;
     input.title = stateWide
-      ? "Buscar localidades y colonias en todo Guerrero"
+      ? `Buscar localidades y colonias en ${getEntidadNombre() || "la entidad"}`
       : cve
         ? "Buscar localidades y colonias del municipio seleccionado"
         : "Seleccione un municipio en el panel izquierdo";
@@ -462,10 +481,20 @@ function ensureGeocoder(map) {
   updateGeocoderUi();
 }
 
-function tryAttach(attempt) {
+function tryAttach(attempt, epoch) {
+  if (!_active || epoch !== _attachEpoch) return;
   const map = getLeafletMap();
   if (!map) {
-    if (attempt < 24) setTimeout(() => tryAttach(attempt + 1), 120);
+    if (attempt < 24) setTimeout(() => tryAttach(attempt + 1, epoch), 120);
+    return;
+  }
+  // Solo en el marco del visor (no explorador municipal / home / geo).
+  const host = map.getContainer?.();
+  if (
+    host?.classList?.contains("atlas-map--home-lock") ||
+    host?.classList?.contains("atlas-map--geo-lock")
+  ) {
+    detachGeocoder(map);
     return;
   }
   ensureGeocoder(map);
@@ -478,16 +507,22 @@ function tryAttach(attempt) {
  */
 export function attachVisorGeocoder(options = {}) {
   _visorOptions = options || {};
+  _active = true;
+  const epoch = ++_attachEpoch;
   whenAtlasMapReady(() => {
+    if (!_active || epoch !== _attachEpoch) return;
     void ensureVisorSearchConfig().then((cfg) => {
+      if (!_active || epoch !== _attachEpoch) return;
       _searchConfig = cfg;
       updateGeocoderUi();
     });
-    requestAnimationFrame(() => tryAttach(0));
+    requestAnimationFrame(() => tryAttach(0, epoch));
   });
 }
 
 export function teardownVisorGeocoder() {
+  _active = false;
+  _attachEpoch += 1;
   removeSearchMarker();
   detachGeocoder(getLeafletMap());
   _visorOptions = {};
@@ -508,16 +543,29 @@ export function clearVisorGeocoderSearch() {
 }
 
 export function refreshVisorGeocoder() {
+  if (!_active) {
+    detachGeocoder(getLeafletMap());
+    return;
+  }
   const map = getLeafletMap();
   if (!map) return;
+  const host = map.getContainer?.();
+  if (
+    host?.classList?.contains("atlas-map--home-lock") ||
+    host?.classList?.contains("atlas-map--geo-lock")
+  ) {
+    detachGeocoder(map);
+    return;
+  }
   void ensureVisorSearchConfig().then((cfg) => {
+    if (!_active) return;
     _searchConfig = cfg;
     if (_geocoder) updateGeocoderUi();
   });
   if (_geocoder) {
     updateGeocoderUi();
   } else {
-    tryAttach(0);
+    tryAttach(0, _attachEpoch);
   }
 }
 

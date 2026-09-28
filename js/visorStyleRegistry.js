@@ -165,7 +165,7 @@ function validateSymbolAttributeStyle(entry) {
 /**
  * @param {object} preset
  * @param {object} [layerStyle]
- * @param {"paint"|"paintHalo"} [target]
+ * @param {"paint"|"paintHalo"|"fillHit"|"layout"} [target]
  */
 function applyStyleSchema(preset, layerStyle, target = "paint") {
   let base;
@@ -179,14 +179,22 @@ function applyStyleSchema(preset, layerStyle, target = "paint") {
     base = deepClone(preset.paint || {});
   }
   const schema = preset.style_schema || {};
-  const style = layerStyle || {};
+  const style = expandOutlineDetailStyle(layerStyle, preset);
 
   for (const [styleKey, spec] of Object.entries(schema)) {
     const specTarget = spec.target || "paint";
     if (specTarget !== target) continue;
     const mapKey = spec.paint || spec.layout;
     if (!mapKey) continue;
-    const val = style[styleKey] !== undefined ? style[styleKey] : spec.default;
+    let val = style[styleKey];
+    if ((val === undefined || val === null || val === "") && style.color) {
+      if (styleKey === "halo_color" || styleKey === "fill_hit_color") {
+        val = style.color;
+      }
+    }
+    if (val === undefined || val === null || val === "") {
+      val = spec.default;
+    }
     if (val === undefined || val === null || val === "") continue;
     if (mapKey === "line-dasharray") {
       if (Array.isArray(val) && val.length) base[mapKey] = val;
@@ -196,6 +204,25 @@ function applyStyleSchema(preset, layerStyle, target = "paint") {
   }
 
   return base;
+}
+
+/**
+ * polygon_outline_detail / line_stack: un solo `color` completa halo e hit.
+ * @param {object} [layerStyle]
+ * @param {object} [preset]
+ */
+export function expandOutlineDetailStyle(layerStyle, preset) {
+  const out = { ...(layerStyle || {}) };
+  const color = out.color || out.halo_color || out.fill_hit_color;
+  if (!color) return out;
+  if (!out.color) out.color = color;
+  if (preset?.lineStack || preset?.fillHit || preset?.id === "polygon_outline_detail") {
+    if (!out.halo_color) out.halo_color = color;
+    if ((preset?.fillHit || preset?.id === "polygon_outline_detail") && !out.fill_hit_color) {
+      out.fill_hit_color = color;
+    }
+  }
+  return out;
 }
 
 /**
@@ -233,8 +260,25 @@ function attachOverlayDefExtras(def, entry) {
   if (mf === false || mf === "false" || mf === "none" || mf === 0) {
     def.skipMunFilter = true;
   }
+  if (entry.data?.mun_filter_cvegeo === false) {
+    def.munFilterCvegeo = false;
+  }
   const geom = String(entry.geometry || "").trim().toLowerCase();
   if (geom) def.geometry = geom;
+
+  // Tile strategy: filtered → MVT resource = published_id (vista propia); shared → tabla geo.
+  const pub = entry.publication || {};
+  const strategy = String(pub.tile_strategy || "shared").toLowerCase();
+  const publishedId = String(pub.published_id || "").trim().toLowerCase();
+  const physicalTable = String(entry.data?.table || def.table || "").trim().toLowerCase();
+  if (strategy === "filtered" && (publishedId || entry.id)) {
+    def.tileStrategy = "filtered";
+    def.martinResource = publishedId || String(entry.id).trim().toLowerCase();
+    def.table = physicalTable || def.table;
+  } else {
+    def.tileStrategy = "shared";
+    def.martinResource = physicalTable || def.table;
+  }
   return def;
 }
 
@@ -247,6 +291,8 @@ export function buildOverlayDefFromGenericPreset(entry, preset) {
   const table = entry.data?.table;
   const key = entry.overlay_key;
   if (!table || !key || !preset) return null;
+
+  const layerStyle = expandOutlineDetailStyle(entry.style, preset);
 
   if (preset.type === "symbol") {
     if (isSymbolAttributePreset(preset)) {
@@ -263,11 +309,11 @@ export function buildOverlayDefFromGenericPreset(entry, preset) {
     key,
     table,
     type: preset.type,
-    paint: applyStyleSchema(preset, entry.style, "paint"),
+    paint: applyStyleSchema(preset, layerStyle, "paint"),
   };
 
   if (isAttributePreset(preset)) {
-    const style = entry.style || {};
+    const style = layerStyle;
     def.paint[preset.attribute.paint] = buildAttributeColorMatch(
       style.field,
       style.classes,
@@ -277,21 +323,21 @@ export function buildOverlayDefFromGenericPreset(entry, preset) {
 
   if (preset.lineStack) {
     def.lineStack = true;
-    def.paintHalo = applyStyleSchema(preset, entry.style, "paintHalo");
-    const dash = entry.style?.line_dash;
+    def.paintHalo = applyStyleSchema(preset, layerStyle, "paintHalo");
+    const dash = layerStyle?.line_dash;
     if (Array.isArray(dash) && dash.length) {
       def.paint["line-dasharray"] = dash;
       if (def.paintHalo) def.paintHalo["line-dasharray"] = dash;
     }
   } else if (preset.type === "line") {
-    const dash = entry.style?.line_dash;
+    const dash = layerStyle?.line_dash;
     if (Array.isArray(dash) && dash.length) {
       def.paint["line-dasharray"] = dash;
     }
   }
 
   if (preset.type === "fill") {
-    const style = entry.style || {};
+    const style = layerStyle;
     const outlineW = Number(style.outline_width);
     if (Number.isFinite(outlineW) && outlineW > 0) {
       const outlineColor =
@@ -311,15 +357,15 @@ export function buildOverlayDefFromGenericPreset(entry, preset) {
       def.polygonOutline = { paint: outlinePaint };
     }
   }
-  const wantsFillHit = preset.fillHit || entry.style?.fill_hit === true;
+  const wantsFillHit = preset.fillHit || layerStyle?.fill_hit === true;
   if (wantsFillHit) {
     def.fillHit = true;
-    def.fillHitPaint = applyStyleSchema(preset, entry.style, "fillHit");
+    def.fillHitPaint = applyStyleSchema(preset, layerStyle, "fillHit");
     if (!def.fillHitPaint || !Object.keys(def.fillHitPaint).length) {
-      const color = entry.style?.color ?? entry.style?.fill_hit_color;
+      const color = layerStyle?.color ?? layerStyle?.fill_hit_color;
       def.fillHitPaint = {
         "fill-color": color || "#990000",
-        "fill-opacity": entry.style?.fill_hit_opacity ?? 0.01,
+        "fill-opacity": layerStyle?.fill_hit_opacity ?? 0.01,
         "fill-antialias": true,
       };
     }
@@ -327,7 +373,7 @@ export function buildOverlayDefFromGenericPreset(entry, preset) {
     def.fillHit = true;
   }
 
-  const minZ = entry.style?.minzoom ?? preset.minzoom;
+  const minZ = layerStyle?.minzoom ?? preset.minzoom;
   if (minZ != null) def.minzoom = Number(minZ);
 
   return attachOverlayDefExtras(def, entry);

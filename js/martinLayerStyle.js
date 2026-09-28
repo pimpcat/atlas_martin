@@ -4,12 +4,19 @@
  */
 
 import { mapLibreLayoutMinzoom } from "./visorMapZoom.js";
+import { martinPublishedId } from "./atlasConfig.js";
+import { OFFLINE_MODE, portalAssetUrl } from "./offlineMode.js";
 
 /** Suavizado sutil del trazo central (overlays / detalle). */
 export const LINE_BLUR_SOFT = 0.2;
 
-/** Glyphs MapLibre (requerido para capas symbol / etiquetas). */
-export const MAPLIBRE_GLYPHS_URL = "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
+/**
+ * Glyphs MapLibre (requerido para capas symbol / etiquetas).
+ * Offline: PBF locales descargados con tools/offline/fetch_offline_assets.py.
+ */
+export const MAPLIBRE_GLYPHS_URL = OFFLINE_MODE
+  ? portalAssetUrl("/atlas_gro/fonts/glyphs/{fontstack}/{range}.pbf")
+  : "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf";
 
 /** Opacidad de etiqueta visible desde el zoom mínimo (inclusivo en el entero configurado). */
 export function labelTextOpacityAtMinZoom(minZ) {
@@ -26,18 +33,18 @@ export const LOCS_PUNTO_LABEL_TEXT = [
   [
     "all",
     [">", ["length", ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""]], 0],
-    [">", ["length", ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ""]], 0],
+    [">", ["length", ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ["get", "nomgeo"], ["get", "NOMGEO"], ""]], 0],
   ],
   [
     "concat",
     ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""],
     " ",
-    ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ""],
+    ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ["get", "nomgeo"], ["get", "NOMGEO"], ""],
   ],
   [">", ["length", ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""]], 0],
   ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], "—"],
-  [">", ["length", ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ""]], 0],
-  ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], "—"],
+  [">", ["length", ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ["get", "nomgeo"], ["get", "NOMGEO"], ""]], 0],
+  ["coalesce", ["get", "nom_loc"], ["get", "NOM_LOC"], ["get", "nomgeo"], ["get", "NOMGEO"], "—"],
   "—",
 ];
 
@@ -646,7 +653,7 @@ export const MARTIN_USO_SUELO = {
 
 /** Capa vectorial dentro del tile (.pbf) */
 export function martinSourceLayer(table) {
-  return table;
+  return martinPublishedId(table);
 }
 
 export const LAYER_PAINT = {

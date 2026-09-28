@@ -12,8 +12,17 @@ import {
   probeCartographyHealth,
   summarizeCartographyHealth,
 } from "./cartographyHealth.js";
+import {
+  adminKitGroEndpoints,
+  bindKitGroCollapsible,
+  KIT_GRO_PANEL_INNER_HTML,
+  mountKitGroPanel,
+} from "./kitGroStudio.js";
 
 const $ = (id) => document.getElementById(id);
+
+let _kitGroMounted = false;
+let _kitGroCollapsibleBound = false;
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -269,6 +278,21 @@ async function exportAnalyticsXlsx() {
   }
 }
 
+function isAnalyticsOpen() {
+  return $("grosigAnalyticsToggle")?.getAttribute("aria-expanded") === "true";
+}
+
+async function toggleAnalyticsPanel() {
+  const btn = $("grosigAnalyticsToggle");
+  const body = $("grosigAnalyticsBody");
+  if (!btn || !body) return;
+  const open = !isAnalyticsOpen();
+  btn.setAttribute("aria-expanded", open ? "true" : "false");
+  body.classList.toggle("d-none", !open);
+  body.hidden = !open;
+  if (open) await loadAnalytics();
+}
+
 function bindAnalyticsUi() {
   $("grosigAnalyticsRefresh")?.addEventListener("click", () => void loadAnalytics());
   $("grosigAnalyticsExport")?.addEventListener("click", () => void exportAnalyticsXlsx());
@@ -281,6 +305,9 @@ function bindAnalyticsUi() {
   });
   $("grosigAnalyticsTo")?.addEventListener("change", () => {
     if (isDateFilterOn()) void loadAnalytics();
+  });
+  $("grosigAnalyticsToggle")?.addEventListener("click", () => {
+    void toggleAnalyticsPanel();
   });
   document.querySelectorAll("#grosigDashboard .nodo-date-input").forEach((el) => {
     el.addEventListener("click", () => {
@@ -295,9 +322,31 @@ function bindAnalyticsUi() {
   syncDateFilterUi();
 }
 
+function mountKitGroPanelContent() {
+  const panel = $("grosigKitGroPanel");
+  if (!panel || _kitGroMounted) return;
+  panel.innerHTML = KIT_GRO_PANEL_INNER_HTML;
+  mountKitGroPanel(panel, {
+    ...adminKitGroEndpoints(),
+    fetchFn: adminFetch,
+  });
+  _kitGroMounted = true;
+}
+
+function initKitGroPanel() {
+  const card = $("grosigKitGroCard");
+  if (!card || _kitGroCollapsibleBound) return;
+  bindKitGroCollapsible(card, { onFirstExpand: mountKitGroPanelContent });
+  _kitGroCollapsibleBound = true;
+}
+
 async function onEnterDashboard() {
+  updateAnalyticsScopeLabel();
+  const user = getAdminUser();
+  const ent = String(user?.cve_ent || "").padStart(2, "0");
+  $("grosigKitGroCard")?.classList.toggle("d-none", ent === "12");
+  initKitGroPanel();
   await refreshHealth();
-  await loadAnalytics();
 }
 
 async function init() {

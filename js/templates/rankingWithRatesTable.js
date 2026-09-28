@@ -15,6 +15,7 @@ import {
   resolveRankingSize,
   applyRankingSizeCss,
   showError,
+  syncRankingNameColumn,
 } from "./domUtil.js";
 
 function setTableCols(host, metrics, config) {
@@ -142,6 +143,7 @@ function renderChartOnly(root, payload, config, barKey, maxV, rankN) {
   appendFooter(wrap, config, "crecimiento-viz-fuente");
   root.innerHTML = "";
   root.append(wrap);
+  requestAnimationFrame(() => syncRankingNameColumn(wrap));
 }
 
 export function renderRankingWithRatesTable(root, payload, config = {}) {
@@ -232,4 +234,5 @@ export function renderRankingWithRatesTable(root, payload, config = {}) {
   appendFooter(wrap, config, "crecimiento-viz-fuente");
   root.innerHTML = "";
   root.append(wrap);
+  requestAnimationFrame(() => syncRankingNameColumn(wrap));
 }

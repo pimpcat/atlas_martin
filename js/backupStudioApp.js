@@ -288,9 +288,28 @@ async function enterApp() {
   }
 }
 
-async function init() {
+function wireBackupStudioUi() {
   $("bkCreateBtn")?.addEventListener("click", () => void createBackup());
   $("bkRefreshBtn")?.addEventListener("click", () => void loadList());
+}
+
+/** Shell v2 — enlazar UI tras montar panel en #gs2StudioMount */
+export function bindBackupStudioUi() {
+  wireBackupStudioUi();
+}
+
+/** Shell v2 — meta + listado de respaldos */
+export function enterBackupStudioDashboard() {
+  return enterApp();
+}
+
+/** Shell v2 — detener polling al cambiar de vista */
+export function stopBackupStudioPolling() {
+  stopPoll();
+}
+
+async function init() {
+  wireBackupStudioUi();
 
   const shell = createStudioShell(
     {
@@ -314,4 +333,6 @@ async function init() {
   await shell.boot();
 }
 
-void init();
+if (document.getElementById("bkLoginForm")) {
+  void init();
+}

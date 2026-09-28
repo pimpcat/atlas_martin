@@ -1,0 +1,66 @@
+/**
+ * GroSIG Studio 2 — tokens + página base.
+ */
+.gs2-page,
+.grosig-shell-v2 {
+  --gs2-bg: #0f1117;
+  --gs2-bg-elevated: #161922;
+  --gs2-bg-card: #1a1d27;
+  --gs2-border: rgba(148, 163, 184, 0.14);
+  --gs2-text: #f1f5f9;
+  --gs2-text-muted: #94a3b8;
+  --gs2-accent: #7c6cf0;
+  --gs2-accent-rgb: 124, 108, 240;
+  --gs2-success: #22c55e;
+  --gs2-warning: #f59e0b;
+  --gs2-danger: #ef4444;
+  --gs2-radius: 12px;
+  --gs2-radius-sm: 8px;
+  --gs2-sidebar-w: 268px;
+  --gs2-topbar-h: 56px;
+  --gs2-space-1: 0.25rem;
+  --gs2-space-2: 0.5rem;
+  --gs2-space-3: 0.75rem;
+  --gs2-space-4: 1rem;
+  --gs2-space-5: 1.25rem;
+  --gs2-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --gs2-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.25);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--gs2-text);
+  background: var(--gs2-bg);
+}
+
+html[data-theme="claro"] .gs2-page,
+html[data-theme="claro"] .grosig-shell-v2 {
+  --gs2-bg: #eef2f7;
+  --gs2-bg-elevated: #ffffff;
+  --gs2-bg-card: #ffffff;
+  --gs2-border: rgba(15, 23, 42, 0.1);
+  --gs2-text: #0f172a;
+  --gs2-text-muted: #64748b;
+  --gs2-accent: #6d5ce7;
+  --gs2-accent-rgb: 109, 92, 231;
+  --gs2-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --gs2-shadow-md: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+.gs2-page {
+  min-height: 100vh;
+  margin: 0;
+}
+
+.gs2-entity-pill {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.25rem 0.65rem;
+  border-radius: 999px;
+  background: rgba(var(--gs2-accent-rgb), 0.18);
+  color: var(--gs2-text);
+  border: 1px solid rgba(var(--gs2-accent-rgb), 0.35);
+}
+
+.gs2-entity-pill:empty {
+  display: none;
+}

@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <script>
+    (function () {
+      var t = localStorage.getItem("atlasgro-theme");
+      if (t !== "oscuro" && t !== "claro") t = localStorage.getItem("atlasgro-theme-default");
+      if (t !== "oscuro" && t !== "claro") t = "claro";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Cartography Studio — GroSIG</title>
@@ -15,7 +23,7 @@
         <div class="card-body p-4">
           <h1 class="h5 mb-1">Cartography Studio</h1>
           <p class="small text-muted mb-3">
-            Branding de tiras PDF (logo, institución, advertencias, fechas). Misma sesión admin.
+            Productos, Custom, Fuentes, Datos (capas carto) y branding PDF. Misma sesión admin.
           </p>
           <form id="cartoStudioLoginForm" class="d-grid gap-3">
             <div>
@@ -68,63 +76,842 @@
           </div>
         </div>
 
-        <form id="cartoStudioForm" class="d-grid gap-3">
-          <div class="card shadow-sm visor-studio-card">
-            <div class="card-header fw-semibold">Institución</div>
+        <div id="cartoStudioApiHint" class="alert alert-warning py-2 small d-none" role="status"></div>
+
+        <ul class="nav nav-tabs mb-3">
+          <li class="nav-item">
+            <button type="button" class="nav-link active" data-carto-tab="products">Productos</button>
+          </li>
+          <li class="nav-item">
+            <button type="button" class="nav-link" data-carto-tab="custom">Custom</button>
+          </li>
+          <li class="nav-item">
+            <button type="button" class="nav-link" data-carto-tab="fuentes">Fuentes</button>
+          </li>
+          <li class="nav-item d-none" id="cartoTabDatosItem">
+            <button type="button" class="nav-link" data-carto-tab="datos">Datos</button>
+          </li>
+          <li class="nav-item">
+            <button type="button" class="nav-link" data-carto-tab="branding">Branding PDF</button>
+          </li>
+          <li class="nav-item">
+            <button type="button" class="nav-link" data-carto-tab="salud">Salud</button>
+          </li>
+        </ul>
+
+        <!-- P3: editor productos oficiales -->
+        <div id="cartoStudioProductsPanel">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body">
+              <div class="row g-2 align-items-end">
+                <div class="col-md-5">
+                  <label class="form-label small" for="cartoProdSelect">Producto oficial</label>
+                  <select id="cartoProdSelect" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label small" for="cartoProdTemplateSelect">Plantilla</label>
+                  <select id="cartoProdTemplateSelect" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-md-3">
+                  <div id="cartoProdStatus" class="small"></div>
+                  <span id="cartoProdDirtyBadge" class="badge text-bg-warning d-none">sin guardar</span>
+                </div>
+              </div>
+              <p class="small text-muted mt-2 mb-0">
+                Edita un <strong>draft</strong>. Preview no toca producción. Solo <strong>Publicar</strong> actualiza el JSON activo del Visor.
+              </p>
+              <div id="cartoProdErrorTop" class="small text-danger mt-2 d-none"></div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible">
+            <div class="card-header fw-semibold">Metadatos</div>
             <div class="card-body row g-2">
               <div class="col-md-6">
-                <label class="form-label small" for="fBrandLine">Línea institucional</label>
-                <input id="fBrandLine" class="form-control form-control-sm" maxlength="200" />
+                <label class="form-label small" for="cartoProdTitle">Título</label>
+                <input id="cartoProdTitle" class="form-control form-control-sm" />
               </div>
               <div class="col-md-6">
-                <label class="form-label small" for="fEngineLine">Línea del motor</label>
-                <input id="fEngineLine" class="form-control form-control-sm" maxlength="200" />
+                <label class="form-label small" for="cartoProdFooter">Pie</label>
+                <input id="cartoProdFooter" class="form-control form-control-sm" />
               </div>
             </div>
           </div>
 
-          <div class="card shadow-sm visor-studio-card">
-            <div class="card-header fw-semibold">Logo(s)</div>
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible">
+            <div class="card-header fw-semibold">Layout · papel</div>
             <div class="card-body">
-              <p class="small text-muted mb-2">Archivos en <code>assets/logos/</code>. Orden = lista en branding.</p>
-              <ul id="cartoStudioLogosList" class="small mb-2"></ul>
-              <div class="d-flex flex-wrap gap-2 align-items-end">
-                <div>
-                  <label class="form-label small" for="fLogoFile">Subir PNG/JPG</label>
-                  <input type="file" id="fLogoFile" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" />
+              <p class="small text-muted mb-2" id="cartoLayHelpSplit">
+                <strong>Geometría aquí</strong> (papel, tira, alturas) → Guardar draft → Preview → Publicar.
+                <strong>Textos y logos</strong> de las tiras → pestaña <em>Branding PDF</em> (global, al guardar).
+              </p>
+              <div class="row g-2 align-items-end mb-2">
+                <div class="col-md-5">
+                  <label class="form-label small" for="cartoLayPaper">Tamaño de papel</label>
+                  <select id="cartoLayPaper" class="form-select form-select-sm"></select>
                 </div>
-                <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStudioUploadLogoBtn">Subir logo</button>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoLayOrient">Orientación</label>
+                  <select id="cartoLayOrient" class="form-select form-select-sm">
+                    <option value="portrait">Vertical</option>
+                    <option value="landscape">Horizontal</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <div class="small text-muted pt-3" id="cartoLayPaperHint">—</div>
+                </div>
+              </div>
+              <div id="cartoLayCustomWrap" class="border rounded p-2 mb-2 bg-light d-none">
+                <div class="fw-semibold small mb-2">Tamaño personalizado</div>
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-3">
+                    <label class="form-label small" for="cartoLayWidth">Ancho</label>
+                    <input id="cartoLayWidth" type="number" step="any" min="0.5" class="form-control form-control-sm" />
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small" for="cartoLayHeight">Alto</label>
+                    <input id="cartoLayHeight" type="number" step="any" min="0.5" class="form-control form-control-sm" />
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small" for="cartoLayUnit">Unidad</label>
+                    <select id="cartoLayUnit" class="form-select form-select-sm">
+                      <option value="cm">Centímetros (cm)</option>
+                      <option value="mm">Milímetros (mm)</option>
+                      <option value="in">Pulgadas (in)</option>
+                      <option value="pt">Puntos PDF (pt)</option>
+                      <option value="px">Píxeles 96 dpi (px)</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <div class="small text-muted" id="cartoLayCustomHint">El PDF usará exactamente este tamaño.</div>
+                  </div>
+                </div>
+              </div>
+              <div class="d-flex flex-wrap gap-3 small">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="cartoLayLegend" />
+                  <label class="form-check-label" for="cartoLayLegend">Leyenda</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="cartoLayNorth" />
+                  <label class="form-check-label" for="cartoLayNorth">Norte</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="cartoLayScale" />
+                  <label class="form-check-label" for="cartoLayScale">Escala</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="cartoLayBrand" />
+                  <label class="form-check-label" for="cartoLayBrand">Cabecera marca</label>
+                </div>
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="cartoLayFrame" />
+                  <label class="form-check-label" for="cartoLayFrame">Marco exterior</label>
+                </div>
+              </div>
+              <div class="border rounded p-2 mt-2 bg-light d-none" id="cartoLayStripWrap">
+                <div class="fw-semibold small mb-1">Tira inferior (plano localidad)</div>
+                <div class="d-flex flex-wrap gap-3 align-items-end small">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="cartoLayStrip" />
+                    <label class="form-check-label" for="cartoLayStrip">Tira informativa activa</label>
+                  </div>
+                  <div style="min-width: 12rem; flex: 1 1 12rem;">
+                    <label class="form-label small mb-0" for="cartoLayStripRatio">
+                      Altura relativa (<span id="cartoLayStripRatioLbl">10</span> %)
+                    </label>
+                    <input
+                      id="cartoLayStripRatio"
+                      type="range"
+                      class="form-range"
+                      min="8"
+                      max="35"
+                      step="1"
+                      value="10"
+                    />
+                    <div class="text-muted" style="font-size: 0.75rem;">
+                      Rango 8–35 % de la página (mismo clamp del motor).
+                    </div>
+                  </div>
+                  <div class="flex-shrink-0" style="width: 5.5rem;">
+                    <div class="small text-muted mb-1">Proporción</div>
+                    <div
+                      id="cartoLayStripPreview"
+                      title="Mapa arriba · tira abajo"
+                      style="
+                        height: 4.5rem;
+                        border: 1px solid #adb5bd;
+                        border-radius: 0.25rem;
+                        overflow: hidden;
+                        display: flex;
+                        flex-direction: column;
+                        background: #fff;
+                      "
+                    >
+                      <div id="cartoLayStripPreviewMap" style="flex: 1 1 auto; background: #e9ecef; min-height: 0;"></div>
+                      <div
+                        id="cartoLayStripPreviewBand"
+                        style="flex: 0 0 10%; background: #6c757d; min-height: 4px;"
+                      ></div>
+                    </div>
+                    <div class="text-muted text-center" style="font-size: 0.7rem;" id="cartoLayStripPreviewLbl">mapa / tira</div>
+                  </div>
+                </div>
+                <div class="alert alert-warning py-1 px-2 small mb-0 mt-2 d-none" id="cartoLayStripWarn" role="status">
+                  Tira desactivada: el PDF del plano quedará <strong>sin franja informativa</strong>
+                  (y este producto no usa cabecera de marca de respaldo). Reactive la tira o use Preview antes de publicar.
+                </div>
+                <details class="mt-2" id="cartoLayStripComposeDetails">
+                  <summary class="small fw-semibold" style="cursor:pointer">Columnas internas de la tira (avanzado)</summary>
+                  <p class="text-muted mb-2 mt-1" style="font-size: 0.75rem;">
+                    Pesos relativos (se normalizan). Defaults canónicos: 17 / 12 / 18 / 26 / 27.
+                    Sin cambios el PDF oficial se ve igual.
+                  </p>
+                  <div class="row g-2 small">
+                    <div class="col-4 col-md">
+                      <label class="form-label small" for="cartoStripColLimites">Límites %</label>
+                      <input id="cartoStripColLimites" type="number" class="form-control form-control-sm" min="1" max="80" step="1" value="17" />
+                    </div>
+                    <div class="col-4 col-md">
+                      <label class="form-label small" for="cartoStripColClaves">Claves %</label>
+                      <input id="cartoStripColClaves" type="number" class="form-control form-control-sm" min="1" max="80" step="1" value="12" />
+                    </div>
+                    <div class="col-4 col-md">
+                      <label class="form-label small" for="cartoStripColServicios">Servicios %</label>
+                      <input id="cartoStripColServicios" type="number" class="form-control form-control-sm" min="1" max="80" step="1" value="18" />
+                    </div>
+                    <div class="col-4 col-md">
+                      <label class="form-label small" for="cartoStripColIndice">Índice %</label>
+                      <input id="cartoStripColIndice" type="number" class="form-control form-control-sm" min="1" max="80" step="1" value="26" />
+                    </div>
+                    <div class="col-4 col-md">
+                      <label class="form-label small" for="cartoStripColAdvert">Advertencia %</label>
+                      <input id="cartoStripColAdvert" type="number" class="form-control form-control-sm" min="1" max="80" step="1" value="27" />
+                    </div>
+                  </div>
+                  <div class="row g-2 small mt-1">
+                    <div class="col-md-4">
+                      <label class="form-label small" for="cartoStripLogoMax">Logo máx. ancho %</label>
+                      <input id="cartoStripLogoMax" type="number" class="form-control form-control-sm" min="10" max="45" step="1" value="28" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small" for="cartoStripLogoH">Logo alto %</label>
+                      <input id="cartoStripLogoH" type="number" class="form-control form-control-sm" min="70" max="100" step="1" value="96" />
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label small" for="cartoStripGapTabs">Separación (tabs)</label>
+                      <input id="cartoStripGapTabs" type="number" class="form-control form-control-sm" min="0" max="4" step="0.5" value="2" />
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStripComposeResetBtn">
+                      Restaurar columnas canónicas
+                    </button>
+                  </div>
+                </details>
+                <details class="mt-2" id="cartoStripSymDetails">
+                  <summary class="small fw-semibold" style="cursor:pointer">Simbología de la tira (LÍMITES)</summary>
+                  <p class="text-muted mt-2 mb-2" style="font-size: 0.75rem;">
+                    Título, textos, orden, filas visibles y muestras de la columna <strong>LÍMITES</strong>.
+                    Mientras no edite nada se usa la de fábrica. La columna SERVICIOS no se edita aquí.
+                    Compruebe el resultado con <em>Preview</em>.
+                  </p>
+                  <div id="cartoStripSym" class="small"><span class="text-muted">Cargando…</span></div>
+                </details>
+              </div>
+              <div class="border rounded p-2 mt-2 bg-light d-none" id="cartoLayLabelsWrap">
+                <div class="fw-semibold small mb-1">Etiquetas y ampliación (plano localidad)</div>
+                <div class="d-flex flex-wrap gap-3 small">
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="cartoLabEngineV2" />
+                    <label class="form-check-label" for="cartoLabEngineV2">Motor de etiquetas mejorado</label>
+                  </div>
+                  <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="cartoLayInset" />
+                    <label class="form-check-label" for="cartoLayInset">Recuadro de ampliación de la localidad</label>
+                  </div>
+                </div>
+                <p class="text-muted mt-1 mb-0" style="font-size: 0.75rem;">
+                  <strong>Motor mejorado:</strong> nombres de calles y ríos sobre su trazo, sin encimarse; si un nombre no cabe
+                  se reduce (mín. 3.8 pt), se muestra sin clave o se omite. Desmarcado = motor anterior (fuerza todos los nombres).
+                  <br /><strong>Recuadro:</strong> amplía el núcleo de calles en el hueco libre más grande del mapa, solo si se ve al
+                  menos 1.8 veces más grande. Compruebe con <em>Preview</em>.
+                </p>
+              </div>
+              <div class="border rounded p-2 mt-2 bg-light d-none" id="cartoLayHeightsWrap">
+                <div class="fw-semibold small mb-2">Alturas de marca (cabecera / título / pie)</div>
+                <div class="row g-2 small">
+                  <div class="col-md-4">
+                    <label class="form-label small" for="cartoLayBrandH">Cabecera (pt)</label>
+                    <input id="cartoLayBrandH" type="number" class="form-control form-control-sm" min="0" max="80" step="1" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small" for="cartoLayTitleH">Título (pt)</label>
+                    <input id="cartoLayTitleH" type="number" class="form-control form-control-sm" min="0" max="56" step="1" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small" for="cartoLayFooterH">Pie (pt)</label>
+                    <input id="cartoLayFooterH" type="number" class="form-control form-control-sm" min="0" max="48" step="1" />
+                  </div>
+                </div>
+                <div class="text-muted mt-1" style="font-size: 0.75rem;">
+                  Textos y logos de las tiras se editan en <strong>Branding PDF</strong> (global). Aquí solo el tamaño de franja.
+                </div>
+              </div>
+              <div class="border rounded p-2 mt-2 bg-light d-none" id="cartoLayPanelWrap">
+                <div class="fw-semibold small mb-1">Panel lateral (croquis / condensado)</div>
+                <p class="text-muted mb-2" style="font-size: 0.75rem;">
+                  Este producto usa un <strong>panel derecho</strong>, no tira inferior.
+                  Textos/logos → <em>Branding PDF</em>. Aquí: ancho del panel y composición.
+                </p>
+                <div class="row g-2 align-items-end small mb-2">
+                  <div class="col-md-4">
+                    <label class="form-label small" for="cartoPanelLegendW">Ancho del panel (pt)</label>
+                    <input id="cartoPanelLegendW" type="number" class="form-control form-control-sm" min="80" max="480" step="1" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small" for="cartoPanelTypeScale">Escala tipográfica</label>
+                    <input id="cartoPanelTypeScale" type="number" class="form-control form-control-sm" min="0.7" max="1.4" step="0.05" value="1" />
+                  </div>
+                  <div class="col-md-4">
+                    <label class="form-label small" for="cartoPanelGapMax">Hueco máx. entre bloques (pt)</label>
+                    <input id="cartoPanelGapMax" type="number" class="form-control form-control-sm" min="0" max="120" step="1" />
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2 mb-2" style="width: 7rem;">
+                  <div
+                    id="cartoPanelPreview"
+                    title="Mapa | panel"
+                    style="height: 3.5rem; width: 100%; border: 1px solid #adb5bd; border-radius: 0.25rem; overflow: hidden; display: flex;"
+                  >
+                    <div id="cartoPanelPreviewMap" style="flex: 1 1 auto; background: #e9ecef;"></div>
+                    <div id="cartoPanelPreviewBand" style="flex: 0 0 28%; background: #6c757d;"></div>
+                  </div>
+                </div>
+                <details id="cartoPanelComposeDetails">
+                  <summary class="small fw-semibold" style="cursor:pointer">Bloques y métricas (avanzado)</summary>
+                  <div class="d-flex flex-wrap gap-3 small mt-2">
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="cartoPanelBlkSym" checked />
+                      <label class="form-check-label" for="cartoPanelBlkSym">Simbología</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="cartoPanelBlkClaves" checked />
+                      <label class="form-check-label" for="cartoPanelBlkClaves">Claves</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="cartoPanelBlkId" checked />
+                      <label class="form-check-label" for="cartoPanelBlkId">Identificación</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="cartoPanelBlkIdx" checked />
+                      <label class="form-check-label" for="cartoPanelBlkIdx">Índice / escala</label>
+                    </div>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="cartoPanelBlkRef" checked />
+                      <label class="form-check-label" for="cartoPanelBlkRef">Referencia geográfica</label>
+                    </div>
+                  </div>
+                  <div class="row g-2 small mt-2">
+                    <div class="col-md-3">
+                      <label class="form-label small" for="cartoPanelIdxFrac">Alto índice (% página)</label>
+                      <input id="cartoPanelIdxFrac" type="number" class="form-control form-control-sm" min="5" max="40" step="1" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small" for="cartoPanelLiftMin">Lift inferior mín. (pt)</label>
+                      <input id="cartoPanelLiftMin" type="number" class="form-control form-control-sm" min="0" max="200" step="1" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small" for="cartoPanelLiftMult">Lift × pad</label>
+                      <input id="cartoPanelLiftMult" type="number" class="form-control form-control-sm" min="0" max="10" step="0.1" />
+                    </div>
+                    <div class="col-md-3">
+                      <label class="form-label small" for="cartoPanelWarnPad">Pad aviso (pt)</label>
+                      <input id="cartoPanelWarnPad" type="number" class="form-control form-control-sm" min="0" max="80" step="1" />
+                    </div>
+                  </div>
+                  <div class="mt-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoPanelComposeResetBtn">
+                      Restaurar panel canónico
+                    </button>
+                  </div>
+                </details>
+                <details id="cartoPanelSymDetails" class="mt-2">
+                  <summary class="small fw-semibold" style="cursor:pointer">Simbología del panel</summary>
+                  <p class="text-muted mt-2 mb-2" style="font-size: 0.75rem;">
+                    Textos, orden, filas visibles y muestras del bloque <strong>SIMBOLOGÍA</strong>.
+                    Mientras no edite nada se usa la de fábrica. Las filas <strong>ligadas</strong> toman color, relleno
+                    y trama de su capa del mapa (grosor y guiones son los del panel). Compruebe el resultado con <em>Preview</em>.
+                  </p>
+                  <div id="cartoPanelSym" class="small"><span class="text-muted">Cargando…</span></div>
+                </details>
               </div>
             </div>
           </div>
 
-          <div class="card shadow-sm visor-studio-card">
-            <div class="card-header fw-semibold">Advertencias</div>
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible d-none" id="cartoMpCard">
+            <div class="card-header fw-semibold">Cartas de detalle · índice de armado (plano urbano)</div>
             <div class="card-body">
-              <label class="form-label small" for="fAdvertencia">Texto legal / advertencia (tira y paneles)</label>
-              <textarea id="fAdvertencia" class="form-control form-control-sm" rows="5" maxlength="4000"></textarea>
+              <p class="small text-muted mb-2">
+                Multipágina opcional del plano de localidad urbana: la 1.ª hoja es el <strong>índice de armado</strong>
+                y el resto son <strong>cartas</strong> a escala fija con el papel de <em>Layout · papel</em>.
+                En el Visor se activa con «Cartas detalle»; aquí se prueba en <em>Preview</em>. Vacío = valor del motor.
+              </p>
+              <div class="row g-2">
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoMpScale">Escala de las cartas 1:</label>
+                  <input id="cartoMpScale" type="number" min="1000" max="50000" step="500" class="form-control form-control-sm" placeholder="7500" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoMpMaxPages">Máximo de cartas</label>
+                  <input id="cartoMpMaxPages" type="number" min="1" max="40" step="1" class="form-control form-control-sm" placeholder="40" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoMpOverlap">Traslape entre cartas (%)</label>
+                  <input id="cartoMpOverlap" type="number" min="0" max="30" step="1" class="form-control form-control-sm" placeholder="5" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoMpIndexPaper">Papel de la hoja índice</label>
+                  <select id="cartoMpIndexPaper" class="form-select form-select-sm">
+                    <option value="">Plotter 90×120 cm (motor)</option>
+                    <option value="plotter_90x70">Plotter 90×70 cm</option>
+                    <option value="plotter_90x60">Plotter 90×60 cm</option>
+                    <option value="dcarta_42x28">Doble carta 42×28 cm</option>
+                  </select>
+                </div>
+                <div class="col-12 small fw-semibold mt-2">Tamaño de letra en las cartas (pt)</div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoMpSizeMza">Manzana</label>
+                  <input id="cartoMpSizeMza" type="number" min="1" max="24" step="0.1" class="form-control form-control-sm" placeholder="4.8" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoMpSizeAgeb">AGEB</label>
+                  <input id="cartoMpSizeAgeb" type="number" min="1" max="24" step="0.1" class="form-control form-control-sm" placeholder="9.6" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoMpSizeVial">Vialidad</label>
+                  <input id="cartoMpSizeVial" type="number" min="1" max="24" step="0.1" class="form-control form-control-sm" placeholder="2.7" />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="card shadow-sm visor-studio-card">
-            <div class="card-header fw-semibold">Fechas</div>
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible">
+            <div class="card-header fw-semibold">Capas · símbolos · etiquetas</div>
             <div class="card-body">
-              <label class="form-label small" for="fFechaAct">Fecha de actualización</label>
-              <input id="fFechaAct" class="form-control form-control-sm" maxlength="120" placeholder="DICIEMBRE DEL 2024" />
-              <div class="form-text">Se muestra en paneles de croquis / condensado y textos de tira.</div>
+              <p class="small text-muted mb-2">
+                Una fuente en <strong>Fuentes</strong> no es aún una capa del producto: hay que
+                <strong>añadirla</strong> aquí. Luego elija colores/etiquetas.
+                <br />
+                <strong>Orden:</strong> la primera se dibuja debajo; la última queda encima
+                (↑/↓ reordenan). Capas especiales de planos oficiales (AGEB, límites…) pueden
+                tener un orden fijo del motor.
+              </p>
+              <div class="border rounded p-2 mb-3 bg-light">
+                <div class="fw-semibold small mb-2">Añadir capa desde una fuente</div>
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-5">
+                    <label class="form-label small" for="cartoProdAddTable">Fuente / tabla</label>
+                    <select id="cartoProdAddTable" class="form-select form-select-sm"></select>
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small" for="cartoProdAddLabel">Nombre en el mapa</label>
+                    <input id="cartoProdAddLabel" class="form-control form-control-sm" maxlength="120" placeholder="Se sugiere solo" />
+                  </div>
+                  <div class="col-md-2">
+                    <label class="form-label small" for="cartoProdAddGeom">Dibujo</label>
+                    <select id="cartoProdAddGeom" class="form-select form-select-sm">
+                      <option value="auto">Auto</option>
+                      <option value="polygon">Áreas</option>
+                      <option value="line">Líneas</option>
+                      <option value="point">Puntos</option>
+                    </select>
+                  </div>
+                  <div class="col-md-2">
+                    <button type="button" class="btn btn-sm btn-primary w-100" id="cartoProdAddLayerBtn">Añadir</button>
+                  </div>
+                </div>
+              </div>
+              <div id="cartoProdLayers"></div>
             </div>
           </div>
 
-          <div id="cartoStudioFormError" class="small text-danger d-none"></div>
-          <div id="cartoStudioFormOk" class="small text-success d-none"></div>
-          <div class="d-flex flex-wrap gap-2">
-            <button type="submit" class="btn btn-sm btn-primary">Guardar branding</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStudioReloadBtn">Recargar</button>
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible carto-open">
+            <div class="card-header fw-semibold">Preview (territorio de prueba)</div>
+            <div class="card-body">
+              <div id="cartoProdPreviewParams" class="mb-2"></div>
+              <label class="form-label small" for="cartoProdComment">Comentario (draft / publish)</label>
+              <input id="cartoProdComment" class="form-control form-control-sm mb-2" maxlength="500" placeholder="opcional" />
+              <div id="cartoProdError" class="small text-danger d-none"></div>
+              <div id="cartoProdOk" class="small text-success d-none"></div>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-primary" id="cartoProdSaveBtn">Guardar draft</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoProdValidateBtn">Validar</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="cartoProdPreviewBtn">Preview PDF</button>
+                <button type="button" class="btn btn-sm btn-success" id="cartoProdPublishBtn">Publicar</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="cartoProdDiscardBtn">Descartar draft</button>
+                <button type="button" class="btn btn-sm btn-outline-warning" id="cartoProdFactoryBtn" title="Vuelve al JSON canónico GroSIG (fábrica)">Restaurar canónico</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoProdReloadBtn">Recargar</button>
+              </div>
+              <div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+                <button type="button" class="btn btn-sm btn-outline-info" id="cartoProdDiffBtn" title="Compara lo que hay en el editor (incluye lo no guardado)">Ver cambios</button>
+                <label class="small text-muted" for="cartoProdDiffLeft">contra</label>
+                <select id="cartoProdDiffLeft" class="form-select form-select-sm" style="width:auto">
+                  <option value="active" selected>lo publicado (Visor)</option>
+                  <option value="factory">canónico (fábrica)</option>
+                </select>
+              </div>
+              <div id="cartoProdDiff" class="mt-2"></div>
+            </div>
           </div>
-          <p class="small text-muted mb-0">
-            La generación de PDF sigue en el <strong>Visor</strong> (panel Cartografía). Tras guardar, genere un producto y verifique tira/panel.
+
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible">
+            <div class="card-header fw-semibold">Versiones</div>
+            <div class="card-body">
+              <div id="cartoProdVersions"></div>
+              <div id="cartoProdVersionDiff" class="mt-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- P6: Custom Builder -->
+        <div id="cartoStudioCustomPanel" class="d-none">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body">
+              <p class="small text-muted mb-2">
+                Clona un producto <strong>oficial</strong> a un custom aislado.
+                Publicar custom <strong>no</strong> cambia el JSON del Visor ni el catálogo cerrado.
+              </p>
+              <div class="row g-2 align-items-end">
+                <div class="col-md-4">
+                  <label class="form-label small" for="cartoCustomCloneProduct">Clonar desde</label>
+                  <select id="cartoCustomCloneProduct" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoCustomCloneTemplate">Plantilla</label>
+                  <select id="cartoCustomCloneTemplate" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoCustomCloneName">Nombre</label>
+                  <input id="cartoCustomCloneName" class="form-control form-control-sm" placeholder="Mi mapa…" maxlength="200" />
+                </div>
+                <div class="col-md-2">
+                  <button type="button" class="btn btn-sm btn-primary w-100" id="cartoCustomCloneBtn">Clonar</button>
+                </div>
+              </div>
+              <div class="row g-2 mt-1">
+                <div class="col-md-6">
+                  <label class="form-label small" for="cartoCustomCloneId">custom_id (opcional)</label>
+                  <input id="cartoCustomCloneId" class="form-control form-control-sm" placeholder="custom_mi_mapa" maxlength="64" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body">
+              <div class="row g-2 align-items-end">
+                <div class="col-md-6">
+                  <label class="form-label small" for="cartoCustomSelect">Custom</label>
+                  <select id="cartoCustomSelect" class="form-select form-select-sm"></select>
+                </div>
+                <div class="col-md-6">
+                  <div id="cartoCustomStatus" class="small"></div>
+                  <span id="cartoCustomDirtyBadge" class="badge text-bg-warning d-none">sin guardar</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible">
+            <div class="card-header fw-semibold">Metadatos custom</div>
+            <div class="card-body row g-2">
+              <div class="col-md-6">
+                <label class="form-label small" for="cartoCustomTitle">Título</label>
+                <input id="cartoCustomTitle" class="form-control form-control-sm" />
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small" for="cartoCustomFooter">Pie</label>
+                <input id="cartoCustomFooter" class="form-control form-control-sm" />
+              </div>
+            </div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible">
+            <div class="card-header fw-semibold">Capas (origen + activar)</div>
+            <div class="card-body" id="cartoCustomLayers"></div>
+          </div>
+
+          <div class="card shadow-sm visor-studio-card mb-3 carto-collapsible carto-open">
+            <div class="card-header fw-semibold">Preview custom</div>
+            <div class="card-body">
+              <div id="cartoCustomPreviewParams" class="mb-2"></div>
+              <label class="form-label small" for="cartoCustomComment">Comentario</label>
+              <input id="cartoCustomComment" class="form-control form-control-sm mb-2" maxlength="500" placeholder="opcional" />
+              <div id="cartoCustomError" class="small text-danger d-none"></div>
+              <div id="cartoCustomOk" class="small text-success d-none"></div>
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-primary" id="cartoCustomSaveBtn">Guardar draft</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="cartoCustomPreviewBtn">Preview PDF</button>
+                <button type="button" class="btn btn-sm btn-success" id="cartoCustomPublishBtn">Publicar custom</button>
+                <button type="button" class="btn btn-sm btn-outline-warning" id="cartoCustomFactoryBtn">Restaurar fábrica</button>
+                <button type="button" class="btn btn-sm btn-outline-danger" id="cartoCustomDeleteBtn">Eliminar</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoCustomReloadBtn">Recargar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- P5 UI: Fuentes / overrides -->
+        <div id="cartoStudioFuentesPanel" class="d-none">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body">
+              <p class="small text-muted mb-2">
+                Elija una <strong>carpeta</strong> y una <strong>capa</strong> de la base cartográfica.
+                El sistema arma solo el identificador interno. Luego podrá usarla en Productos o Custom.
+              </p>
+              <div class="border rounded p-3 mb-3 bg-light">
+                <div class="fw-semibold mb-2">Incorporar capa a mis productos</div>
+                <div id="cartoFuentesDiscoverHint" class="small text-muted mb-2"></div>
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-4">
+                    <label class="form-label small" for="cartoFuentesSchema">Carpeta (esquema)</label>
+                    <select id="cartoFuentesSchema" class="form-select form-select-sm">
+                      <option value="">Cargando…</option>
+                    </select>
+                  </div>
+                  <div class="col-md-5">
+                    <label class="form-label small" for="cartoFuentesTable">Capa en la base de datos</label>
+                    <select id="cartoFuentesTable" class="form-select form-select-sm">
+                      <option value="">Elija carpeta primero…</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <button type="button" class="btn btn-sm btn-primary w-100" id="cartoFuentesRegisterBtn">Usar esta capa</button>
+                  </div>
+                </div>
+                <div class="row g-2 mt-2 align-items-end">
+                  <div class="col-md-5">
+                    <label class="form-label small" for="cartoFuentesNewLabel">Nombre que verá en productos</label>
+                    <input id="cartoFuentesNewLabel" class="form-control form-control-sm" placeholder="Se sugiere solo" maxlength="200" />
+                  </div>
+                  <div class="col-md-3">
+                    <label class="form-label small" for="cartoFuentesNewGeom">Tipo de dibujo</label>
+                    <select id="cartoFuentesNewGeom" class="form-select form-select-sm">
+                      <option value="auto">Automático</option>
+                      <option value="polygon">Áreas (polígonos)</option>
+                      <option value="line">Líneas</option>
+                      <option value="point">Puntos</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="small text-muted pt-3" id="cartoFuentesPreviewId">Identificador: —</div>
+                  </div>
+                </div>
+                <div class="form-check mt-2">
+                  <input class="form-check-input" type="checkbox" id="cartoFuentesShowRegistered" />
+                  <label class="form-check-label small" for="cartoFuentesShowRegistered">Mostrar también capas ya incorporadas</label>
+                </div>
+              </div>
+              <div id="cartoFuentesError" class="small text-danger d-none mb-2"></div>
+              <div id="cartoFuentesOk" class="small text-success d-none mb-2"></div>
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="fw-semibold small">Capas disponibles para productos</div>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoFuentesReloadBtn">Actualizar</button>
+              </div>
+              <div id="cartoFuentesCatalog"></div>
+            </div>
+          </div>
+
+          <details class="card shadow-sm visor-studio-card mb-3">
+            <summary class="card-header fw-semibold" style="cursor:pointer;list-style:none">
+              Opciones avanzadas por entidad
+            </summary>
+            <div class="card-body">
+              <p class="small text-muted">
+                Solo si necesita desactivar capas o redirigir tablas para un estado concreto (código de entidad, ej. Guerrero = 12).
+              </p>
+              <div class="row g-2 align-items-end mb-2">
+                <div class="col-md-3">
+                  <label class="form-label small" for="cartoFuentesCveEnt">Código de entidad</label>
+                  <input id="cartoFuentesCveEnt" class="form-control form-control-sm" value="12" maxlength="3" />
+                </div>
+                <div class="col-md-5">
+                  <label class="form-label small" for="cartoFuentesLabel">Nombre de la entidad</label>
+                  <input id="cartoFuentesLabel" class="form-control form-control-sm" placeholder="Guerrero" maxlength="120" />
+                </div>
+                <div class="col-md-4 d-flex flex-wrap gap-2">
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoFuentesLoadBtn">Cargar</button>
+                  <button type="button" class="btn btn-sm btn-primary" id="cartoFuentesSaveBtn">Guardar</button>
+                  <button type="button" class="btn btn-sm btn-outline-danger" id="cartoFuentesDeleteBtn">Borrar</button>
+                </div>
+              </div>
+              <div class="mb-2">
+                <div class="fw-semibold small mb-1">Capas desactivadas solo en esta entidad</div>
+                <div id="cartoFuentesDisabled" class="border rounded p-2" style="max-height:12rem;overflow:auto"></div>
+              </div>
+              <div class="mb-2">
+                <label class="form-label small" for="cartoFuentesAliases">Redirecciones (avanzado, una por línea: origen =&gt; destino)</label>
+                <textarea id="cartoFuentesAliases" class="form-control form-control-sm font-monospace" rows="3" placeholder="c_loc_punto => c_loc_punto"></textarea>
+              </div>
+              <div class="mt-2">
+                <div class="fw-semibold small">Entidades con ajustes</div>
+                <div id="cartoFuentesOverridesList"></div>
+              </div>
+            </div>
+          </details>
+        </div>
+
+        <!-- P9: datos cartográficos (≠ Data Refresh portal) -->
+        <div id="cartoStudioDatosPanel" class="d-none">
+          <div class="alert alert-info py-2 small" role="status">
+            Esta pestaña actualiza capas en la BD <strong>GroSIG_Cartography</strong>
+            (rematerializar desde AMIGO <code>geo</code> o subir SHP/ZIP).
+            Es <strong>independiente</strong> de Data Refresh y de la BD atlas deprecada.
+          </div>
+          <div id="cartoDatosError" class="small text-danger d-none mb-2"></div>
+          <div id="cartoDatosOk" class="small text-success d-none mb-2"></div>
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+              <span>Estado cartográfico</span>
+              <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoDatosReloadBtn">Actualizar vista</button>
+                <button type="button" class="btn btn-sm btn-outline-primary" id="cartoDatosGoFuentesBtn">Ir a Fuentes</button>
+              </div>
+            </div>
+            <div class="card-body" id="cartoDatosStatus">
+              <p class="small text-muted mb-0">Cargando…</p>
+            </div>
+          </div>
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-header fw-semibold">Catálogo de capas (aux.layer_catalog)</div>
+            <div class="card-body" id="cartoDatosCatalog">
+              <p class="small text-muted mb-0">Cargando…</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- P11: checklist de salud (bajo demanda) -->
+        <div id="cartoStudioSaludPanel" class="d-none">
+          <div class="alert alert-info py-2 small" role="status">
+            Revisión <strong>bajo demanda</strong>: motor, BD cartográfica, conexión AMIGO y, por cada producto oficial,
+            plantilla válida, carga para el Visor, <strong>Visor alineado</strong> con la última publicación y drafts pendientes.
+            No publica ni sincroniza nada.
+          </div>
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-body">
+              <div class="d-flex flex-wrap align-items-center gap-3">
+                <button type="button" class="btn btn-sm btn-primary" id="cartoSaludRunBtn">Ejecutar checklist</button>
+                <div class="form-check mb-0">
+                  <input class="form-check-input" type="checkbox" id="cartoSaludPreview" />
+                  <label class="form-check-label small" for="cartoSaludPreview">
+                    Incluir preview real (genera PDFs de prueba; condensado y plotter tardan)
+                  </label>
+                </div>
+                <span id="cartoSaludMeta" class="small text-muted"></span>
+              </div>
+              <div id="cartoSaludError" class="small text-danger d-none mt-2"></div>
+            </div>
+          </div>
+          <div id="cartoSaludResult"></div>
+        </div>
+
+        <!-- Branding (existente) -->
+        <div id="cartoStudioBrandingPanel" class="d-none">
+          <p class="small text-muted mb-2">
+            Contenido global de las tiras (textos, logos, fecha). Se aplica al regenerar el PDF.
+            El <strong>tamaño / proporción</strong> de la tira se ajusta en <em>Productos → Layout</em> (draft → Preview → Publicar).
           </p>
-        </form>
+          <form id="cartoStudioForm" class="d-grid gap-3">
+            <div class="card shadow-sm visor-studio-card">
+              <div class="card-header fw-semibold">Institución</div>
+              <div class="card-body row g-2">
+                <div class="col-md-6">
+                  <label class="form-label small" for="fBrandLine">Línea institucional</label>
+                  <input id="fBrandLine" class="form-control form-control-sm" maxlength="200" />
+                </div>
+                <div class="col-md-6">
+                  <label class="form-label small" for="fEngineLine">Línea del motor</label>
+                  <input id="fEngineLine" class="form-control form-control-sm" maxlength="200" />
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm visor-studio-card">
+              <div class="card-header fw-semibold">Logo(s)</div>
+              <div class="card-body">
+                <p class="small text-muted mb-2">Archivos en <code>assets/logos/</code>. Tira de localidad, croquis y condensado usan solo el logo <strong>principal</strong>; el encabezado de hojas usa todos los «en uso», en ese orden. El archivo original no se modifica: el fondo se quita al generar el PDF.</p>
+                <ul id="cartoStudioLogosList" class="small mb-2"></ul>
+                <div id="cartoLogoUsage" class="small mb-2"></div>
+                <div class="d-flex flex-wrap align-items-center gap-2 mb-2 small">
+                  <label for="cartoLogoBgMode" class="mb-0">Quitar fondo (negro/blanco) en tira y croquis:</label>
+                  <select id="cartoLogoBgMode" class="form-select form-select-sm w-auto">
+                    <option value="umbral">En toda la imagen (comportamiento actual)</option>
+                    <option value="bordes">Solo desde los bordes (no abre huecos)</option>
+                  </select>
+                </div>
+                <div class="small fw-semibold mb-1">Logos disponibles</div>
+                <div id="cartoLogoGallery" class="d-flex flex-wrap gap-2 mb-2"><span class="small text-muted">Cargando…</span></div>
+                <div id="cartoLogoPreview" class="d-none border rounded p-2 mb-3"></div>
+                <div class="d-flex flex-wrap gap-3 align-items-end">
+                  <div>
+                    <label class="form-label small" for="fLogoFile">Subir PNG/JPG/WEBP</label>
+                    <input type="file" id="fLogoFile" class="form-control form-control-sm" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" />
+                  </div>
+                  <div id="cartoLogoPending" class="d-none align-items-center gap-2 border rounded p-1">
+                    <img id="cartoLogoPendingImg" alt="Vista previa" style="max-height:56px;max-width:140px;object-fit:contain;background:#fff" />
+                    <span id="cartoLogoPendingInfo" class="small"></span>
+                  </div>
+                  <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStudioUploadLogoBtn">Subir logo</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="card shadow-sm visor-studio-card">
+              <div class="card-header fw-semibold">Advertencias</div>
+              <div class="card-body">
+                <label class="form-label small" for="fAdvertencia">Texto legal / advertencia (tira y paneles)</label>
+                <textarea id="fAdvertencia" class="form-control form-control-sm" rows="5" maxlength="4000"></textarea>
+              </div>
+            </div>
+
+            <div class="card shadow-sm visor-studio-card">
+              <div class="card-header fw-semibold">Fechas</div>
+              <div class="card-body">
+                <label class="form-label small" for="fFechaAct">Fecha de actualización</label>
+                <input id="fFechaAct" class="form-control form-control-sm" maxlength="120" placeholder="DICIEMBRE DEL 2024" />
+                <div class="form-text">Se muestra en paneles de croquis / condensado y textos de tira.</div>
+              </div>
+            </div>
+
+            <div id="cartoStudioFormError" class="small text-danger d-none"></div>
+            <div id="cartoStudioFormOk" class="small text-success d-none"></div>
+            <div class="d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-sm btn-primary">Guardar branding</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="cartoStudioReloadBtn">Recargar</button>
+            </div>
+            <p class="small text-muted mb-0">
+              Branding es global a los PDF. La generación sigue en el Visor; tras publicar un producto, genere y verifique.
+            </p>
+          </form>
+
+          <div class="card shadow-sm visor-studio-card mt-3">
+            <div class="card-header fw-semibold">Perfiles de branding</div>
+            <div class="card-body">
+              <p class="small text-muted mb-2">
+                Guarde el branding <strong>vigente</strong> (institución, logos, advertencia, fecha) con un nombre y
+                restáurelo después. Al aplicar un perfil se respalda antes el branding actual en
+                «Respaldo automático». Los archivos de logo no se copian: deben seguir en <code>assets/logos/</code>.
+              </p>
+              <div class="d-flex flex-wrap gap-2 align-items-center mb-2">
+                <input id="cartoBrandProfileName" class="form-control form-control-sm" style="max-width:20rem" maxlength="80" placeholder="Nombre del perfil (p. ej. CEIEG 2026)" />
+                <button type="button" class="btn btn-sm btn-outline-primary" id="cartoBrandProfileSaveBtn">Guardar branding actual como perfil</button>
+              </div>
+              <div id="cartoBrandProfileMsg" class="small d-none mb-2"></div>
+              <div id="cartoBrandProfiles"><p class="small text-muted mb-0">Cargando…</p></div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   </main>

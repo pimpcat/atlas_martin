@@ -62,6 +62,32 @@ function attributeFieldExpr(fieldName) {
   return ["coalesce", ["get", fieldName], ["get", upper], ""];
 }
 
+/**
+ * Campo MVT para iconos por atributo: style.field + columnas del join identify (p. ej. nom_tipo).
+ * @param {object} [style]
+ * @param {object} [identify]
+ */
+export function styleAttributeFieldExpr(style, identify) {
+  const primary = style?.field;
+  if (!primary) return null;
+  const join = identify?.join;
+  const altFields = [];
+  if (join && Array.isArray(join.right)) {
+    for (const col of join.right) {
+      const name = String(col || "").trim();
+      if (name && name !== primary) altFields.push(name);
+    }
+  }
+  if (!altFields.length) return attributeFieldExpr(primary);
+
+  const parts = [];
+  for (const name of [primary, ...altFields]) {
+    parts.push(["get", name], ["get", String(name).toUpperCase()]);
+  }
+  parts.push("");
+  return ["coalesce", ...parts];
+}
+
 function matchRuleClause(fieldExpr, rule) {
   const clauses = [["==", fieldExpr, rule.value]];
   if (rule.partial) {
@@ -81,7 +107,7 @@ export function getIconMaplibreId(iconKey) {
  * @param {string} defaultIconKey
  */
 export function buildIconImageMatchExpr(fieldName, iconRules, defaultIconKey) {
-  const field = attributeFieldExpr(fieldName);
+  const field = Array.isArray(fieldName) ? fieldName : attributeFieldExpr(fieldName);
   const defaultId = getIconMaplibreId(defaultIconKey);
   if (!defaultId) return defaultIconKey;
 
@@ -105,11 +131,22 @@ export function collectIconKeysFromStyle(style = {}) {
   return [...keys];
 }
 
-export function readCatalogStyleFieldValue(properties, fieldName) {
+export function readCatalogStyleFieldValue(properties, fieldName, identify) {
   if (!properties || !fieldName) return "";
-  const upper = String(fieldName).toUpperCase();
-  const raw = properties[fieldName] ?? properties[upper];
-  return raw == null ? "" : String(raw);
+  const names = [fieldName];
+  const join = identify?.join;
+  if (join && Array.isArray(join.right)) {
+    for (const col of join.right) {
+      const name = String(col || "").trim();
+      if (name && !names.includes(name)) names.push(name);
+    }
+  }
+  for (const name of names) {
+    const upper = String(name).toUpperCase();
+    const raw = properties[name] ?? properties[upper];
+    if (raw != null && String(raw).trim() !== "") return String(raw);
+  }
+  return "";
 }
 
 function catalogRuleMatches(rule, fieldValue) {
@@ -127,12 +164,12 @@ function catalogRuleMatches(rule, fieldValue) {
  * @param {object} style - entry.style del catálogo
  * @param {object} [properties]
  */
-export function resolveIconKeyFromCatalogStyle(style, properties) {
+export function resolveIconKeyFromCatalogStyle(style, properties, identify) {
   if (!style) return null;
   if (style.icon_key) return style.icon_key;
   const field = style.field;
   if (!field) return style.default_icon_key || null;
-  const fieldValue = readCatalogStyleFieldValue(properties, field);
+  const fieldValue = readCatalogStyleFieldValue(properties, field, identify);
   for (const rule of style.icon_rules || []) {
     if (catalogRuleMatches(rule, fieldValue)) return rule.icon_key;
   }
@@ -277,7 +314,8 @@ export function buildSymbolByAttributeOverlayDefFromPreset(entry, preset) {
   const defaultKey = style.default_icon_key;
   if (!table || !key || !preset || !field || !defaultKey) return null;
 
-  const iconImage = buildIconImageMatchExpr(field, style.icon_rules, defaultKey);
+  const fieldExpr = styleAttributeFieldExpr(style, entry.identify) || field;
+  const iconImage = buildIconImageMatchExpr(fieldExpr, style.icon_rules, defaultKey);
   const layerLayout = { ...(preset.layout || {}), ...(style.layout || {}) };
   layerLayout["icon-image"] = iconImage;
   layerLayout["icon-size"] = buildIconSizeFromLayerStyle(style);

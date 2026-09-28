@@ -158,7 +158,7 @@ function overlayTipShell(title, bodyHtml) {
 }
 
 export function locsPuntoTipHtml(props) {
-  const line = [featureProp(props, "cvegeo"), featureProp(props, "nom_loc")].filter(Boolean).join(" ");
+  const line = [featureProp(props, "cvegeo"), featureProp(props, "nom_loc", "nomgeo")].filter(Boolean).join(" ");
   return overlayTipShell("Localidad:", escapeHtml(line || "—"));
 }
 
@@ -393,7 +393,7 @@ function hideTip(map) {
 
 function maybeEnrichHoverTip(map, feature, primary, tipHtml, point) {
   const catalogId = resolveVisorApiLayerId(primary);
-  const gid = pickVisorFeatureGid(feature?.properties);
+  const gid = pickVisorFeatureGid(feature?.properties, feature);
   if (!catalogId || !gid) return;
 
   const featKey = overlayFeatureKey(feature);

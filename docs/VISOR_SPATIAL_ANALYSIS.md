@@ -59,6 +59,8 @@ Puntos y líneas siguen requiriendo buffer (no son un área cerrada).
 
 La exportación usa **openpyxl en el backend** (`POST /api/analisis/export`), el mismo enfoque que indicadores y consulta tabular. Ya no depende de SheetJS en el navegador.
 
+En **ITER**, además de los totales agregados, el Excel incluye la hoja de **detalle por localidad** (claves/nombres de entidad, municipio y localidad, ámbito e indicadores seleccionados), la misma tabla colapsable del modal.
+
 ---
 
 ## Fuentes de capas para el análisis
@@ -86,7 +88,16 @@ No basta con `"capabilities": { "spatial_analysis": true }` en todas las capas:
 
 Capas con `spatial_analysis: true` pero **sin** bloque wizard (p. ej. colonias, manzanas legacy) **no** se listan en el picker — evita confusión con flags heredados.
 
----
+### Política del kit GRO (seed)
+
+El catálogo vivo `config/visor/catalog.json` (fuente de `seed-gro`) deja el flag **activo** solo donde tiene sentido operativo:
+
+| `capabilities.spatial_analysis` | Capas |
+|----------------------------------|--------|
+| **true** | Localidades (`locspunto`, `locsatlas`), CLUES, DENUE (`denue_*`), agua/residuos, capas Studio con bloque (`rnc_loc`, `sip_esp_rec`, `regiones`, `regiones8`) |
+| **false** | Marco denso (colonias, AGEB, manzanas, vialidades), RNC lineal, medio físico (uso de suelo, hidrografía, curvas, clima) |
+
+El wizard de Studio arranca con el checkbox **desactivado**; no reactivar en masa al republicar. Morelos u otras instancias ya sembradas se ajustan a mano o con un re-seed.
 
 ## Bloque `spatial_analysis` en el catálogo
 

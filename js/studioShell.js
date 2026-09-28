@@ -14,6 +14,7 @@
  *   });
  *   await shell.boot();
  */
+import { applyTheme, hasUserTheme, initThemeSelector, readStoredTheme } from "./theme.js";
 import {
   clearAdminSession,
   fillLoginInstanciasSelect,
@@ -23,6 +24,7 @@ import {
   verifyAdminSession,
 } from "./visorAdminAuth.js";
 import { mountStudioNav, studioLoginFooterHtml } from "./studioNav.js";
+import { mountStudioInstanceBadge } from "./studioInstanceBadge.js";
 
 /**
  * @param {string|HTMLElement|null} elOrId
@@ -159,6 +161,7 @@ export function createStudioShell(ids, opts) {
   };
 
   function showLogin() {
+    document.documentElement.classList.remove("gs2-session-hint");
     el("loginView")?.classList.remove("d-none");
     el("dashboard")?.classList.add("d-none");
     const footer = el("loginFooter");
@@ -168,6 +171,7 @@ export function createStudioShell(ids, opts) {
   }
 
   function showDashboard() {
+    document.documentElement.classList.add("gs2-session-hint");
     el("loginView")?.classList.add("d-none");
     el("dashboard")?.classList.remove("d-none");
     const user = getAdminUser();
@@ -181,8 +185,23 @@ export function createStudioShell(ids, opts) {
           : "Sesión admin activa";
       }
     }
+    const badgeMode = opts.instanceBadge ?? true;
+    if (badgeMode !== false) {
+      const badgeHost =
+        typeof badgeMode === "string"
+          ? document.getElementById(badgeMode)
+          : badgeMode instanceof HTMLElement
+            ? badgeMode
+            : el("dashboard");
+      mountStudioInstanceBadge(badgeHost, user);
+    }
     if (activeNav) {
-      mountStudioNav(el("nav"), { active: activeNav });
+      const themePicker = opts.themePicker ?? activeNav !== "theme";
+      mountStudioNav(el("nav"), {
+        active: activeNav,
+        themePicker,
+      });
+      if (themePicker) applyTheme(readStoredTheme(), { persist: hasUserTheme() });
     }
   }
 
@@ -233,9 +252,16 @@ export function createStudioShell(ids, opts) {
    * @returns {Promise<{ loggedIn: boolean }>}
    */
   async function boot() {
+    if (opts.initTheme !== false && activeNav !== "theme") {
+      initThemeSelector();
+    }
     bindAuth();
     if (isVisorAdminLoggedIn()) {
-      const ok = await verifyAdminSession();
+      if (opts.optimisticSession !== false) {
+        showDashboard();
+      }
+      // Portal mapa usa failClosed; Studio tolera red caída (401 sí limpia sesión).
+      const ok = await verifyAdminSession({ failClosed: false });
       if (ok) {
         showDashboard();
         if (onEnterDashboard) {
@@ -248,6 +274,9 @@ export function createStudioShell(ids, opts) {
         }
         return { loggedIn: true };
       }
+      // Token inválido (401) → login; no dejar dashboard a medias.
+      showLogin();
+      return { loggedIn: false };
     }
     showLogin();
     return { loggedIn: false };

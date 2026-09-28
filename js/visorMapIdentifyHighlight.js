@@ -130,20 +130,47 @@ function storeCachedGeometry(apiLayer, gid, feature) {
   _geometryCache.set(key, feature);
 }
 
+function identifyClickLonLat(map, point) {
+  if (point && map?.unproject && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+    const ll = map.unproject(point);
+    if (ll && Number.isFinite(ll.lng) && Number.isFinite(ll.lat)) {
+      return { lon: ll.lng, lat: ll.lat };
+    }
+  }
+  return {};
+}
+
 function resolveFetchTarget(map, mapFeature, layerId, point) {
   const resolved = resolveIdentifyHighlightFeature(map, mapFeature, layerId, point);
   if (!resolved) return null;
   const primary = normalizeIdentifyPrimary(layerId) || layerId;
   const apiLayer = resolveVisorApiLayerId(primary);
-  const gid = pickVisorFeatureGid(resolved.properties || mapFeature.properties);
-  return { resolved, apiLayer, gid };
+  const gid = pickVisorFeatureGid(resolved.properties || mapFeature.properties, resolved, layerId);
+  return { resolved, apiLayer, gid, ...identifyClickLonLat(map, point) };
 }
 
-function fetchFullGeometry(apiLayer, gid) {
-  const cached = readCachedGeometry(apiLayer, gid);
+function isCatalogPolygonTarget(layerId, feature) {
+  const t = feature?.geometry?.type;
+  if (t === "Polygon" || t === "MultiPolygon") return true;
+  return resolveCatalogGeometryKind(layerId) === "polygon";
+}
+
+function fetchFullGeometry(apiLayer, gid, extras = {}) {
+  const cacheGid = gid || (extras.lon != null ? `${extras.lon}:${extras.lat}` : "");
+  const cached = readCachedGeometry(apiLayer, cacheGid);
   if (cached) return Promise.resolve(cached);
-  return fetchVisorFeatureGeometry({ layer_id: apiLayer, gid }).then(({ feature: full }) => {
-    if (full?.geometry) storeCachedGeometry(apiLayer, gid, full);
+  return fetchVisorFeatureGeometry({
+    layer_id: apiLayer,
+    gid,
+    attrs: extras.attrs,
+    lon: extras.lon,
+    lat: extras.lat,
+  }).then(({ feature: full }) => {
+    const storeId = full?.properties?.gid || cacheGid;
+    if (full?.geometry) {
+      if (storeId) storeCachedGeometry(apiLayer, storeId, full);
+      if (cacheGid && cacheGid !== storeId) storeCachedGeometry(apiLayer, cacheGid, full);
+    }
     return full ?? null;
   });
 }
@@ -153,19 +180,30 @@ export function prefetchIdentifyGeometry(map, mapFeature, layerId, point, onRead
   if (!map || !mapFeature?.geometry) return;
   const target = resolveFetchTarget(map, mapFeature, layerId, point);
   if (!target) return;
-  const { resolved, apiLayer, gid } = target;
-  if (!apiLayer || !gid) {
-    onReady?.(resolved);
+  const { resolved, apiLayer, gid, lon, lat } = target;
+  const catalogPoly = isCatalogPolygonTarget(layerId, resolved);
+  const extras = { attrs: resolved.properties, lon, lat };
+  if (!apiLayer) {
+    if (!catalogPoly) onReady?.(resolved);
     return;
   }
-  const cached = readCachedGeometry(apiLayer, gid);
+  const cacheGid = gid || (lon != null ? `${lon}:${lat}` : "");
+  const cached = readCachedGeometry(apiLayer, cacheGid) || (gid ? readCachedGeometry(apiLayer, gid) : null);
   if (cached) {
     onReady?.(cached);
     return;
   }
-  fetchFullGeometry(apiLayer, gid)
-    .then((full) => onReady?.(full?.geometry ? mergeHighlightFeature(resolved, full) : resolved))
-    .catch(() => onReady?.(resolved));
+  fetchFullGeometry(apiLayer, gid, extras)
+    .then((full) => {
+      if (full?.geometry) {
+        onReady?.(mergeHighlightFeature(resolved, full));
+        return;
+      }
+      if (!catalogPoly) onReady?.(resolved);
+    })
+    .catch(() => {
+      if (!catalogPoly) onReady?.(resolved);
+    });
 }
 
 /** Crea capas de resaltado en idle para evitar costo en el primer clic. */
@@ -192,9 +230,12 @@ function isPointGeometry(feature) {
 
 function cloneFeature(feature) {
   if (!feature?.geometry) return null;
+  const props = { ...(feature.properties || {}) };
+  if (props.gid == null && feature.id != null) props.gid = String(feature.id);
   return {
     type: "Feature",
-    properties: { ...(feature.properties || {}) },
+    id: feature.id,
+    properties: props,
     geometry: JSON.parse(JSON.stringify(feature.geometry)),
   };
 }
@@ -252,7 +293,7 @@ function resolveCatalogSymbolHighlightSpec(feature, layerId) {
   if (!catalogId) return null;
   const entry = getVisorLayerEntry(catalogId);
   if (!isCatalogSymbolLayerEntry(entry)) return null;
-  const iconKey = resolveIconKeyFromCatalogStyle(entry.style, feature?.properties);
+  const iconKey = resolveIconKeyFromCatalogStyle(entry.style, feature?.properties, entry.identify);
   const iconId = iconKey ? getIconMaplibreId(iconKey) : null;
   if (!iconKey || !iconId) return null;
   return { iconKey, iconId, style: entry.style || {} };
@@ -410,32 +451,31 @@ export function resolveIdentifyHighlightFeature(map, mapFeature, layerId, point)
   if (isPolygonGeometry(cloned) || isPointGeometry(cloned)) return cloned;
 
   const catalogGeom = resolveCatalogGeometryKind(layerId);
-  if (catalogGeom === "line" || isLineGeometry(cloned)) {
+  if (catalogGeom === "line" || catalogGeom === "point") {
     return cloned;
   }
-
-  if (!isLineGeometry(cloned) || !point || !layerId) return cloned;
 
   const primary = normalizeIdentifyPrimary(layerId);
   const fillId = primary ? `${primary}-fill` : null;
-  if (!fillId || !map.getLayer(fillId)) return cloned;
-
-  try {
-    if (map.getLayoutProperty(fillId, "visibility") !== "visible") return cloned;
-  } catch {
-    return cloned;
+  if (fillId && map.getLayer(fillId) && point) {
+    try {
+      if (map.getLayoutProperty(fillId, "visibility") === "visible") {
+        const pad = 4;
+        const hits = map.queryRenderedFeatures(
+          [
+            [point.x - pad, point.y - pad],
+            [point.x + pad, point.y + pad],
+          ],
+          { layers: [fillId] },
+        );
+        const poly = hits.find((f) => isPolygonGeometry(f));
+        if (poly) return cloneFeature(poly);
+      }
+    } catch {
+      /* se sigue con el hit original; PostGIS completa el polígono */
+    }
   }
-
-  const pad = 4;
-  const hits = map.queryRenderedFeatures(
-    [
-      [point.x - pad, point.y - pad],
-      [point.x + pad, point.y + pad],
-    ],
-    { layers: [fillId] },
-  );
-  const poly = hits.find((f) => isPolygonGeometry(f));
-  return poly ? cloneFeature(poly) : cloned;
+  return cloned;
 }
 
 function findInsertBefore(map) {
@@ -709,38 +749,59 @@ function setHighlightData(map, feature, layerId) {
   map.once("idle", () => commit());
 }
 
-/** Muestra el resaltado del feature identificado (tesela al instante + PostGIS en segundo plano). */
-export function showIdentifyHighlight(map, mapFeature, layerId, point, onRefined) {
+/** Muestra el resaltado del feature identificado (PostGIS para polígonos; tesela solo puntos/líneas). */
+export function showIdentifyHighlight(map, mapFeature, layerId, point, onRefined, opts = {}) {
   if (!map || !mapFeature?.geometry) return;
 
   const gen = ++_fetchGen;
   const target = resolveFetchTarget(map, mapFeature, layerId, point);
   if (!target) return;
 
-  const { resolved, apiLayer, gid } = target;
+  const { resolved, apiLayer, gid, lon, lat } = target;
+  const catalogPoly = isCatalogPolygonTarget(layerId, resolved);
+  const extras = { attrs: resolved.properties, lon, lat };
   const apply = (feature) => setHighlightData(map, feature, layerId);
 
-  if (!apiLayer || !gid) {
-    apply(resolved);
+  const finish = (feature) => {
+    apply(feature);
+    onRefined?.(feature);
+  };
+
+  if (!apiLayer) {
+    if (!catalogPoly) finish(resolved);
     return;
   }
 
-  const cached = readCachedGeometry(apiLayer, gid);
-  if (cached) {
-    const merged = mergeHighlightFeature(resolved, cached);
-    apply(merged);
-    onRefined?.(merged);
+  const cacheGid = gid || (lon != null ? `${lon}:${lat}` : "");
+  const cached = readCachedGeometry(apiLayer, cacheGid) || (gid ? readCachedGeometry(apiLayer, gid) : null);
+  if (cached?.geometry) {
+    finish(mergeHighlightFeature(resolved, cached));
     return;
   }
 
-  // Vista previa inmediata (tesela); PostGIS refina sin bloquear la UI.
+  // Polígonos: nunca resaltar fragmento de tesela MVT (rectángulo recortado).
+  if (catalogPoly) {
+    if (opts.allowFeatureGeom && mapFeature.geometry) {
+      finish(mapFeature);
+    }
+    fetchFullGeometry(apiLayer, gid, extras)
+      .then((full) => {
+        if (gen !== _fetchGen) return;
+        if (full?.geometry) finish(mergeHighlightFeature(resolved, full));
+      })
+      .catch((err) => {
+        console.warn("[visorMapIdentify] geometría PostGIS:", err);
+      });
+    return;
+  }
+
+  // Puntos/líneas: vista previa inmediata desde tesela; PostGIS refina si aplica.
   apply(resolved);
 
-  fetchFullGeometry(apiLayer, gid)
+  fetchFullGeometry(apiLayer, gid, extras)
     .then((full) => {
       if (gen !== _fetchGen || !full?.geometry) return;
-      apply(mergeHighlightFeature(resolved, full));
-      onRefined?.(mergeHighlightFeature(resolved, full));
+      finish(mergeHighlightFeature(resolved, full));
     })
     .catch((err) => {
       console.warn("[visorMapIdentify] geometría PostGIS:", err);

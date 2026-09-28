@@ -4,6 +4,7 @@
  */
 
 import { fetchExploradorMunicipal } from "./api.js";
+import { getActiveCveEnt } from "./amigoDeployment.js";
 
 // --- Escalas visuales (marginación y rezago social) ---
 
@@ -434,8 +435,9 @@ export async function loadAndRenderHomePanels(municipio, opts = {}) {
   }
 
   const cve = municipio && municipio.cve_mun ? padCve3(municipio.cve_mun) : "";
+  const ent = String(municipio?.cve_ent || getActiveCveEnt() || "").replace(/\D/g, "").slice(-2);
   try {
-    const data = await fetchExploradorMunicipal(cve || undefined, { signal });
+    const data = await fetchExploradorMunicipal(cve || undefined, { signal, cve_ent: ent });
     if (gen !== _homePanelGen) return;
     if (data && data.context) {
       lastContext = data.context;
@@ -462,7 +464,7 @@ export function renderHomePanels(municipio) {
 
 export async function loadHomeContext() {
   try {
-    const data = await fetchExploradorMunicipal();
+    const data = await fetchExploradorMunicipal(undefined, { cve_ent: getActiveCveEnt() });
     if (data && data.context) {
       lastContext = data.context;
       applyContext(data.context);

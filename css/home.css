@@ -5,34 +5,19 @@
 
 /* Carta de presentación — temas claro y oscuro */
 
+/* Colores base --home-* en layout.css (catálogo Theme Studio); aquí solo los brillos derivados. */
 html[data-theme="claro"] {
-  --home-sidebar-accent: #0d8a8a;
-  --home-card-bg: #ffffff;
-  --home-card-border: rgba(0, 60, 80, 0.1);
-  --home-map-bg: #e8eef2;
-  --home-panel-bg: #ffffff;
-  --home-stat-icon: #0d8a8a;
-  --home-highlight: #0d8a8a;
-  --home-header-sub: rgba(0, 40, 60, 0.75);
-  --home-card-hover-border: rgba(13, 138, 138, 0.72);
-  --home-card-glow-inner: rgba(13, 138, 138, 0.18);
-  --home-card-glow-mid: rgba(13, 138, 138, 0.32);
-  --home-card-glow-outer: rgba(13, 138, 138, 0.45);
+  --home-card-hover-border: color-mix(in srgb, var(--home-highlight) 72%, transparent);
+  --home-card-glow-inner: color-mix(in srgb, var(--home-highlight) 18%, transparent);
+  --home-card-glow-mid: color-mix(in srgb, var(--home-highlight) 32%, transparent);
+  --home-card-glow-outer: color-mix(in srgb, var(--home-highlight) 45%, transparent);
 }
 
 html[data-theme="oscuro"] {
-  --home-sidebar-accent: #3dbdbd;
-  --home-card-bg: rgba(21, 32, 46, 0.95);
-  --home-card-border: rgba(255, 255, 255, 0.1);
-  --home-map-bg: rgba(0, 0, 0, 0.2);
-  --home-panel-bg: rgba(21, 32, 46, 0.92);
-  --home-stat-icon: #6ec9c9;
-  --home-highlight: #3dbdbd;
-  --home-header-sub: rgba(236, 241, 248, 0.72);
-  --home-card-hover-border: rgba(61, 189, 189, 0.85);
-  --home-card-glow-inner: rgba(61, 189, 189, 0.22);
-  --home-card-glow-mid: rgba(61, 189, 189, 0.38);
-  --home-card-glow-outer: rgba(61, 189, 189, 0.55);
+  --home-card-hover-border: color-mix(in srgb, var(--home-highlight) 85%, transparent);
+  --home-card-glow-inner: color-mix(in srgb, var(--home-highlight) 22%, transparent);
+  --home-card-glow-mid: color-mix(in srgb, var(--home-highlight) 38%, transparent);
+  --home-card-glow-outer: color-mix(in srgb, var(--home-highlight) 55%, transparent);
 }
 
 /* Header institucional */
@@ -169,7 +154,7 @@ html[data-theme="claro"] .theme-switch {
   width: 48px;
   height: 26px;
   border-radius: 999px;
-  background: #0a4a4a;
+  background: var(--switch-track, #0a4a4a);
   border: 2px solid rgba(255, 255, 255, 0.75);
   padding: 0;
   cursor: pointer;
@@ -177,12 +162,12 @@ html[data-theme="claro"] .theme-switch {
 }
 
 html[data-theme="claro"] .theme-switch__track {
-  background: #065656;
+  background: var(--switch-track);
   border-color: rgba(255, 255, 255, 0.9);
 }
 
 html[data-theme="oscuro"] .theme-switch__track {
-  background: #1a3a4a;
+  background: var(--switch-track);
   border-color: rgba(255, 255, 255, 0.35);
 }
 
@@ -193,7 +178,7 @@ html[data-theme="oscuro"] .theme-switch__track {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--switch-thumb, #ffffff);
   transition: transform 0.2s ease;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
   pointer-events: none;
@@ -201,7 +186,7 @@ html[data-theme="oscuro"] .theme-switch__track {
 
 html[data-theme="oscuro"] .theme-switch__thumb {
   transform: translateX(22px);
-  background: #b8f0f0;
+  background: var(--switch-thumb);
 }
 
 .sidebar-theme-picker__title {
@@ -250,7 +235,7 @@ html[data-theme="claro"] .sidebar-theme-picker .theme-switch__label {
 }
 
 html[data-theme="claro"] .sidebar-theme-picker .theme-switch__label.is-active {
-  color: #004d40;
+  color: var(--switch-label-active);
 }
 
 html[data-theme="oscuro"] .sidebar-theme-picker .theme-switch__label {
@@ -258,7 +243,7 @@ html[data-theme="oscuro"] .sidebar-theme-picker .theme-switch__label {
 }
 
 html[data-theme="oscuro"] .sidebar-theme-picker .theme-switch__label.is-active {
-  color: var(--accent-on-dark);
+  color: var(--switch-label-active);
 }
 
 /* Explorador municipal: mismo estilo que las temáticas del menú */
@@ -376,6 +361,35 @@ html:has(#main.home-mode) .app-shell__row {
 }
 
 /* Layout inicio: rejilla mapa | panel + KPI (responsive-layout.css) */
+
+.home-banner {
+  margin-bottom: 0.6rem;
+  flex-shrink: 0;
+}
+
+.home-banner[hidden] {
+  display: none;
+}
+
+.home-banner__link {
+  display: block;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--home-card-border);
+  line-height: 0;
+}
+
+.home-banner__link[aria-disabled="true"] {
+  pointer-events: none;
+}
+
+.home-banner__img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 160px;
+  object-fit: cover;
+}
 
 .home-panel {
   background: var(--home-panel-bg);

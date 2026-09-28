@@ -215,6 +215,33 @@ export function applyBarColors(wrap, style = {}) {
 }
 
 /** Proporción gráfico/tabla desde style.split del preset o catálogo. */
+/**
+ * Columna de nombres compartida (Población / crecimiento).
+ * Mide el texto más largo y fija --ind-name-col en el host.
+ */
+export function syncRankingNameColumn(host) {
+  if (!host) return;
+  const names = host.querySelectorAll(".crec-mun-name, .pobl-mun-name");
+  let max = 0;
+  names.forEach((n) => {
+    const w = Math.ceil(n.scrollWidth);
+    if (w > max) max = w;
+  });
+  if (max > 0) {
+    host.style.setProperty("--ind-name-col", `${max}px`);
+  }
+  requestAnimationFrame(() => {
+    let max2 = 0;
+    names.forEach((n) => {
+      const w = Math.ceil(n.scrollWidth);
+      if (w > max2) max2 = w;
+    });
+    if (max2 > 0) {
+      host.style.setProperty("--ind-name-col", `${max2}px`);
+    }
+  });
+}
+
 export function applySplitLayout(bodyEl, style = {}, columnCount = 1) {
   if (!bodyEl) return;
   const split = style.split || {};

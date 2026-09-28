@@ -42,6 +42,7 @@ import {
   ensureExploradorBulk,
   prefetchMunicipioData,
   invalidateExploradorCache,
+  invalidateGeoContextoCache,
 } from "./api.js";
 import {
   loadAmigoConfig,
@@ -176,6 +177,8 @@ import {
 } from "./invViv.js";
 import { createGeoContextController } from "./geoContext.js";
 import { initThemeSelector } from "./theme.js";
+import { initPortalBranding } from "./portalBranding.js";
+import { initThemePreviewBridge } from "./themePreviewBridge.js";
 
 // --- Estado global de la aplicación ---
 
@@ -304,8 +307,10 @@ function attachMapViewerPlugins({ includeMapUi = false } = {}) {
     attachVisorMapOpacity();
     attachVisorFeaturePickBuffer();
     attachVisorMapIdentify();
+    attachVisorGeocoder(visorLayerPanelOptions());
+  } else {
+    teardownVisorGeocoder();
   }
-  attachVisorGeocoder(visorLayerPanelOptions());
   attachVisorMapExport();
   attachVisorDraw();
   attachVisorBuffer();
@@ -324,6 +329,7 @@ function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
     refreshVisorMapOpacity();
     refreshVisorFeaturePickBuffer();
     refreshVisorMapIdentify();
+    refreshVisorGeocoder();
   }
   refreshVisorMapExport();
   refreshVisorDraw();
@@ -334,7 +340,6 @@ function refreshMapViewerPlugins({ includeMapUi = false } = {}) {
   refreshVisorCatalogAdmin();
   refreshVisorClearLayers();
   refreshVisorMapCompare();
-  refreshVisorGeocoder();
 }
 
 function teardownMapViewerPlugins() {
@@ -514,12 +519,8 @@ async function goToHomeView() {
     btn?.classList.add("is-active");
     btn?.setAttribute("aria-current", "page");
     restoreMapZoomControls();
-    const cve =
-      state.selectedMunicipio && state.selectedMunicipio.cve_mun
-        ? state.selectedMunicipio.cve_mun
-        : null;
     await Promise.all([
-      enterExploradorMapView(cve),
+      enterExploradorMapView(() => state.selectedMunicipio?.cve_mun ?? null),
       loadAndRenderHomePanels(state.selectedMunicipio),
     ]);
     clearVisorThematicLayers();
@@ -936,6 +937,8 @@ function findIndicatorById(model, id) {
 /** Inicialización: tema, menú, municipios, exportaciones y vista Inicio. */
 async function bootstrap() {
   initThemeSelector();
+  void initPortalBranding();
+  initThemePreviewBridge();
   attachVisorCatalogAdmin();
   window.addEventListener("atlasgro-themechange", () => {
     refreshMainBarChartColors();
@@ -957,8 +960,28 @@ async function bootstrap() {
     });
   }
 
-  onAmigoTerritoryChange(() => {
+  onAmigoTerritoryChange(({ cve_ent }) => {
     syncBrandFromTerritory();
+    invalidateExploradorCache();
+    invalidateGeoContextoCache(cve_ent);
+    void import("./geographyContextClient.js")
+      .then(({ invalidateGeographyCatalogCache }) =>
+        invalidateGeographyCatalogCache(cve_ent),
+      )
+      .catch(() => {});
+    if (isVisorIndicator(state.activeIndicator)) {
+      void import("./visorLayers.js")
+        .then(({ reloadVisorLayerCatalog }) => reloadVisorLayerCatalog())
+        .then(() => refreshVisorLayerPanel())
+        .catch((err) => console.warn("[visor] recarga catálogo por entidad:", err));
+    }
+    if (state.geoCtx && isGeoContextIndicator(state.activeIndicator)) {
+      try {
+        state.geoCtx.setMunicipioChanged();
+      } catch (err) {
+        console.warn("[geo] territory change:", err);
+      }
+    }
   });
 
   const munSelect = document.getElementById("selectMunicipio");
@@ -991,6 +1014,7 @@ async function bootstrap() {
     if (!ent?.cve_ent) {
       clearNationalEntityPick();
       invalidateExploradorCache();
+      invalidateGeoContextoCache();
       if (munSelect) {
         munSelect.innerHTML = "";
         const opt = document.createElement("option");
@@ -1007,10 +1031,12 @@ async function bootstrap() {
     if (ent.nomgeo) rememberEntidadNombre(ent.cve_ent, ent.nomgeo);
     trackEvent("ENTIDAD_SELECCIONADA", { cve_ent: ent.cve_ent });
     invalidateExploradorCache();
+    invalidateGeoContextoCache();
     setEntidadSelectValue(entSelect, ent.cve_ent);
     await reloadMunicipiosForEnt(ent.cve_ent);
     await applyMunicipioSelection(null);
     void ensureExploradorBulk({ cve_ent: ent.cve_ent }).catch(() => {});
+    void ensureGeoContextoBulk({ cve_ent: ent.cve_ent }).catch(() => {});
     await goToHomeView();
   }
 
@@ -1052,7 +1078,7 @@ async function bootstrap() {
       }
 
       purgeOrphanModalBackdrops();
-      void ensureGeoContextoBulk().catch(() => {});
+      void ensureGeoContextoBulk({ cve_ent: getActiveCveEnt() }).catch(() => {});
       void ensureExploradorBulk().catch(() => {});
 
       setHomeMunicipioClickHandler(async (m) => {

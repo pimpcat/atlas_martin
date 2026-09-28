@@ -9,7 +9,14 @@ import {
   studioIdsFromPrefix,
 } from "./studioShell.js";
 
-const $ = (id) => document.getElementById(id);
+/** @type {Document|HTMLElement|null} */
+let _uiRoot = null;
+
+const $ = (id) => {
+  const root = _uiRoot || document;
+  if (root === document) return document.getElementById(id);
+  return root.querySelector(`#${CSS.escape(id)}`);
+};
 
 const FALLBACK_DEFAULTS = {
   version: 1,
@@ -28,11 +35,16 @@ function setMsg(msg, ok = true) {
 
 function fillForm(cat) {
   const c = cat || FALLBACK_DEFAULTS;
-  $("fEstadoColor").value = c.estado?.line_color || "#0f172a";
-  $("fEstadoWidth").value = c.estado?.line_width ?? 2.4;
-  $("fMunColor").value = c.municipios?.line_color || "#475569";
-  $("fMunWidth").value = c.municipios?.line_width ?? 1.25;
-  $("fSelFill").value = c.municipio_seleccionado?.fill_color || "#008b8b";
+  const estadoColor = $("fEstadoColor");
+  const estadoWidth = $("fEstadoWidth");
+  const munColor = $("fMunColor");
+  const munWidth = $("fMunWidth");
+  const selFill = $("fSelFill");
+  if (estadoColor) estadoColor.value = c.estado?.line_color || "#0f172a";
+  if (estadoWidth) estadoWidth.value = c.estado?.line_width ?? 2.4;
+  if (munColor) munColor.value = c.municipios?.line_color || "#475569";
+  if (munWidth) munWidth.value = c.municipios?.line_width ?? 1.25;
+  if (selFill) selFill.value = c.municipio_seleccionado?.fill_color || "#008b8b";
   updatePreview();
 }
 
@@ -72,20 +84,40 @@ function updatePreview() {
     _defaults?.municipio_seleccionado?.fill_opacity ??
     0.42;
 
-  if ($("prevEstadoSwatch")) $("prevEstadoSwatch").style.background = estadoColor;
-  if ($("prevMunSwatch")) $("prevMunSwatch").style.background = munColor;
-  if ($("prevEstadoLine")) {
-    $("prevEstadoLine").style.borderBottomColor = estadoColor;
-    $("prevEstadoLine").style.borderBottomWidth = `${Math.max(1, estadoW)}px`;
+  const paintBg = (el, color) => {
+    if (!el) return;
+    el.style.setProperty("background-color", color, "important");
+  };
+
+  paintBg($("prevEstadoSwatch"), estadoColor);
+  paintBg($("prevMunSwatch"), munColor);
+  const estadoLine = $("prevEstadoLine");
+  if (estadoLine) {
+    estadoLine.style.borderBottomStyle = "solid";
+    estadoLine.style.borderBottomColor = estadoColor;
+    estadoLine.style.borderBottomWidth = `${Math.max(1, estadoW)}px`;
   }
-  if ($("prevMunLine")) {
-    $("prevMunLine").style.borderBottomColor = munColor;
-    $("prevMunLine").style.borderBottomWidth = `${Math.max(1, munW)}px`;
+  const munLine = $("prevMunLine");
+  if (munLine) {
+    munLine.style.borderBottomStyle = "solid";
+    munLine.style.borderBottomColor = munColor;
+    munLine.style.borderBottomWidth = `${Math.max(1, munW)}px`;
   }
-  if ($("prevSelFill")) {
-    $("prevSelFill").style.background = sel;
-    $("prevSelFill").style.opacity = String(opacity);
+  const selFill = $("prevSelFill");
+  if (selFill) {
+    paintBg(selFill, sel);
+    selFill.style.opacity = String(opacity);
   }
+}
+
+/** Shell v2 — refrescar vista previa (p. ej. tras montar DOM) */
+export function updateExplorerPreview() {
+  updatePreview();
+}
+
+/** Shell v2 — limpiar referencia al contenedor montado */
+export function resetExplorerStudioUiRoot() {
+  _uiRoot = null;
 }
 
 async function loadCatalog() {
@@ -127,7 +159,7 @@ function restoreDefaults() {
   setMsg("Defaults cargados en el formulario (aún no publicados).", true);
 }
 
-async function init() {
+function wireExplorerStudioUi() {
   $("explorerStudioForm")?.addEventListener("submit", (ev) => void publish(ev));
   $("explorerStudioResetBtn")?.addEventListener("click", restoreDefaults);
   ["fEstadoColor", "fEstadoWidth", "fMunColor", "fMunWidth", "fSelFill"].forEach(
@@ -135,6 +167,21 @@ async function init() {
       $(id)?.addEventListener("input", updatePreview);
     }
   );
+}
+
+/** Shell v2 — enlazar UI tras montar panel en #gs2StudioMount */
+export function bindExplorerStudioUi(root) {
+  _uiRoot = root instanceof HTMLElement ? root : null;
+  wireExplorerStudioUi();
+}
+
+/** Shell v2 — cargar catálogo */
+export function enterExplorerStudioDashboard() {
+  return loadCatalog();
+}
+
+async function init() {
+  wireExplorerStudioUi();
 
   const shell = createStudioShell(
     studioIdsFromPrefix("explorerStudio", {
@@ -149,4 +196,6 @@ async function init() {
   await shell.boot();
 }
 
-void init();
+if (document.getElementById("explorerStudioLoginForm")) {
+  void init();
+}

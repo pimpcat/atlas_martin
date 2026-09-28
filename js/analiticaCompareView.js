@@ -90,6 +90,7 @@ function pad2(cve) {
 }
 function pad3(cve) {
   const d = String(cve ?? "").replace(/\D/g, "");
+  if (!d) return "";
   return d.length >= 3 ? d.slice(-3) : ("000" + d).slice(-3);
 }
 function escapeHtml(s) {
@@ -223,12 +224,17 @@ function showErr(msg) {
   el.classList.remove("d-none");
 }
 
+let _munRenderSeq = 0;
+let _addMunLock = false;
+
 async function renderMunSlotList() {
   const list = document.getElementById("acMunList");
   const addBtn = document.getElementById("acBtnAddMun");
   if (!list) return;
+  const seq = ++_munRenderSeq;
+  const snapshot = _munSlots.slice();
   const showEnt = isNationalMode();
-  list.innerHTML = _munSlots
+  list.innerHTML = snapshot
     .map((slot, idx) => {
       const isRef = idx === 0;
       const label = isRef ? "Referencia" : `Municipio ${idx + 1}`;
@@ -253,29 +259,36 @@ async function renderMunSlotList() {
     })
     .join("");
 
-  for (let idx = 0; idx < _munSlots.length; idx++) {
-    const slot = _munSlots[idx];
+  for (let idx = 0; idx < snapshot.length; idx++) {
+    if (seq !== _munRenderSeq) return;
+    const slot = snapshot[idx];
     const entSel = list.querySelector(`.ac-mun-ent[data-idx="${idx}"]`);
     const munSel = list.querySelector(`.ac-mun-select[data-idx="${idx}"]`);
     if (entSel) {
       await loadEntOptions(entSel);
+      if (seq !== _munRenderSeq) return;
       entSel.value = pad2(slot.ent || getActiveCveEnt());
     }
     const ent = pad2(entSel?.value || slot.ent || getActiveCveEnt());
     await loadMunOptions(munSel, ent, slot.mun);
   }
+  if (seq !== _munRenderSeq) return;
   if (addBtn) addBtn.disabled = _munSlots.length >= MAX_MUN;
 }
 
 function readControls() {
   const list = document.getElementById("acMunList");
   const slots = [];
-  list?.querySelectorAll(".analitica-mun-row").forEach((row) => {
+  list?.querySelectorAll(".analitica-mun-row").forEach((row, idx) => {
     const entSel = row.querySelector(".ac-mun-ent");
     const munSel = row.querySelector(".ac-mun-select");
-    const ent = pad2(entSel?.value || getActiveCveEnt());
-    const mun = pad3(munSel?.value || "");
-    const nom = munSel?.selectedOptions?.[0]?.textContent?.trim() || mun;
+    const prev = _munSlots[idx] || { ent: "", mun: "", nom: "" };
+    const ent = pad2(entSel?.value || prev.ent || getActiveCveEnt());
+    const rawMun = String(munSel?.value || "").trim();
+    const mun = rawMun ? pad3(rawMun) : pad3(prev.mun);
+    const nom = rawMun
+      ? munSel?.selectedOptions?.[0]?.textContent?.trim() || mun
+      : prev.nom || mun;
     slots.push({ ent, mun, nom });
   });
   if (slots.length >= 2) _munSlots = slots;
@@ -287,10 +300,16 @@ function filledTerritorySlots() {
 }
 
 function addMunSlot() {
-  if (_munSlots.length >= MAX_MUN) return;
+  if (_addMunLock) return;
+  _addMunLock = true;
   readControls();
-  _munSlots.push({ ent: pad2(getActiveCveEnt()), mun: "", nom: "" });
-  void renderMunSlotList();
+  if (_munSlots.length < MAX_MUN) {
+    _munSlots.push({ ent: pad2(getActiveCveEnt()), mun: "", nom: "" });
+    void renderMunSlotList();
+  }
+  queueMicrotask(() => {
+    _addMunLock = false;
+  });
 }
 
 function removeMunSlot(idx) {
@@ -1021,6 +1040,8 @@ async function downloadPng() {
 }
 
 function bindOnce(root) {
+  if (root.dataset.acCompareBound === "1") return;
+  root.dataset.acCompareBound = "1";
   root.addEventListener("change", async (ev) => {
     const t = ev.target;
     if (!(t instanceof HTMLSelectElement)) return;
@@ -1029,10 +1050,28 @@ function bindOnce(root) {
       refreshVariationCards(document.getElementById("acPanel"));
       return;
     }
+    const idx = Number(t.getAttribute("data-idx"));
     if (t.classList.contains("ac-mun-ent")) {
-      const idx = t.getAttribute("data-idx");
       const munSel = root.querySelector(`.ac-mun-select[data-idx="${idx}"]`);
-      await loadMunOptions(munSel, t.value, "");
+      const prev = Number.isFinite(idx) ? _munSlots[idx] : null;
+      const newEnt = pad2(t.value);
+      if (prev) {
+        const sameEnt = pad2(prev.ent) === newEnt;
+        prev.ent = newEnt;
+        if (!sameEnt) {
+          prev.mun = "";
+          prev.nom = "";
+        }
+      }
+      await loadMunOptions(munSel, t.value, prev?.mun || "");
+      return;
+    }
+    if (t.classList.contains("ac-mun-select") && Number.isFinite(idx) && _munSlots[idx]) {
+      const mun = pad3(t.value);
+      _munSlots[idx].mun = mun;
+      _munSlots[idx].nom = t.selectedOptions?.[0]?.textContent?.trim() || mun;
+      const entSel = root.querySelector(`.ac-mun-ent[data-idx="${idx}"]`);
+      _munSlots[idx].ent = pad2(entSel?.value || _munSlots[idx].ent || getActiveCveEnt());
     }
   });
   root.addEventListener("click", (ev) => {

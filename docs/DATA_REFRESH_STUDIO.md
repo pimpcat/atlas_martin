@@ -11,10 +11,10 @@ ETL asistido para **actualizar tablas espaciales** e **indicadores tabulares** e
 ## Flujo espacial
 
 1. Elegir tabla destino (lista desde `geometry_columns`; excluye núcleo marco/ruteo/`c_contexto`/tabs).
-2. Subir `.zip` o `.shp` (overlay + barra de progreso; el POST solo encola el job).
+2. Subir `.zip` o `.shp` (overlay + barra de progreso; el POST solo encola el job). Opcional: **codificación DBF** (Auto / Windows-1252 / UTF-8 / ISO-8859-1). Auto detecta `.cpg` o usa Windows-1252 (INEGI/DENUE); `ogr2ogr` recibe `SHAPE_ENCODING` y deja UTF-8 en PostGIS.
 3. Background: `queued` → `importing` → `comparing` → `ready`/`failed`.
 4. Informe + checklist (`ok` / `warn` / `block`): geometría, SRID, columnas, conteos, duplicados, nulos, GIST.
-5. **Aplicar** → swap atómico; **retiene** backup versionado (no DROP); `ANALYZE`; poll Martin. Si `validation.level == "block"`, el servidor rechaza el apply.
+5. **Aplicar** → swap atómico; **retiene** backup versionado (no DROP); `ANALYZE`; poll Martin. Si `validation.level == "block"`, el servidor rechaza el apply. Tras Apply geo exitoso, la UI ofrece **reconcile Martin** opcional (confirmado) para regenerar vistas `tiles.*` compartidas/filtradas.
 6. **Cancelar** → drop staging (no disponible mientras `applying`).
 
 ## Historial

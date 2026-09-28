@@ -137,7 +137,7 @@ export function registerCatalogPolygonLabelCtx(overlayKey, ctx) {
 
 export async function syncCatalogPolygonLabels(map, overlayKey) {
   const ctx = _ctxByOverlay.get(overlayKey);
-  const labelId = `ly-${overlayKey}-labels`;
+  const labelId = ctx?.labelId || `ly-${overlayKey}-labels`;
   if (!map?.getLayer(labelId) || !ctx?.layerId) return;
 
   clearLabelFilter(map, labelId);

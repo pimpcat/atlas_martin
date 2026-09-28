@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es" data-studio-ui-fallback="v2">
+<head>
+  <script>
+    (function () {
+      var t = localStorage.getItem("atlasgro-theme");
+      if (t !== "oscuro" && t !== "claro") t = localStorage.getItem("atlasgro-theme-default");
+      if (t !== "oscuro" && t !== "claro") t = "claro";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nodo Studio 2 — SuperAdmin</title>
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./studio-v2/css/tokens.css" />
+  <link rel="stylesheet" href="./studio-v2/css/components.css" />
+  <link rel="stylesheet" href="./studio-v2/css/shell.css" />
+</head>
+<body class="gs2-page">
+  <div class="grosig-shell-v2__login-wrap" id="nodoV2Placeholder">
+    <div class="grosig-shell-v2__login-card">
+      <h1 class="grosig-shell-v2__login-title">Nodo Studio 2</h1>
+      <p class="grosig-shell-v2__login-blurb">
+        Shell v2 en construcción (Fase F). Por ahora use Nodo legacy para operaciones SuperAdmin.
+      </p>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="gs2-btn gs2-btn--primary" href="./nodo-studio.html?ui=legacy">Abrir Nodo legacy</a>
+        <a class="gs2-btn gs2-btn--secondary" href="./grosig-studio-v2.html">GroSIG Studio 2</a>
+      </div>
+    </div>
+  </div>
+  <script type="module">
+    import { applyStudioUiGate } from "./js/studioUiGate.js";
+    await applyStudioUiGate("nodo");
+  </script>
+</body>
+</html>

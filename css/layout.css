@@ -109,6 +109,48 @@ html[data-theme="claro"] {
   --bs-tertiary-color: rgba(6, 16, 24, 0.55);
   --bs-emphasis-color: #030810;
   --bs-heading-color: #041018;
+  --bs-border-color: #dee2e6;
+  --bs-border-color-translucent: rgba(0, 0, 0, 0.175);
+
+  /* Formularios, código y avisos (valores Bootstrap 5.3 con el texto del tema) */
+  --input-bg: #ffffff;
+  --input-text: #061018;
+  --input-border: #dee2e6;
+  --input-focus-border: #86b7fe;
+  --input-placeholder: rgba(6, 16, 24, 0.7);
+  --code-color: #d63384;
+  --alert-success-bg: #d1e7dd;
+  --alert-success-text: #0a3622;
+  --alert-success-border: #a3cfbb;
+  --alert-warning-bg: #fff3cd;
+  --alert-warning-text: #664d03;
+  --alert-warning-border: #ffe69c;
+  --alert-info-bg: #cff4fc;
+  --alert-info-text: #055160;
+  --alert-info-border: #9eeaf9;
+
+  /* Resaltados (elementos activos) */
+  --home-highlight: #0d8a8a;
+  --home-stat-icon: #0d8a8a;
+  --home-sidebar-accent: #0d8a8a;
+  --menu-active-marker: #008b8b;
+  --active-control-bg: #0d8a8a;
+  --switch-track: #065656;
+  --switch-thumb: #ffffff;
+  --switch-label-active: #004d40;
+  --export-btn-text: #6c757d;
+  --export-btn-border: #6c757d;
+  --export-btn-bg: rgba(255, 255, 255, 0);
+  --export-btn-hover-text: #ffffff;
+  --export-btn-hover-border: rgba(0, 51, 102, 0.55);
+  --export-btn-hover-bg: rgba(0, 51, 102, 0.12);
+
+  /* Página de inicio */
+  --home-card-bg: #ffffff;
+  --home-panel-bg: #ffffff;
+  --home-card-border: rgba(0, 60, 80, 0.1);
+  --home-map-bg: #e8eef2;
+  --home-header-sub: rgba(0, 40, 60, 0.75);
 }
 
 /* ========== Tema OSCURO (azul oscuro original) ========== */
@@ -116,8 +158,6 @@ html[data-theme="oscuro"] {
   --shell-bg: #0c141f;
   --shell-text: #ecf1f8;
   --shell-muted: rgba(236, 241, 248, 0.72);
-  --shell-border: rgba(255, 255, 255, 0.11);
-
   --bg: #0c141f;
   --header-bg: rgba(12, 20, 32, 0.9);
   --sidebar-bg-top: rgba(21, 33, 48, 0.97);
@@ -133,8 +173,12 @@ html[data-theme="oscuro"] {
   --accent-dim: #6ec9c9;
   --accent-on-dark: #b8f0f0;
 
+  --shell-border: rgba(255, 255, 255, 0.11);
   --border: rgba(255, 255, 255, 0.11);
   --border-accent: rgba(var(--accent-rgb), 0.28);
+  /* Bootstrap .border-* usa --bs-border-color (!important); sin esto sale #dee2e6 (blanco). */
+  --bs-border-color: rgba(148, 163, 184, 0.28);
+  --bs-border-color-translucent: rgba(148, 163, 184, 0.22);
 
   --card-background: rgba(21, 32, 46, 0.92);
   --card-header-background: rgba(16, 26, 40, 0.82);
@@ -182,6 +226,43 @@ html[data-theme="oscuro"] {
   --bs-tertiary-color: rgba(255, 255, 255, 0.58);
   --bs-emphasis-color: #ffffff;
   --bs-heading-color: #f5f8ff;
+
+  --input-bg: rgba(10, 18, 32, 0.92);
+  --input-text: #f1f5f9;
+  --input-border: rgba(255, 255, 255, 0.22);
+  --input-focus-border: rgba(125, 211, 252, 0.55);
+  --input-placeholder: rgba(236, 241, 248, 0.45);
+  --code-color: #a5d8f3;
+  --alert-success-bg: rgba(20, 90, 55, 0.38);
+  --alert-success-text: #bbf7d0;
+  --alert-success-border: rgba(74, 222, 128, 0.45);
+  --alert-warning-bg: rgba(120, 85, 10, 0.38);
+  --alert-warning-text: #fde68a;
+  --alert-warning-border: rgba(251, 191, 36, 0.5);
+  --alert-info-bg: rgba(12, 74, 110, 0.38);
+  --alert-info-text: #bae6fd;
+  --alert-info-border: rgba(56, 189, 248, 0.45);
+
+  --home-highlight: #3dbdbd;
+  --home-stat-icon: #6ec9c9;
+  --home-sidebar-accent: #3dbdbd;
+  --menu-active-marker: #008b8b;
+  --active-control-bg: #008b8b;
+  --switch-track: #1a3a4a;
+  --switch-thumb: #b8f0f0;
+  --switch-label-active: #b8f0f0;
+  --export-btn-text: #6c757d;
+  --export-btn-border: #6c757d;
+  --export-btn-bg: rgba(255, 255, 255, 0.04);
+  --export-btn-hover-text: #ffffff;
+  --export-btn-hover-border: rgba(0, 139, 139, 0.55);
+  --export-btn-hover-bg: rgba(0, 139, 139, 0.12);
+
+  --home-card-bg: rgba(21, 32, 46, 0.95);
+  --home-panel-bg: rgba(21, 32, 46, 0.92);
+  --home-card-border: rgba(255, 255, 255, 0.1);
+  --home-map-bg: rgba(0, 0, 0, 0.2);
+  --home-header-sub: rgba(236, 241, 248, 0.72);
 }
 
 html,
@@ -330,8 +411,8 @@ html[data-theme="claro"] .app-sidebar .menu-item.is-active {
 }
 
 html[data-theme="claro"] .app-sidebar .menu-item.is-active::before {
-  background: #008b8b;
-  box-shadow: 0 0 8px rgba(0, 139, 139, 0.45);
+  background: var(--menu-active-marker);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--menu-active-marker) 45%, transparent);
 }
 
 html[data-theme="claro"] .app-sidebar .menu-item.is-active .title {
@@ -446,7 +527,9 @@ html[data-theme="oscuro"] .sidebar-theme-picker {
 }
 
 .app-sidebar.border-end,
-.app-header.border-bottom {
+.app-header.border-bottom,
+.sidebar-municipios.border-bottom,
+.app-footer--home.border-top {
   border-color: var(--shell-border) !important;
 }
 
@@ -477,6 +560,16 @@ html[data-theme="oscuro"] .visor-layer-list .form-check-label {
 
 html[data-theme="oscuro"] .visor-layer-list .text-muted {
   color: rgba(255, 255, 255, 0.82) !important;
+}
+
+/* Selector claro/oscuro en la nav de Studios (no Theme Studio). */
+.grosig-studio-nav .studio-theme-picker {
+  flex: 0 0 auto;
+}
+.grosig-studio-nav .studio-theme-picker .btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
 }
 
 /* Off-canvas sidebar móvil: responsive-layout.css */

@@ -1,7 +1,15 @@
 import { apiUrl } from "./atlasConfig.js";
-import { readStoredTheme } from "./theme.js";
+import { initThemeSelector, readStoredTheme } from "./theme.js";
+import {
+  KIT_GRO_PANEL_INNER_HTML,
+  mountKitGroPanel,
+  nodoKitGroEndpoints,
+} from "./kitGroStudio.js";
 
-document.documentElement.setAttribute("data-theme", readStoredTheme());
+if (!document.getElementById("gs2Dashboard")) {
+  document.documentElement.setAttribute("data-theme", readStoredTheme());
+  initThemeSelector();
+}
 
 const TOKEN_KEY = "grosigNodoSuperadminToken";
 const USER_KEY = "grosigNodoSuperadminUser";
@@ -16,6 +24,7 @@ const hints = [
 
 let step = 1;
 let entidades = [];
+let _nodoKitGroModal = null;
 
 function getToken() {
   try {
@@ -41,6 +50,29 @@ function apiMessage(data, fallback) {
   if (d && typeof d === "object") return d.message || d.error || fallback;
   if (typeof d === "string") return d;
   return data.message || fallback;
+}
+
+function martinReconcileHint(martin) {
+  if (!martin || typeof martin !== "object") return "";
+  const federated = Array.isArray(martin.federated) ? martin.federated : [];
+  const dbs = federated.map((f) => f.database_name).filter(Boolean).join(", ");
+  const dbsBit = dbs ? ` Conexiones federadas: ${dbs}.` : "";
+  const st = String(martin.status || "");
+  const restarted = Boolean(martin.restart?.thematic?.ok);
+  if (st === "RESTART_REQUIRED") {
+    return ` YAML Martin actualizado.${dbsBit} Reinicia martin_thematic si el visor MVT no lista la entidad.`;
+  }
+  if (st === "MARTIN_UNHEALTHY") {
+    return ` YAML escrito.${dbsBit} martin_thematic no arrancó (revisa logs: DSN / YAML).`;
+  }
+  if (restarted) {
+    return ` YAML Martin + martin_thematic reiniciado.${dbsBit}`;
+  }
+  if (st === "RECONCILED" || st === "ALREADY_RECONCILED") {
+    return ` YAML Martin reconciliado.${dbsBit}`;
+  }
+  if (martin.error) return ` Martin: ${martin.error}`;
+  return "";
 }
 
 function showError(id, msg) {
@@ -135,6 +167,8 @@ async function loadLists() {
     .map((r) => {
       const inact = String(r.estado || "").toUpperCase() === "INACTIVA";
       const kit = `<button type="button" class="btn btn-sm btn-outline-primary" data-kit="${r.cve_ent}">Kit XLSX</button>`;
+      const seedGro = `<button type="button" class="btn btn-sm btn-outline-info" data-seed-gro="${r.cve_ent}" title="Kit Base: sembrar o borrar catálogos">Kit Base…</button>`;
+      const repair = `<button type="button" class="btn btn-sm btn-outline-secondary" data-repair="${r.cve_ent}" title="Schema tiles + GRANT grosig_martin (no borra datos)">Reparar Martin</button>`;
       const btn = inact
         ? `<button type="button" class="btn btn-sm btn-outline-success" data-act="PILOTO" data-ent="${r.cve_ent}">Reactivar</button>`
         : `<button type="button" class="btn btn-sm btn-outline-warning" data-act="INACTIVA" data-ent="${r.cve_ent}">Despublicar</button>`;
@@ -143,7 +177,7 @@ async function loadLists() {
         <td>${r.clave || ""}</td>
         <td>${r.estado || ""}</td>
         <td><code>${r.database_name || ""}</code></td>
-        <td class="text-nowrap">${kit} ${btn}</td>
+        <td class="text-nowrap">${kit} ${seedGro} ${repair} ${btn}</td>
       </tr>`;
     })
     .join("");
@@ -363,8 +397,8 @@ async function exportAnalyticsXlsx() {
 
 function gate() {
   const token = getToken();
-  document.getElementById("nodoLoginView").classList.toggle("d-none", Boolean(token));
-  document.getElementById("nodoDashboard").classList.toggle("d-none", !token);
+  document.getElementById("nodoLoginView")?.classList.toggle("d-none", Boolean(token));
+  document.getElementById("nodoDashboard")?.classList.toggle("d-none", !token);
   if (!token) return;
   let user = {};
   try {
@@ -372,175 +406,261 @@ function gate() {
   } catch {
     user = {};
   }
-  document.getElementById("nodoWelcome").textContent =
-    `${user.display_name || user.username || ""} · SuperAdmin`;
+  const welcome = document.getElementById("nodoWelcome");
+  if (welcome) {
+    welcome.textContent = `${user.display_name || user.username || ""} · SuperAdmin`;
+  }
   loadLists();
 }
 
-document.getElementById("nodoLoginForm").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  showError("nodoLoginError", "");
-  try {
-    const { res, data } = await nodoFetch("/api/amigo/nodo/login", {
-      method: "POST",
-      body: JSON.stringify({
-        username: document.getElementById("nodoUser").value,
-        password: document.getElementById("nodoPass").value,
-      }),
+function wireNodoStudioUi() {
+  document.getElementById("nodoLoginForm")?.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    showError("nodoLoginError", "");
+    try {
+      const { res, data } = await nodoFetch("/api/amigo/nodo/login", {
+        method: "POST",
+        body: JSON.stringify({
+          username: document.getElementById("nodoUser").value,
+          password: document.getElementById("nodoPass").value,
+        }),
+      });
+      if (!res.ok) {
+        showError("nodoLoginError", apiMessage(data, "No se pudo entrar"));
+        return;
+      }
+      setSession(data.token, data.user);
+      gate();
+    } catch {
+      showError("nodoLoginError", "Sin conexión con la API");
+    }
+  });
+
+  document.getElementById("nodoLogoutBtn")?.addEventListener("click", () => {
+    clearSession();
+    gate();
+  });
+
+  document.getElementById("nodoAnalyticsRefresh")?.addEventListener("click", () => {
+    void loadAnalytics();
+  });
+  document.getElementById("nodoAnalyticsEnt")?.addEventListener("change", () => {
+    void loadAnalytics();
+  });
+  document.getElementById("nodoAnalyticsFrom")?.addEventListener("change", () => {
+    if (isDateFilterOn()) void loadAnalytics();
+  });
+  document.getElementById("nodoAnalyticsTo")?.addEventListener("change", () => {
+    if (isDateFilterOn()) void loadAnalytics();
+  });
+  document.getElementById("nodoAnalyticsDateFilter")?.addEventListener("change", () => {
+    syncDateFilterUi();
+    void loadAnalytics();
+  });
+  document.getElementById("nodoAnalyticsExport")?.addEventListener("click", () => {
+    void exportAnalyticsXlsx();
+  });
+  document.getElementById("nodoMainTabs")?.addEventListener("click", (ev) => {
+    const btn = ev.target.closest("[data-nodo-tab]");
+    if (!btn) return;
+    setNodoTab(btn.getAttribute("data-nodo-tab") || "analitica");
+  });
+  document.querySelectorAll(".nodo-date-input").forEach((el) => {
+    el.addEventListener("click", () => {
+      if (el.disabled) return;
+      try {
+        if (typeof el.showPicker === "function") el.showPicker();
+      } catch {
+        /* ignore */
+      }
     });
-    if (!res.ok) {
-      showError("nodoLoginError", apiMessage(data, "No se pudo entrar"));
+  });
+
+  document.getElementById("nodoPrevBtn")?.addEventListener("click", () => {
+    if (step > 1) {
+      step -= 1;
+      renderStep();
+    }
+  });
+
+  document.getElementById("nodoNextBtn")?.addEventListener("click", async () => {
+    showError("nodoWizardError", "");
+    if (step < 5) {
+      if (step === 1 && !document.getElementById("nodoEnt").value) {
+        showError("nodoWizardError", "Elija una entidad sin instancia.");
+        return;
+      }
+      if (step === 4) {
+        const u = document.getElementById("nodoAdminUser").value.trim();
+        const p = document.getElementById("nodoAdminPass").value;
+        if (u.length < 2 || p.length < 8) {
+          showError("nodoWizardError", "Usuario ≥ 2 caracteres y contraseña ≥ 8.");
+          return;
+        }
+      }
+      step += 1;
+      renderStep();
       return;
     }
-    setSession(data.token, data.user);
-    gate();
-  } catch {
-    showError("nodoLoginError", "Sin conexión con la API");
-  }
-});
-
-document.getElementById("nodoLogoutBtn").addEventListener("click", () => {
-  clearSession();
-  gate();
-});
-
-document.getElementById("nodoAnalyticsRefresh")?.addEventListener("click", () => {
-  void loadAnalytics();
-});
-document.getElementById("nodoAnalyticsEnt")?.addEventListener("change", () => {
-  void loadAnalytics();
-});
-document.getElementById("nodoAnalyticsFrom")?.addEventListener("change", () => {
-  if (isDateFilterOn()) void loadAnalytics();
-});
-document.getElementById("nodoAnalyticsTo")?.addEventListener("change", () => {
-  if (isDateFilterOn()) void loadAnalytics();
-});
-document.getElementById("nodoAnalyticsDateFilter")?.addEventListener("change", () => {
-  syncDateFilterUi();
-  void loadAnalytics();
-});
-document.getElementById("nodoAnalyticsExport")?.addEventListener("click", () => {
-  void exportAnalyticsXlsx();
-});
-document.getElementById("nodoMainTabs")?.addEventListener("click", (ev) => {
-  const btn = ev.target.closest("[data-nodo-tab]");
-  if (!btn) return;
-  setNodoTab(btn.getAttribute("data-nodo-tab") || "analitica");
-});
-// Abrir calendario nativo al hacer clic en el campo (Chrome/Edge/Firefox)
-document.querySelectorAll(".nodo-date-input").forEach((el) => {
-  el.addEventListener("click", () => {
-    if (el.disabled) return;
+    const btn = document.getElementById("nodoNextBtn");
+    btn.disabled = true;
+    btn.textContent = "Creando…";
     try {
-      if (typeof el.showPicker === "function") el.showPicker();
+      const { res, data } = await nodoFetch("/api/amigo/nodo/instancias", {
+        method: "POST",
+        body: JSON.stringify(payload()),
+      });
+      const box = document.getElementById("nodoChecks");
+      box.classList.remove("d-none");
+      if (!res.ok) {
+        showError("nodoWizardError", apiMessage(data, "Falló el provisionamiento"));
+        box.textContent = JSON.stringify(data, null, 2);
+        return;
+      }
+      box.textContent = JSON.stringify(data.checks, null, 2);
+      step = 1;
+      await loadLists();
+    } catch {
+      showError("nodoWizardError", "Sin conexión con la API");
+    } finally {
+      btn.disabled = false;
+      renderStep();
+    }
+  });
+
+  document.getElementById("nodoInstanciasBody")?.addEventListener("click", async (ev) => {
+    const kitBtn = ev.target.closest("button[data-kit]");
+    if (kitBtn) {
+      const ent = kitBtn.getAttribute("data-kit");
+      try {
+        const headers = new Headers();
+        const token = getToken();
+        if (token) {
+          headers.set("Authorization", `Bearer ${token}`);
+          headers.set("X-Atlas-Authorization", `Bearer ${token}`);
+        }
+        const res = await fetch(apiUrl(`/api/amigo/nodo/instancias/${ent}/kit-xlsx`), {
+          headers,
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          let msg = "No se pudo generar el kit";
+          try {
+            const err = await res.json();
+            msg = apiMessage(err, msg);
+          } catch {
+            /* ignore */
+          }
+          window.alert(msg);
+          return;
+        }
+        const blob = await res.blob();
+        const cd = res.headers.get("content-disposition") || "";
+        const m = /filename="([^"]+)"/.exec(cd);
+        const name = (m && m[1]) || `AMIGO_kit_captura_${ent}.xlsx`;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = name;
+        a.click();
+        URL.revokeObjectURL(a.href);
+      } catch {
+        window.alert("Sin conexión con la API");
+      }
+      return;
+    }
+    const seedGroBtn = ev.target.closest("button[data-seed-gro]");
+    if (seedGroBtn) {
+      openNodoKitGroModal(seedGroBtn.getAttribute("data-seed-gro"));
+      return;
+    }
+    const repairBtn = ev.target.closest("button[data-repair]");
+    if (repairBtn) {
+      const ent = repairBtn.getAttribute("data-repair");
+      repairBtn.disabled = true;
+      try {
+        const out = await nodoFetch(`/api/amigo/nodo/instancias/${ent}/repair`, { method: "POST" });
+        if (!out.res.ok) {
+          window.alert(apiMessage(out.data, "No se pudo reparar Martin en la instancia"));
+          return;
+        }
+        window.alert(
+          `Listo ${ent}: schema tiles + grants Martin (${(out.data && out.data.martin_grants) ?? "ok"}).${martinReconcileHint(out.data && out.data.martin)} La instancia sigue publicada.`
+        );
+      } catch {
+        window.alert("Sin conexión con la API");
+      } finally {
+        repairBtn.disabled = false;
+      }
+      return;
+    }
+    const btn = ev.target.closest("button[data-ent]");
+    if (!btn) return;
+    await nodoFetch(`/api/amigo/nodo/instancias/${btn.getAttribute("data-ent")}/estado`, {
+      method: "PATCH",
+      body: JSON.stringify({ estado: btn.getAttribute("data-act") }),
+    });
+    await loadLists();
+  });
+}
+
+function openNodoKitGroModal(cve_ent) {
+  const ent = String(cve_ent || "").padStart(2, "0");
+  if (ent === "12") {
+    window.alert("Guerrero ya usa catálogos globales del nodo.");
+    return;
+  }
+  const modalEl = document.getElementById("nodoKitGroModal");
+  const panel = document.getElementById("nodoKitGroPanel");
+  const title = document.getElementById("nodoKitGroModalLabel");
+  if (!modalEl || !panel) return;
+  if (modalEl.parentElement !== document.body) {
+    document.body.appendChild(modalEl);
+  }
+  if (title) title.textContent = `Kit Base · entidad ${ent}`;
+  panel.innerHTML = KIT_GRO_PANEL_INNER_HTML;
+  mountKitGroPanel(panel, {
+    ...nodoKitGroEndpoints(ent),
+    fetchFn: nodoFetch,
+  });
+  if (typeof bootstrap !== "undefined" && bootstrap.Modal) {
+    _nodoKitGroModal = bootstrap.Modal.getOrCreateInstance(modalEl, {
+      backdrop: true,
+      focus: true,
+      keyboard: true,
+    });
+    _nodoKitGroModal.show();
+  } else {
+    modalEl.classList.add("show");
+    modalEl.style.display = "block";
+  }
+}
+
+/** Shell v2 — enlazar UI tras montar panel en #gs2StudioMount */
+export function bindNodoStudioUi() {
+  wireNodoStudioUi();
+}
+
+/** Shell v2 — sesión Nodo + analítica / instancias */
+export function enterNodoStudioDashboard() {
+  syncDateFilterUi();
+  renderStep();
+  gate();
+}
+
+/** Shell v2 — cerrar modal Kit Base al cambiar de vista */
+export function teardownNodoStudioUi() {
+  if (_nodoKitGroModal) {
+    try {
+      _nodoKitGroModal.hide();
     } catch {
       /* ignore */
     }
-  });
-});
-syncDateFilterUi();
-
-document.getElementById("nodoPrevBtn").addEventListener("click", () => {
-  if (step > 1) {
-    step -= 1;
-    renderStep();
   }
-});
+}
 
-document.getElementById("nodoNextBtn").addEventListener("click", async () => {
-  showError("nodoWizardError", "");
-  if (step < 5) {
-    if (step === 1 && !document.getElementById("nodoEnt").value) {
-      showError("nodoWizardError", "Elija una entidad sin instancia.");
-      return;
-    }
-    if (step === 4) {
-      const u = document.getElementById("nodoAdminUser").value.trim();
-      const p = document.getElementById("nodoAdminPass").value;
-      if (u.length < 2 || p.length < 8) {
-        showError("nodoWizardError", "Usuario ≥ 2 caracteres y contraseña ≥ 8.");
-        return;
-      }
-    }
-    step += 1;
-    renderStep();
-    return;
-  }
-  const btn = document.getElementById("nodoNextBtn");
-  btn.disabled = true;
-  btn.textContent = "Creando…";
-  try {
-    const { res, data } = await nodoFetch("/api/amigo/nodo/instancias", {
-      method: "POST",
-      body: JSON.stringify(payload()),
-    });
-    const box = document.getElementById("nodoChecks");
-    box.classList.remove("d-none");
-    if (!res.ok) {
-      showError("nodoWizardError", apiMessage(data, "Falló el provisionamiento"));
-      box.textContent = JSON.stringify(data, null, 2);
-      return;
-    }
-    box.textContent = JSON.stringify(data.checks, null, 2);
-    step = 1;
-    await loadLists();
-  } catch {
-    showError("nodoWizardError", "Sin conexión con la API");
-  } finally {
-    btn.disabled = false;
-    renderStep();
-  }
-});
-
-document.getElementById("nodoInstanciasBody").addEventListener("click", async (ev) => {
-  const kitBtn = ev.target.closest("button[data-kit]");
-  if (kitBtn) {
-    const ent = kitBtn.getAttribute("data-kit");
-    try {
-      const headers = new Headers();
-      const token = getToken();
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
-        headers.set("X-Atlas-Authorization", `Bearer ${token}`);
-      }
-      const res = await fetch(apiUrl(`/api/amigo/nodo/instancias/${ent}/kit-xlsx`), {
-        headers,
-        cache: "no-store",
-      });
-      if (!res.ok) {
-        let msg = "No se pudo generar el kit";
-        try {
-          const err = await res.json();
-          msg = apiMessage(err, msg);
-        } catch {
-          /* ignore */
-        }
-        window.alert(msg);
-        return;
-      }
-      const blob = await res.blob();
-      const cd = res.headers.get("content-disposition") || "";
-      const m = /filename="([^"]+)"/.exec(cd);
-      const name = (m && m[1]) || `AMIGO_kit_captura_${ent}.xlsx`;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = name;
-      a.click();
-      URL.revokeObjectURL(a.href);
-    } catch {
-      window.alert("Sin conexión con la API");
-    }
-    return;
-  }
-  const btn = ev.target.closest("button[data-ent]");
-  if (!btn) return;
-  await nodoFetch(`/api/amigo/nodo/instancias/${btn.getAttribute("data-ent")}/estado`, {
-    method: "PATCH",
-    body: JSON.stringify({ estado: btn.getAttribute("data-act") }),
-  });
-  await loadLists();
-});
-
-renderStep();
-gate();
+if (document.getElementById("nodoLoginForm") && !document.getElementById("gs2Dashboard")) {
+  wireNodoStudioUi();
+  syncDateFilterUi();
+  renderStep();
+  gate();
+}

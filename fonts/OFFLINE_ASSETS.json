@@ -1,0 +1,105 @@
+{
+  "generated_at": "2026-09-28T14:48:24+00:00",
+  "files": [
+    {
+      "path": "fonts/glyphs/Open Sans Bold,Arial Unicode MS Bold,Open Sans Regular/0-255.pbf",
+      "bytes": 77571,
+      "sha256": "64da7011e07531351a249a3d26aad76e2f22e4e321e50833f742697b453e8365"
+    },
+    {
+      "path": "fonts/glyphs/Open Sans Bold,Arial Unicode MS Bold,Open Sans Regular/256-511.pbf",
+      "bytes": 68869,
+      "sha256": "78298bbd8198c117ccdffe66bf9bbf646fdc1210b7e1bf222f5a9b29b366d7a5"
+    },
+    {
+      "path": "fonts/glyphs/Open Sans Bold,Arial Unicode MS Bold,Open Sans Regular/8192-8447.pbf",
+      "bytes": 10092,
+      "sha256": "ee80ee7ef05e77bea017bcb387d970d61823fc37fdb0a51c446ae322c5974990"
+    },
+    {
+      "path": "fonts/glyphs/Open Sans Bold,Arial Unicode MS Bold,Open Sans Regular/8448-8703.pbf",
+      "bytes": 5512,
+      "sha256": "f568af4cb6e55460e59d0f6b575449adabf4e3e5c19c1363f3b375e85cf50634"
+    },
+    {
+      "path": "fonts/glyphs/Open Sans Bold,Arial Unicode MS Bold,Open Sans Regular/9472-9727.pbf",
+      "bytes": 467,
+      "sha256": "2fd5e3ae33701b62a8b34df71251d126267460035550a5c633f9950eb9c93480"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxC0SmrfB.woff2",
+      "bytes": 9740,
+      "sha256": "10a64cfaceefde32e4a7f650ab1631b2c5c6f7000ee9d80eca1e48f84c7ae23d"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxCQSmrfB.woff2",
+      "bytes": 5684,
+      "sha256": "814f16e0584327b193e155bef010be69030cfcb1c9106a2f70c62078ff6154ec"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxCUSmrfB.woff2",
+      "bytes": 5876,
+      "sha256": "370e43ac2d49324397c86df8a0c4597f6b8a18c87660befd9c19c349ac555451"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxCYSmrfB.woff2",
+      "bytes": 6376,
+      "sha256": "db664d97d45a6a62504598d6bc97a1e4e67a1f4e44caf59ba808760eaa1baba2"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxCcSmrfB.woff2",
+      "bytes": 32208,
+      "sha256": "97f4d6bf2b17b55107975f652bfe47e4443c261cae6a022482611a6c5c8cf7af"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxCkSmg.woff2",
+      "bytes": 15808,
+      "sha256": "3c230c03425a2866e4b57954f3173fc149dba2634e9ee32c681b41d96c7f06fe"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpDtKy2OAdR1K-IwhWudF-R3woAa8opPOrG97lwqLlOxCoSmrfB.woff2",
+      "bytes": 8100,
+      "sha256": "911eaee1bbf7cb030309a09928952b876f7127598d6d6faca63c80ac9729cfe4"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpStKy2OAdR1K-IwhWudF-R3w8aZQ.woff2",
+      "bytes": 28740,
+      "sha256": "7a19a7027e125257d310c6dbd78ae3a30b5ea1e3794d60b12bb28227a003bfda"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpStKy2OAdR1K-IwhWudF-R3wAaZfrc.woff2",
+      "bytes": 10324,
+      "sha256": "ff34bf5a131a3f9d194f47b4ff7de95aceef5dad72b74709a5d5bf2c069e1f86"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpStKy2OAdR1K-IwhWudF-R3wEaZfrc.woff2",
+      "bytes": 60088,
+      "sha256": "a85a7459bdb3cdc1136751e151a506bae653fc29ada3ca86237477df6f1b59e6"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpStKy2OAdR1K-IwhWudF-R3wIaZfrc.woff2",
+      "bytes": 10676,
+      "sha256": "6aba01e1a800f890b4d91094c4cf5e1769aaf77085371a3ad96065d586186796"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpStKy2OAdR1K-IwhWudF-R3wMaZfrc.woff2",
+      "bytes": 9784,
+      "sha256": "3576fb9237b1a58cb5b38369bd63074a6f884dbeb9f88069690b6bc67ee5d3ff"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpStKy2OAdR1K-IwhWudF-R3wsaZfrc.woff2",
+      "bytes": 18496,
+      "sha256": "b6b721e08d0324b9e743858e8260463085d4c5e1e684f036f9d4a8ca6c62996f"
+    },
+    {
+      "path": "fonts/source-sans-3/nwpStKy2OAdR1K-IwhWudF-R3wwaZfrc.woff2",
+      "bytes": 14600,
+      "sha256": "5360981f035cd4307cd65e4cf46a27693a2409702d3234403c534d9e656d7844"
+    },
+    {
+      "path": "fonts/source-sans-3/source-sans-3.css",
+      "bytes": 9071,
+      "sha256": "cd18f35426bc2a026365da8e749fdb56fd1fbce46ab107588a1c665f71ace3e9"
+    }
+  ]
+}

@@ -3,7 +3,7 @@
  * - N series (bar_metrics), sin límite a 2
  * - Ranking opcional: top / municipio seleccionado / bottom
  */
-import { applyBarColors, applyRankingSizeCss, rankingBadge, resolveRankingSize } from "./domUtil.js";
+import { applyBarColors, applyRankingSizeCss, rankingBadge, resolveRankingSize, syncRankingNameColumn } from "./domUtil.js";
 
 const SERIES_PALETTE = [
   "#6342ff",
@@ -246,4 +246,5 @@ export function renderRankingDualBars(root, payload, config = {}) {
   }
 
   root.append(wrap);
+  requestAnimationFrame(() => syncRankingNameColumn(wrap));
 }

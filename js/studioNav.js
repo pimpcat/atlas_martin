@@ -23,14 +23,22 @@ const STUDIO_LINKS = [
 export function mountStudioNav(el, opts = {}) {
   if (!el) return;
   const active = String(opts.active || "").toLowerCase();
+  const showPicker = opts.themePicker !== false && active !== "theme";
   el.classList.add("grosig-studio-nav", "d-flex", "flex-wrap", "gap-1", "align-items-center");
-  el.innerHTML = STUDIO_LINKS.map((link) => {
+  const links = STUDIO_LINKS.map((link) => {
     const isActive = link.id === active;
     const cls = isActive
       ? "btn btn-sm btn-primary"
       : "btn btn-sm btn-outline-secondary";
     return `<a href="${link.href}" class="${cls}" ${isActive ? 'aria-current="page"' : ""}>${link.label}</a>`;
   }).join("");
+  const picker = showPicker
+    ? `<span class="studio-theme-picker btn-group ms-auto" role="group" aria-label="Tema visual">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-studio-theme="claro">Claro</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-studio-theme="oscuro">Oscuro</button>
+      </span>`
+    : "";
+  el.innerHTML = `${links}${picker}`;
 }
 
 /** HTML compacto para pie de login (sin botones). */

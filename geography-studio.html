@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <script>
+    (function () {
+      var t = localStorage.getItem("atlasgro-theme");
+      if (t !== "oscuro" && t !== "claro") t = localStorage.getItem("atlasgro-theme-default");
+      if (t !== "oscuro" && t !== "claro") t = "claro";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Geography Studio — GroSIG</title>

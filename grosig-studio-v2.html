@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es" data-studio-ui-fallback="v2">
+<head>
+  <script>
+    (function () {
+      var t = localStorage.getItem("atlasgro-theme");
+      if (t !== "oscuro" && t !== "claro") t = localStorage.getItem("atlasgro-theme-default");
+      if (t !== "oscuro" && t !== "claro") t = "claro";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>GroSIG Studio 2 — Resumen</title>
+  <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
+  <link rel="stylesheet" href="./studio-v2/css/tokens.css" />
+  <link rel="stylesheet" href="./studio-v2/css/components.css" />
+  <link rel="stylesheet" href="./studio-v2/css/shell.css" />
+  <link rel="stylesheet" href="./studio-v2/css/viewport-fit.css" />
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/main.css" />
+  <link rel="stylesheet" href="./studio-v2/css/studio-modules.css" />
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("atlasVisorAdminToken")) {
+          document.documentElement.classList.add("gs2-session-hint");
+        }
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body class="gs2-page">
+  <div id="gs2NavHidden" class="d-none" aria-hidden="true"></div>
+  <p id="gs2WelcomeHidden" class="d-none"></p>
+
+  <section id="gs2LoginView" class="grosig-shell-v2__login-wrap">
+    <div class="grosig-shell-v2__login-card">
+      <img
+        src="./assets/logos/GroSIG-claro.png"
+        alt=""
+        class="grosig-shell-v2__login-logo"
+        decoding="async"
+        onerror="if(!this.dataset.fb){this.dataset.fb='1';this.src='./assets/logos/GroSIG.png';}else if(!this.dataset.fb2){this.dataset.fb2='1';this.src='./assets/logo/GroSIG.png';}"
+      />
+      <p class="grosig-shell-v2__login-blurb">
+        Shell administrativo. Misma sesión admin que los Studios legacy.
+      </p>
+      <form id="gs2LoginForm" class="gs2-form-stack">
+        <div class="d-flex justify-content-end">
+          <span class="studio-theme-picker gs2-theme-segment" role="group" aria-label="Tema">
+            <button type="button" data-studio-theme="claro">Claro</button>
+            <button type="button" data-studio-theme="oscuro">Oscuro</button>
+          </span>
+        </div>
+        <div class="gs2-field">
+          <label class="gs2-label" for="gs2Entidad">Entidad</label>
+          <select id="gs2Entidad" class="gs2-select" required>
+            <option value="">Cargando instancias…</option>
+          </select>
+        </div>
+        <div class="gs2-field">
+          <label class="gs2-label" for="gs2User">Usuario</label>
+          <input id="gs2User" class="gs2-input" autocomplete="username" required />
+        </div>
+        <div class="gs2-field">
+          <label class="gs2-label" for="gs2Pass">Contraseña</label>
+          <input id="gs2Pass" type="password" class="gs2-input" autocomplete="current-password" required />
+        </div>
+        <div id="gs2LoginError" class="gs2-form-error d-none" role="alert"></div>
+        <button type="submit" class="gs2-btn gs2-btn--primary">Entrar</button>
+      </form>
+      <p class="grosig-shell-v2__login-blurb mt-3 mb-0" id="gs2LoginFooter"></p>
+    </div>
+  </section>
+
+  <div id="gs2Dashboard" class="d-none">
+    <div class="grosig-shell-v2">
+      <aside class="grosig-shell-v2__sidebar" id="gs2Sidebar">
+        <div class="grosig-shell-v2__sidebar-head">
+          <div class="grosig-shell-v2__brand" aria-label="GroSIG Studio">
+            <img
+              src="./assets/logos/GroSIG-claro.png"
+              alt=""
+              class="grosig-shell-v2__brand-logo"
+              decoding="async"
+              onerror="if(!this.dataset.fb){this.dataset.fb='1';this.src='./assets/logos/GroSIG.png';}else if(!this.dataset.fb2){this.dataset.fb2='1';this.src='./assets/logo/GroSIG.png';}else if(!this.dataset.fb3){this.dataset.fb3='1';this.src='./studio-v2/img/GroSIG.png';}"
+            />
+          </div>
+          <button type="button" class="grosig-shell-v2__sidebar-toggle" id="gs2SidebarToggle" aria-label="Colapsar menú" title="Colapsar menú">☰</button>
+        </div>
+        <nav id="gs2SidebarNav" aria-label="Navegación administrativa"></nav>
+        <div class="grosig-shell-v2__sidebar-foot">
+          <div class="grosig-shell-v2__version">
+            <span class="grosig-shell-v2__version-dot" aria-hidden="true"></span>
+            v2.0 preview
+          </div>
+        </div>
+      </aside>
+      <div class="grosig-shell-v2__main">
+        <header class="grosig-shell-v2__topbar">
+          <div>
+            <h1 class="grosig-shell-v2__topbar-title" id="gs2TopbarTitle">Resumen</h1>
+            <p class="grosig-shell-v2__topbar-sub" id="gs2TopbarSub">Centro de control de la plataforma</p>
+          </div>
+          <div class="grosig-shell-v2__topbar-end">
+            <div class="grosig-shell-v2__topbar-actions">
+              <button type="button" class="gs2-btn gs2-btn--ghost gs2-btn--sm" id="gs2OverviewRefresh">Actualizar</button>
+              <a class="gs2-btn gs2-btn--ghost gs2-btn--sm" href="./index.html" target="_blank" rel="noopener noreferrer">Portal</a>
+              <a class="gs2-btn gs2-btn--ghost gs2-btn--sm" href="./docs/context.md" target="_blank" rel="noopener noreferrer">Docs</a>
+            </div>
+            <span class="gs2-entity-pill" id="gs2TopbarEnt" title="Instancia activa (JWT)"></span>
+            <span class="studio-theme-picker gs2-theme-segment" role="group" aria-label="Tema">
+              <button type="button" data-studio-theme="claro">Claro</button>
+              <button type="button" data-studio-theme="oscuro">Oscuro</button>
+            </span>
+            <div class="gs2-user-chip" id="gs2TopbarUser"></div>
+            <button type="button" class="gs2-btn gs2-btn--secondary gs2-btn--sm" id="gs2LogoutBtn">Cerrar sesión</button>
+          </div>
+        </header>
+
+        <main class="grosig-shell-v2__workspace gs2-overview-fit" id="gs2Workspace">
+          <div id="gs2OverviewRoot">
+          <div class="gs2-overview-toolbar gs2-overview-span-2">
+            <span class="gs2-overview-toolbar__meta" id="gs2OverviewUpdated">—</span>
+            <div class="gs2-overview-toolbar__actions">
+              <label class="gs2-check-inline">
+                <input type="checkbox" id="gs2AnalyticsLast30" />
+                Últimos 30 días
+              </label>
+              <button type="button" class="gs2-btn gs2-btn--secondary gs2-btn--sm" id="gs2OverviewExport">Exportar XLSX</button>
+            </div>
+          </div>
+
+          <section class="gs2-card gs2-overview-span-2" aria-labelledby="gs2HealthTitle">
+            <div class="gs2-card__head">
+              <div>
+                <h2 class="gs2-card__title" id="gs2HealthTitle">Estado del sistema</h2>
+                <p class="gs2-card__sub">API Atlas, AMIGO CORE, contexto geográfico y cartografía</p>
+              </div>
+              <span class="gs2-status gs2-status--muted" id="gs2HealthOverall">Comprobando…</span>
+            </div>
+            <div class="gs2-health-grid" id="gs2HealthGrid"></div>
+            <div class="gs2-quick-links">
+              <a class="gs2-btn gs2-btn--ghost gs2-btn--sm" href="./grosig-studio-v2.html?view=data-refresh">Actualización de datos</a>
+              <a class="gs2-btn gs2-btn--ghost gs2-btn--sm" href="./grosig-studio-v2.html?view=visor">Visor</a>
+              <a class="gs2-btn gs2-btn--ghost gs2-btn--sm" href="./indicators-studio.html">Indicadores</a>
+              <a class="gs2-btn gs2-btn--ghost gs2-btn--sm" href="./grosig-studio-v2.html?view=backup">Respaldo</a>
+            </div>
+          </section>
+
+          <section class="gs2-card gs2-overview-span-2" aria-labelledby="gs2UsageTitle">
+            <div class="gs2-card__head">
+              <div>
+                <h2 class="gs2-card__title" id="gs2UsageTitle">Uso de la plataforma</h2>
+                <p class="gs2-card__sub" id="gs2AnalyticsScope">Telemetría de la instancia</p>
+              </div>
+              <span class="gs2-card__sub" id="gs2AnalyticsPeriod">—</span>
+            </div>
+            <div id="gs2AnalyticsError" class="gs2-form-error d-none" role="alert"></div>
+            <div class="gs2-grid gs2-grid--4">
+              <div class="gs2-card gs2-card--metric">
+                <div class="gs2-metric-value" id="gs2KpiSessions">—</div>
+                <div class="gs2-metric-label">Sesiones</div>
+              </div>
+              <div class="gs2-card gs2-card--metric">
+                <div class="gs2-metric-value" id="gs2KpiIndicators">—</div>
+                <div class="gs2-metric-label">Indicadores abiertos</div>
+              </div>
+              <div class="gs2-card gs2-card--metric">
+                <div class="gs2-metric-value" id="gs2KpiLayers">—</div>
+                <div class="gs2-metric-label">Activaciones de capa</div>
+              </div>
+              <div class="gs2-card gs2-card--metric">
+                <div class="gs2-metric-value" id="gs2KpiExports">—</div>
+                <div class="gs2-metric-label">Exportaciones</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="gs2-card" aria-labelledby="gs2StudioTitle">
+            <div class="gs2-card__head">
+              <h3 class="gs2-card__title" id="gs2StudioTitle">Estado de los studios</h3>
+            </div>
+            <div id="gs2StudioStatus"></div>
+          </section>
+
+          <section class="gs2-card" aria-labelledby="gs2ActivityTitle">
+            <div class="gs2-card__head">
+              <h3 class="gs2-card__title" id="gs2ActivityTitle">Actividad reciente</h3>
+              <span class="gs2-card__sub">Jobs de actualización</span>
+            </div>
+            <div id="gs2RecentActivity"></div>
+          </section>
+
+          <section class="gs2-card" aria-labelledby="gs2TopIndTitle">
+            <div class="gs2-card__head">
+              <h3 class="gs2-card__title" id="gs2TopIndTitle">Top indicadores</h3>
+            </div>
+            <div class="gs2-table-wrap">
+              <table class="gs2-table">
+                <thead><tr><th>Nombre</th><th>Clave</th><th class="gs2-td-num">N</th></tr></thead>
+                <tbody id="gs2TopIndicadores"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="gs2-card" aria-labelledby="gs2TopCapasTitle">
+            <div class="gs2-card__head">
+              <h3 class="gs2-card__title" id="gs2TopCapasTitle">Top capas</h3>
+            </div>
+            <div class="gs2-table-wrap">
+              <table class="gs2-table">
+                <thead><tr><th>Nombre</th><th>Clave</th><th class="gs2-td-num">N</th></tr></thead>
+                <tbody id="gs2TopCapas"></tbody>
+              </table>
+            </div>
+          </section>
+          </div>
+          <div id="gs2StudioMount" class="gs2-studio-workspace d-none" hidden></div>
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <script type="module">
+    import { applyStudioUiGate } from "./js/studioUiGate.js";
+    await applyStudioUiGate("grosig");
+  </script>
+  <script type="module" src="./studio-v2/js/grosigStudioV2App.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@
  */
 
 import { fetchGeoContexto, getGeoContextoCached } from "./api.js";
+import { getActiveCveEnt } from "./amigoDeployment.js";
 import {
   fetchGeographyCatalog,
   getGeographyCatalogCached,
@@ -23,6 +24,15 @@ function normCve3(cve_mun) {
   const raw = String(cve_mun || "").trim();
   const digits = raw.replace(/\D/g, "");
   return digits ? (digits.length >= 3 ? digits.slice(-3) : ("000" + digits).slice(-3)) : "";
+}
+
+function normEnt(cve_ent) {
+  const d = String(cve_ent ?? "").replace(/\D/g, "");
+  return d.length >= 2 ? d.slice(-2) : "";
+}
+
+function resolveEnt(m) {
+  return normEnt(m?.cve_ent || getActiveCveEnt());
 }
 
 /** Fallback si el catálogo no carga (paridad con seed). */
@@ -83,6 +93,7 @@ export function createGeoContextController({
   let tabs = normalizeTabs(getGeographyCatalogCached());
   let activeTabId = tabs[0]?.id || "ubicacion";
   let lastCve = null;
+  let lastEnt = null;
   let macroCveSynced = null;
   let cacheRow = null;
   let reqSeq = 0;
@@ -183,6 +194,12 @@ export function createGeoContextController({
     );
   }
 
+  function renderTextEmpty() {
+    setTextScrollHtml(
+      `<div class="empty-state">No hay información registrada para este municipio.</div>`
+    );
+  }
+
   function renderNoData() {
     teardownMacroMap();
     setTextScrollHtml(
@@ -210,41 +227,50 @@ export function createGeoContextController({
   function renderActiveTabFromCache() {
     const m = getMunicipio ? getMunicipio() : null;
     const cve = normCve3(m?.cve_mun);
-    if (!cve || !cacheRow || normCve3(lastCve) !== cve) {
+    const ent = resolveEnt(m);
+    if (!cve || normCve3(lastCve) !== cve || lastEnt !== ent) {
       void refresh();
       return;
     }
-    renderTabText(tabTextFromRow(cacheRow));
+    if (cacheRow) {
+      renderTabText(tabTextFromRow(cacheRow));
+    } else {
+      renderTextEmpty();
+    }
     notifyTabChange();
   }
 
-  async function loadRow(cve_mun) {
+  async function loadRow(cve_mun, cve_ent) {
     const seq = ++reqSeq;
     const cve = normCve3(cve_mun);
-    const cached = getGeoContextoCached(cve);
+    const ent = normEnt(cve_ent);
+    const cached = getGeoContextoCached(cve, ent);
     if (cached !== undefined) {
       if (seq !== reqSeq) return null;
       cacheRow = cached;
       lastCve = cve;
+      lastEnt = ent;
       return cached;
     }
     renderLoading();
     try {
-      const row = await fetchGeoContexto(cve_mun);
+      const row = await fetchGeoContexto(cve_mun, { cve_ent: ent });
       if (seq !== reqSeq) return null;
       cacheRow = row;
       lastCve = cve;
+      lastEnt = ent;
       return row;
     } catch (e) {
       if (seq !== reqSeq) return null;
       renderError(e && e.message ? e.message : String(e));
-      return null;
+      return undefined;
     }
   }
 
   async function ensureCatalogLoaded() {
     try {
-      const cat = await fetchGeographyCatalog();
+      const ent = resolveEnt(getMunicipio ? getMunicipio() : null);
+      const cat = await fetchGeographyCatalog({ cve_ent: ent || undefined });
       tabs = normalizeTabs(cat);
       layout = {
         macro_map: cat?.layout?.macro_map !== false,
@@ -263,12 +289,14 @@ export function createGeoContextController({
   async function refresh() {
     const m = getMunicipio ? getMunicipio() : null;
     const cve = normCve3(m?.cve_mun);
+    const ent = resolveEnt(m);
     const nom = m && m.nomgeo ? String(m.nomgeo) : "";
 
     if (!cve) {
       setMeta("—");
       cacheRow = null;
       lastCve = null;
+      lastEnt = null;
       renderEmptyMunicipio();
       notifyTabChange();
       return;
@@ -277,20 +305,22 @@ export function createGeoContextController({
     setMeta(nom ? nom : `Municipio ${cve}`);
 
     let row = cacheRow;
-    const municipioChanged = lastCve !== cve;
-    if (municipioChanged) {
-      row = await loadRow(cve);
-    }
-
-    if (row === null) {
-      if (!municipioChanged) renderNoData();
-      notifyTabChange();
-      return;
+    const territoryChanged = lastCve !== cve || lastEnt !== ent;
+    if (territoryChanged) {
+      row = await loadRow(cve, ent);
+      if (row === undefined) {
+        notifyTabChange();
+        return;
+      }
     }
 
     setMacroVisible(true);
-    renderTabText(tabTextFromRow(row));
-    if (municipioChanged || macroCveSynced !== cve) {
+    if (row) {
+      renderTabText(tabTextFromRow(row));
+    } else {
+      renderTextEmpty();
+    }
+    if (territoryChanged || macroCveSynced !== cve) {
       syncMacroMap(cve, true);
     } else {
       syncMacroMap(cve, false);
@@ -305,6 +335,7 @@ export function createGeoContextController({
     const nom = m && m.nomgeo ? String(m.nomgeo) : "";
     cacheRow = null;
     lastCve = null;
+    lastEnt = null;
     macroCveSynced = null;
     if (cve) {
       setMeta(nom ? nom : `Municipio ${cve}`);

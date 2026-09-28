@@ -16,8 +16,8 @@ import {
   clearVisorBuffer,
   ensureDrawTrashClearsBuffer,
 } from "./visorBuffer.js";
-import { fetchVisorBuffer, fetchVisorFeatureGeometry, fetchVisorFeatureOutline } from "./visorBufferApi.js";
-import { getOrderedVisorLayerEntries } from "./visorCatalog.js";
+import { fetchVisorBuffer, fetchVisorFeatureGeometry } from "./visorBufferApi.js";
+import { getOrderedVisorLayerEntries, getVisorLayerEntry } from "./visorCatalog.js";
 
 let _panelEl = null;
 let _toggleBtn = null;
@@ -34,46 +34,50 @@ let _bufferClearedListener = null;
 let _highlightFetchGen = 0;
 
 const PICK_HIGHLIGHT_SRC = "atlas-visor-pick-highlight-src";
+const PICK_HIGHLIGHT_FILL = "atlas-visor-pick-highlight-fill";
+const PICK_HIGHLIGHT_POLY_HALO = "atlas-visor-pick-highlight-poly-halo";
+const PICK_HIGHLIGHT_POLY_LINE = "atlas-visor-pick-highlight-poly-line";
 const PICK_HIGHLIGHT_OUTLINE_HALO = "atlas-visor-pick-highlight-outline-halo";
 const PICK_HIGHLIGHT_OUTLINE = "atlas-visor-pick-highlight-outline";
 const PICK_HIGHLIGHT_LINE_HALO = "atlas-visor-pick-highlight-line-halo";
 const PICK_HIGHLIGHT_LINE = "atlas-visor-pick-highlight-line";
 const PICK_HIGHLIGHT_CIRCLE = "atlas-visor-pick-highlight-circle";
 
+const HIGHLIGHT_POLYGON_FILTER = ["match", ["geometry-type"], ["Polygon", "MultiPolygon"], true, false];
 const HIGHLIGHT_OUTLINE_FILTER = ["==", ["get", "atlasPickOutline"], true];
 const HIGHLIGHT_LINE_FILTER = [
-  "all",
+  "any",
   ["==", ["get", "atlasPickKind"], "line"],
-  ["!=", ["get", "atlasPickOutline"], true],
+  ["match", ["geometry-type"], ["LineString", "MultiLineString"], true, false],
 ];
 const HIGHLIGHT_POINT_FILTER = ["==", ["get", "atlasPickKind"], "point"];
 
-/** Contorno de polígonos (PostGIS outline): trazo fino. */
+/** Contorno de polígonos: mismo peso que las líneas, visible a zoom municipal. */
 const HIGHLIGHT_OUTLINE_WIDTH = [
   "interpolate",
   ["linear"],
   ["zoom"],
   8,
-  1,
+  3.5,
   12,
-  1.5,
+  5,
   16,
-  2,
+  7,
   20,
-  2.5,
+  9,
 ];
 const HIGHLIGHT_OUTLINE_HALO_WIDTH = [
   "interpolate",
   ["linear"],
   ["zoom"],
   8,
-  2.5,
+  7,
   12,
-  3.5,
+  10,
   16,
-  4.5,
+  13,
   20,
-  5.5,
+  16,
 ];
 
 /** Líneas (ríos, vías): trazo más visible que el contorno. */
@@ -126,6 +130,19 @@ function isPolygonGeometry(feature) {
   return t === "Polygon" || t === "MultiPolygon";
 }
 
+function catalogGeometryKind(layerId) {
+  const catalogId = resolveVisorApiLayerId(layerId);
+  if (!catalogId) return null;
+  const g = String(getVisorLayerEntry(catalogId)?.geometry || "").trim().toLowerCase();
+  if (g === "line" || g === "polygon" || g === "point") return g;
+  return null;
+}
+
+function treatFeatureAsPolygon(feature, layerId) {
+  if (isPolygonGeometry(feature)) return true;
+  return catalogGeometryKind(layerId || feature?._layerId) === "polygon";
+}
+
 function notifyPickAoiChanged(feature) {
   window.dispatchEvent(
     new CustomEvent("atlas:visor-pick-aoi-changed", {
@@ -154,47 +171,47 @@ export function getActivePickAoiFeature() {
 }
 
 async function resolvePickAoiFromFeature(feature) {
-  if (!feature || !isPolygonGeometry(feature)) {
+  if (!feature || !treatFeatureAsPolygon(feature, feature._layerId)) {
     clearPickAoi(true);
     return null;
   }
   const gen = ++_pickAoiGen;
   const apiLayer = feature._apiLayerId || resolveVisorApiLayerId(feature._layerId);
-  const gid = feature._sourceGid || pickVisorFeatureGid(feature.properties);
-  let aoi = {
-    type: "Feature",
-    properties: {
-      ...(feature.properties || {}),
-      atlasAnalysisSource: "pick",
-    },
-    geometry: feature.geometry,
-  };
-  if (apiLayer && gid) {
-    try {
-      const { feature: full } = await fetchVisorFeatureGeometry({
-        layer_id: apiLayer,
-        gid,
-      });
-      if (gen !== _pickAoiGen) return null;
-      aoi = {
-        type: "Feature",
-        properties: {
-          ...(full.properties || {}),
-          ...(feature.properties || {}),
-          atlasAnalysisSource: "pick",
-          gid,
-        },
-        geometry: full.geometry,
-      };
-    } catch (err) {
-      console.warn("[visorFeaturePickBuffer] AOI PostGIS:", err);
-      // Usa geometría del tile como respaldo
-    }
+  const gid = feature._sourceGid || pickVisorFeatureGid(feature.properties, feature, feature._layerId);
+  if (!apiLayer) {
+    clearPickAoi(true);
+    return null;
   }
-  if (gen !== _pickAoiGen) return null;
-  _pickAoiFeature = aoi;
-  notifyPickAoiChanged(aoi);
-  return aoi;
+  try {
+    const { feature: full } = await fetchVisorFeatureGeometry({
+      layer_id: apiLayer,
+      gid,
+      attrs: feature.properties,
+      ...clickLonLatFromFeature(feature),
+    });
+    if (gen !== _pickAoiGen) return null;
+    if (!full?.geometry || !isPolygonGeometry(full)) {
+      clearPickAoi(true);
+      return null;
+    }
+    const aoi = {
+      type: "Feature",
+      properties: {
+        ...(full.properties || {}),
+        ...(feature.properties || {}),
+        atlasAnalysisSource: "pick",
+        gid: full.properties?.gid || gid,
+      },
+      geometry: full.geometry,
+    };
+    _pickAoiFeature = aoi;
+    notifyPickAoiChanged(aoi);
+    return aoi;
+  } catch (err) {
+    console.warn("[visorFeaturePickBuffer] AOI PostGIS:", err);
+    if (gen === _pickAoiGen) clearPickAoi(true);
+    return null;
+  }
 }
 
 function pickHighlightHint(feature) {
@@ -203,11 +220,103 @@ function pickHighlightHint(feature) {
   return "contorno naranja en el mapa";
 }
 
+function coerceHighlightGeometry(geometry) {
+  if (!geometry?.type) return geometry;
+  const t = geometry.type;
+  if (
+    t === "Polygon" ||
+    t === "MultiPolygon" ||
+    t === "LineString" ||
+    t === "MultiLineString" ||
+    t === "Point" ||
+    t === "MultiPoint"
+  ) {
+    return geometry;
+  }
+  if (t !== "GeometryCollection") return geometry;
+  const polys = [];
+  const lines = [];
+  const points = [];
+  for (const g of geometry.geometries || []) {
+    if (g.type === "Polygon") polys.push(g.coordinates);
+    else if (g.type === "MultiPolygon") polys.push(...g.coordinates);
+    else if (g.type === "LineString") lines.push(g.coordinates);
+    else if (g.type === "MultiLineString") lines.push(...g.coordinates);
+    else if (g.type === "Point") points.push(g.coordinates);
+    else if (g.type === "MultiPoint") points.push(...g.coordinates);
+  }
+  if (polys.length) return { type: "MultiPolygon", coordinates: polys };
+  if (lines.length === 1) return { type: "LineString", coordinates: lines[0] };
+  if (lines.length > 1) return { type: "MultiLineString", coordinates: lines };
+  if (points.length === 1) return { type: "Point", coordinates: points[0] };
+  if (points.length > 1) return { type: "MultiPoint", coordinates: points };
+  return geometry;
+}
+
+function outlineToLineHighlight(feature) {
+  if (!feature?.geometry) return null;
+  const geometry = coerceHighlightGeometry(feature.geometry) || feature.geometry;
+  if (!geometry) return null;
+  return {
+    type: "Feature",
+    properties: {
+      ...(feature.properties || {}),
+      atlasPickKind: "line",
+      atlasPickOutline: false,
+    },
+    geometry,
+  };
+}
+
+function polygonRingsToLineFeature(feature) {
+  const geom = coerceHighlightGeometry(feature?.geometry) || feature?.geometry;
+  if (!geom) return null;
+  if (geom.type === "LineString" || geom.type === "MultiLineString") {
+    return outlineToLineHighlight({ ...feature, geometry: geom });
+  }
+  const turf = globalThis.turf;
+  if (turf?.polygonToLine) {
+    try {
+      const line = turf.polygonToLine({
+        type: "Feature",
+        properties: {},
+        geometry: geom,
+      });
+      const geometry =
+        line?.type === "Feature"
+          ? line.geometry
+          : line?.type === "FeatureCollection"
+            ? line.features?.[0]?.geometry
+            : line;
+      if (geometry) return outlineToLineHighlight({ ...feature, geometry });
+    } catch {
+      /* anillos a mano */
+    }
+  }
+  const polys =
+    geom.type === "Polygon" ? [geom.coordinates] : geom.type === "MultiPolygon" ? geom.coordinates : [];
+  const lines = [];
+  for (const poly of polys) {
+    const ring = poly?.[0];
+    if (Array.isArray(ring) && ring.length >= 2) lines.push(ring);
+  }
+  if (!lines.length) return null;
+  return outlineToLineHighlight({
+    ...feature,
+    geometry:
+      lines.length === 1
+        ? { type: "LineString", coordinates: lines[0] }
+        : { type: "MultiLineString", coordinates: lines },
+  });
+}
+
 function tagHighlightFeature(feature) {
   if (!feature?.geometry) return null;
+  const geometry = coerceHighlightGeometry(feature.geometry) || feature.geometry;
   let kind = "polygon";
-  if (isLineGeometry(feature)) kind = "line";
-  else if (isPointGeometry(feature)) kind = "point";
+  const coerced = { type: "Feature", properties: feature.properties, geometry };
+  if (isLineGeometry(coerced) || feature.properties?.atlasPickKind === "line") kind = "line";
+  else if (isPointGeometry(coerced)) kind = "point";
   const props = { ...(feature.properties || {}), atlasPickKind: kind };
   if (props.atlasPickOutline == null && feature.properties?.atlasPickOutline != null) {
     props.atlasPickOutline = feature.properties.atlasPickOutline;
@@ -215,18 +324,22 @@ function tagHighlightFeature(feature) {
   return {
     type: "Feature",
     properties: props,
-    geometry: feature.geometry,
+    geometry,
   };
 }
 
-function raisePickHighlightLayers(map) {
+export function raisePickHighlightLayers(map) {
   if (!map?.getStyle?.()) return;
+  ensurePickHighlightLayers(map);
   for (const id of [
-    PICK_HIGHLIGHT_CIRCLE,
-    PICK_HIGHLIGHT_LINE,
-    PICK_HIGHLIGHT_LINE_HALO,
-    PICK_HIGHLIGHT_OUTLINE,
+    PICK_HIGHLIGHT_FILL,
+    PICK_HIGHLIGHT_POLY_HALO,
+    PICK_HIGHLIGHT_POLY_LINE,
     PICK_HIGHLIGHT_OUTLINE_HALO,
+    PICK_HIGHLIGHT_OUTLINE,
+    PICK_HIGHLIGHT_LINE_HALO,
+    PICK_HIGHLIGHT_LINE,
+    PICK_HIGHLIGHT_CIRCLE,
   ]) {
     if (!map.getLayer(id)) continue;
     try {
@@ -239,19 +352,22 @@ function raisePickHighlightLayers(map) {
 
 function cloneMapFeature(mapFeature) {
   if (!mapFeature?.geometry) return null;
+  const props = { ...(mapFeature.properties || {}) };
+  if (props.gid == null && mapFeature.id != null) props.gid = String(mapFeature.id);
   return {
     type: "Feature",
-    properties: { ...(mapFeature.properties || {}) },
+    id: mapFeature.id,
+    properties: props,
     geometry: JSON.parse(JSON.stringify(mapFeature.geometry)),
   };
 }
 
 function layerRank(layerId) {
   if (!layerId) return 5;
+  if (layerId.endsWith("-labels") || layerId.includes("-visor-labels")) return 9;
   if (layerId.includes("-halo")) return 3;
-  if (layerId.includes("-fill")) return 1;
-  if (layerId.endsWith("-labels")) return 9;
-  return 0;
+  if (layerId.includes("-fill") || layerId.endsWith("-hit")) return 0;
+  return 2;
 }
 
 function pickBestFeature(features) {
@@ -260,7 +376,9 @@ function pickBestFeature(features) {
     const ra = layerRank(a.layer?.id);
     const rb = layerRank(b.layer?.id);
     if (ra !== rb) return ra - rb;
-    return 0;
+    const pa = isPolygonGeometry(a) ? 0 : 1;
+    const pb = isPolygonGeometry(b) ? 0 : 1;
+    return pa - pb;
   });
   return sorted[0];
 }
@@ -283,20 +401,10 @@ function getPickableLayerIds(map) {
 }
 
 function describeLayer(layerId) {
-  if (!layerId) return "elemento del mapa";
-  if (layerId.includes("manzanas")) return "manzana";
-  if (layerId.includes("hcuerpos")) return "cuerpo de agua";
-  if (layerId.includes("hidro")) return "corriente de agua";
-  if (layerId.includes("colonias")) return "colonia";
-  if (layerId.includes("vialidades")) return "vialidad";
-  if (layerId.includes("rnc")) return "vía RNC";
-  if (layerId.includes("saneamiento")) return "servicio de agua";
-  if (layerId.includes("residuo")) return "residuo sólido";
-  if (layerId.includes("locsPunto")) return "localidad";
-  if (layerId.includes("locsAtlas")) return "localidad";
-  if (layerId.includes("ageb")) return "AGEB";
-  if (layerId.includes("curnivel")) return "curva de nivel";
-  if (layerId.includes("uso") || layerId === MARTIN_USO_SUELO.layerId) return "uso de suelo";
+  const catalogId = resolveVisorApiLayerId(layerId);
+  const entry = catalogId ? getVisorLayerEntry(catalogId) : null;
+  const title = entry?.identify?.title || entry?.label;
+  if (title) return String(title);
   return "elemento del mapa";
 }
 
@@ -324,10 +432,42 @@ function describePicked(feature, layerId) {
   return label ? `${kind}: ${label}` : kind;
 }
 
-export function pickVisorFeatureGid(props) {
-  if (!props) return null;
-  for (const k of ["gid", "GID", "ogc_fid", "OGC_FID"]) {
-    if (props[k] != null && String(props[k]).trim()) return String(props[k]).trim();
+export function pickVisorFeatureGid(props, feature, layerId) {
+  const bag = { ...(feature?.properties || {}), ...(props || {}) };
+  const lower = {};
+  for (const [k, v] of Object.entries(bag)) {
+    lower[String(k).toLowerCase()] = v;
+  }
+  for (const col of ["gid", "ogc_fid"]) {
+    const val = lower[col];
+    if (val != null && String(val).trim() !== "") return String(val).trim();
+  }
+  const fid = feature?.id;
+  if (fid != null && String(fid).trim() !== "") return String(fid).trim();
+  return null;
+}
+
+function clickLonLatFromFeature(feature) {
+  const lon = Number(feature?._clickLon);
+  const lat = Number(feature?._clickLat);
+  if (Number.isFinite(lon) && Number.isFinite(lat)) return { lon, lat };
+  return {};
+}
+
+function gidFromLoadedTiles(map, mapFeature) {
+  if (!map || !mapFeature?.source) return null;
+  const sl = mapFeature.sourceLayer;
+  let feats = [];
+  try {
+    feats = map.querySourceFeatures(mapFeature.source, sl ? { sourceLayer: sl } : {});
+  } catch {
+    return null;
+  }
+  const name = featureLabel(mapFeature.properties);
+  for (const f of feats) {
+    const gid = pickVisorFeatureGid(f.properties, f, mapFeature.layer?.id);
+    if (!gid) continue;
+    if (name && featureLabel(f.properties) === name) return gid;
   }
   return null;
 }
@@ -345,48 +485,24 @@ function stripMapLayerKeySuffix(key) {
   return key;
 }
 
-/** Capa del API (/api/visor/export) a partir del id MapLibre ly-*. */
+/** Capa del API a partir del id MapLibre, vía catálogo (id / overlay_key / capa MapLibre). */
 export function resolveVisorApiLayerId(mapLayerId) {
   if (!mapLayerId) return null;
   if (mapLayerId === MARTIN_USO_SUELO.layerId) return "uso_suelo";
-  const normalized = stripMapLayerKeySuffix(
-    mapLayerId.replace(/^ly-/, "").replace(/-visor-labels$/, "").replace(/-labels$/, ""),
+  const stripped = stripMapLayerKeySuffix(
+    mapLayerId.replace(/^ly-/, "").replace(/^lyr_/, "").replace(/-visor-labels$/, "").replace(/-labels$/, ""),
   );
-  const key = normalized;
-  const base = key.split("-")[0];
-  const map = {
-    hcuerpos: "hidro_cuerpos",
-    hidro: "hidro_corrientes",
-    curnivel: "curvas_nivel",
-    locsPunto: "locspunto",
-    locsAtlas: "locsatlas",
-    agebUrbanas: "ageb_urbanas",
-    agebRurales: "ageb_rurales",
-    saneamientoAgua: "saneamiento_agua",
-    clues: "clues",
-    residuoSolido: "residuo_solido",
-    denueRastros: "denue_rastros",
-    denueGasolinerias: "denue_gasolinerias",
-    denueGaseras: "denue_gaseras",
-    denueEscuelas: "denue_escuelas",
-    denueHospitales: "denue_hospitales",
-    denueMuseos: "denue_museos",
-    denueCementerios: "denue_cementerios",
-    denueIglesias: "denue_iglesias",
-  };
-  if (map[key]) return map[key];
-  if (map[base]) return map[base];
-  if (["manzanas", "colonias", "vialidades", "rnc"].includes(base)) return base;
   try {
     for (const entry of getOrderedVisorLayerEntries()) {
-      if (entry.overlay_key === key) return entry.id;
-      if (entry.id === key || entry.id === base) return entry.id;
+      if (!entry?.id) continue;
+      if (entry.id === stripped || entry.id === mapLayerId) return entry.id;
+      const overlayKey = String(entry.overlay_key || "");
+      if (overlayKey && overlayKey === stripped) return entry.id;
+      if (overlayKey && `ly-${overlayKey}` === mapLayerId) return entry.id;
     }
   } catch {
     /* catálogo aún no cargado */
   }
-  const snake = key.replace(/([A-Z])/g, "_$1").toLowerCase().replace(/^_/, "");
-  if (snake !== key) return snake;
   return null;
 }
 
@@ -408,20 +524,82 @@ function ensurePickHighlightLayers(map) {
     });
   }
 
-  const beforeId = findDrawLayerInsertBefore(map);
+  const beforeId = undefined;
 
-  // Retirar capas legadas (fill / contorno sobre polígonos de tile).
-  for (const legacyId of [
-    "atlas-visor-pick-highlight-fill",
-    "atlas-visor-pick-highlight-poly-halo",
-    "atlas-visor-pick-highlight-poly-line",
-  ]) {
-    if (map.getLayer(legacyId)) {
-      try {
-        map.removeLayer(legacyId);
-      } catch {
-        /* noop */
-      }
+  if (!map.getLayer(PICK_HIGHLIGHT_FILL)) {
+    map.addLayer(
+      {
+        id: PICK_HIGHLIGHT_FILL,
+        type: "fill",
+        source: PICK_HIGHLIGHT_SRC,
+        filter: HIGHLIGHT_POLYGON_FILTER,
+        paint: {
+          "fill-color": "#ff6d00",
+          "fill-opacity": 0.42,
+          "fill-outline-color": "#e65100",
+        },
+      },
+      beforeId
+    );
+  } else {
+    try {
+      map.setFilter(PICK_HIGHLIGHT_FILL, HIGHLIGHT_POLYGON_FILTER);
+      map.setPaintProperty(PICK_HIGHLIGHT_FILL, "fill-color", "#ff6d00");
+      map.setPaintProperty(PICK_HIGHLIGHT_FILL, "fill-opacity", 0.42);
+    } catch {
+      /* noop */
+    }
+  }
+
+  if (!map.getLayer(PICK_HIGHLIGHT_POLY_HALO)) {
+    map.addLayer(
+      {
+        id: PICK_HIGHLIGHT_POLY_HALO,
+        type: "line",
+        source: PICK_HIGHLIGHT_SRC,
+        filter: HIGHLIGHT_POLYGON_FILTER,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": HIGHLIGHT_ORANGE_HALO,
+          "line-width": HIGHLIGHT_OUTLINE_HALO_WIDTH,
+          "line-opacity": 0.9,
+        },
+      },
+      beforeId
+    );
+  } else {
+    try {
+      map.setFilter(PICK_HIGHLIGHT_POLY_HALO, HIGHLIGHT_POLYGON_FILTER);
+      map.setPaintProperty(PICK_HIGHLIGHT_POLY_HALO, "line-color", HIGHLIGHT_ORANGE_HALO);
+      map.setPaintProperty(PICK_HIGHLIGHT_POLY_HALO, "line-width", HIGHLIGHT_OUTLINE_HALO_WIDTH);
+      map.setPaintProperty(PICK_HIGHLIGHT_POLY_HALO, "line-opacity", 0.9);
+    } catch {
+      /* noop */
+    }
+  }
+
+  if (!map.getLayer(PICK_HIGHLIGHT_POLY_LINE)) {
+    map.addLayer(
+      {
+        id: PICK_HIGHLIGHT_POLY_LINE,
+        type: "line",
+        source: PICK_HIGHLIGHT_SRC,
+        filter: HIGHLIGHT_POLYGON_FILTER,
+        layout: { "line-cap": "round", "line-join": "round" },
+        paint: {
+          "line-color": HIGHLIGHT_ORANGE_DARK,
+          "line-width": HIGHLIGHT_OUTLINE_WIDTH,
+        },
+      },
+      beforeId
+    );
+  } else {
+    try {
+      map.setFilter(PICK_HIGHLIGHT_POLY_LINE, HIGHLIGHT_POLYGON_FILTER);
+      map.setPaintProperty(PICK_HIGHLIGHT_POLY_LINE, "line-color", HIGHLIGHT_ORANGE_DARK);
+      map.setPaintProperty(PICK_HIGHLIGHT_POLY_LINE, "line-width", HIGHLIGHT_OUTLINE_WIDTH);
+    } catch {
+      /* noop */
     }
   }
 
@@ -560,25 +738,30 @@ function warmPickHighlightLayers(map) {
   map.once("idle", () => ensurePickHighlightLayers(map));
 }
 
-function setPickHighlightData(map, feature) {
+function setPickHighlightData(map, featureOrList) {
   if (!map) return;
-  const tagged = feature ? tagHighlightFeature(feature) : null;
+  const list = Array.isArray(featureOrList)
+    ? featureOrList
+    : featureOrList
+      ? [featureOrList]
+      : [];
+  const tagged = list.map(tagHighlightFeature).filter(Boolean);
   const data = {
     type: "FeatureCollection",
-    features: tagged ? [tagged] : [],
+    features: tagged,
   };
 
   const commit = () => {
-    if (tagged && !ensurePickHighlightLayers(map)) return false;
+    if (tagged.length && !ensurePickHighlightLayers(map)) return false;
     const src = map.getSource(PICK_HIGHLIGHT_SRC);
-    if (!src) return !tagged;
+    if (!src) return !tagged.length;
     src.setData(data);
-    if (tagged) raisePickHighlightLayers(map);
+    if (tagged.length) raisePickHighlightLayers(map);
     return true;
   };
 
   if (commit()) return;
-  if (!tagged) {
+  if (!tagged.length) {
     map.getSource(PICK_HIGHLIGHT_SRC)?.setData(data);
     return;
   }
@@ -607,38 +790,16 @@ function clearPickSelection(options = {}) {
   if (!keepPanelOpen) setPickPanelOpen(false);
 }
 
-function outlineFeatureFromPolygon(fullFeature) {
-  const turf = globalThis.turf;
-  if (!turf?.polygonToLine || !fullFeature?.geometry) return null;
-  try {
-    const line = turf.polygonToLine(fullFeature);
-    const geometry =
-      line.type === "Feature" ? line.geometry : line.type === "FeatureCollection" ? line.features[0]?.geometry : line;
-    if (!geometry) return null;
-    return {
-      type: "Feature",
-      properties: { ...(fullFeature.properties || {}), atlasPickOutline: true },
-      geometry,
-    };
-  } catch {
-    return null;
-  }
-}
-
-async function loadPolygonPickOutline(apiLayer, gid) {
-  try {
-    const { feature: outline } = await fetchVisorFeatureOutline({ layer_id: apiLayer, gid });
-    return outline;
-  } catch (err) {
-    console.warn("[visorFeaturePickBuffer] contorno PostGIS:", err);
-  }
-  try {
-    const { feature: full } = await fetchVisorFeatureGeometry({ layer_id: apiLayer, gid });
-    return outlineFeatureFromPolygon(full);
-  } catch (err) {
-    console.warn("[visorFeaturePickBuffer] contorno Turf:", err);
-  }
-  return null;
+function paintPolygonPickHighlight(map, feature) {
+  const geom = coerceHighlightGeometry(feature?.geometry) || feature?.geometry;
+  if (!geom) return;
+  const polyFeat = {
+    type: "Feature",
+    properties: { ...(feature.properties || {}), atlasPickKind: "polygon" },
+    geometry: geom,
+  };
+  const lineFeat = polygonRingsToLineFeature(polyFeat);
+  setPickHighlightData(map, [polyFeat, lineFeat].filter(Boolean));
 }
 
 async function refreshPickHighlight(feature, layerId) {
@@ -648,24 +809,67 @@ async function refreshPickHighlight(feature, layerId) {
     return;
   }
 
-  const apiLayer = resolveVisorApiLayerId(layerId);
-  const gid = pickVisorFeatureGid(feature.properties);
-  const gen = _highlightFetchGen;
+  const apiLayer = feature._apiLayerId || resolveVisorApiLayerId(layerId);
+  const gid =
+    feature._sourceGid ||
+    pickVisorFeatureGid(feature.properties, feature, layerId);
+  const gen = ++_highlightFetchGen;
+  const asPolygon = treatFeatureAsPolygon(feature, layerId);
 
-  if (isPolygonGeometry(feature)) {
+  if (asPolygon) {
+    if (!apiLayer) {
+      setStatus("No se encontró esta capa en el catálogo.", true);
+      return;
+    }
+    if (_pickedFeature?._fullPostgis && isPolygonGeometry(_pickedFeature)) {
+      paintPolygonPickHighlight(map, _pickedFeature);
+      return;
+    }
+    setStatus("Cargando geometría completa…");
     clearPickHighlight(map);
-    if (!apiLayer || !gid) return;
-    const outline = await loadPolygonPickOutline(apiLayer, gid);
-    if (gen !== _highlightFetchGen || !_pickedFeature) return;
-    if (outline) updatePickHighlight(map, outline);
+    try {
+      const { feature: full } = await fetchVisorFeatureGeometry({
+        layer_id: apiLayer,
+        gid,
+        attrs: feature.properties,
+        ...clickLonLatFromFeature(feature),
+      });
+      if (gen !== _highlightFetchGen || !_pickedFeature) return;
+      const geom = coerceHighlightGeometry(full?.geometry) || full?.geometry;
+      if (!geom) {
+        setStatus("El elemento no tiene geometría en PostGIS.", true);
+        return;
+      }
+      _pickedFeature.geometry = geom;
+      _pickedFeature.properties = {
+        ...(_pickedFeature.properties || {}),
+        ...(full.properties || {}),
+      };
+      _pickedFeature._fullPostgis = true;
+      if (full.properties?.gid) {
+        _pickedFeature._sourceGid = String(full.properties.gid);
+      }
+      paintPolygonPickHighlight(map, _pickedFeature);
+      setStatus("");
+      syncPickPanelUi();
+    } catch (err) {
+      if (gen !== _highlightFetchGen) return;
+      console.warn("[visorFeaturePickBuffer] geometría PostGIS:", err);
+      setStatus(err?.message || "No se pudo cargar la geometría completa.", true);
+    }
     return;
   }
 
   updatePickHighlight(map, feature);
 
-  if (apiLayer && gid) {
+  if (apiLayer) {
     try {
-      const { feature: full } = await fetchVisorFeatureGeometry({ layer_id: apiLayer, gid });
+      const { feature: full } = await fetchVisorFeatureGeometry({
+        layer_id: apiLayer,
+        gid,
+        attrs: feature.properties,
+        ...clickLonLatFromFeature(feature),
+      });
       if (gen !== _highlightFetchGen || !_pickedFeature) return;
       updatePickHighlight(map, full);
     } catch (err) {
@@ -702,7 +906,7 @@ function syncPickPanelUi() {
   if (hint) {
     hint.textContent = _pickActive
       ? _pickedFeature
-        ? isPolygonGeometry(_pickedFeature)
+        ? treatFeatureAsPolygon(_pickedFeature, _pickedFeature._layerId)
           ? `Seleccionado: ${describePicked(_pickedFeature, _pickedFeature._layerId)} · listo para análisis espacial (sin buffer) o genera buffer.`
           : `Seleccionado: ${describePicked(_pickedFeature, _pickedFeature._layerId)} · ${pickHighlightHint(_pickedFeature)}. Para análisis espacial genera un buffer.`
         : "Haz clic sobre una colonia, manzana u otra capa activa del visor."
@@ -807,13 +1011,17 @@ function onMapClick(ev) {
   if (_pickedFeature) {
     _pickedFeature._layerId = best.layer?.id || "";
     _pickedFeature._apiLayerId = resolveVisorApiLayerId(_pickedFeature._layerId);
-    _pickedFeature._sourceGid = pickVisorFeatureGid(_pickedFeature.properties);
+    _pickedFeature._clickLon = ev.lngLat?.lng;
+    _pickedFeature._clickLat = ev.lngLat?.lat;
+    _pickedFeature._sourceGid =
+      pickVisorFeatureGid(_pickedFeature.properties, best, _pickedFeature._layerId) ||
+      gidFromLoadedTiles(map, best);
   }
   setStatus("");
   syncPickPanelUi();
   void refreshPickHighlight(_pickedFeature, _pickedFeature?._layerId);
   void resolvePickAoiFromFeature(_pickedFeature).then((aoi) => {
-    if (!aoi && _pickedFeature && !isPolygonGeometry(_pickedFeature)) {
+    if (!aoi && _pickedFeature && !treatFeatureAsPolygon(_pickedFeature, _pickedFeature._layerId)) {
       setStatus(
         "Elemento seleccionado. Para análisis espacial en puntos/líneas genera un buffer; en polígonos (colonia, manzana…) ya puedes iniciar el análisis.",
         false,
@@ -848,7 +1056,7 @@ function parseDistanceMeters() {
 
 function bufferApiPayload(feature, distanceM, lineSide = "both") {
   const apiLayer = feature._apiLayerId || null;
-  const sourceGid = feature._sourceGid || pickVisorFeatureGid(feature.properties);
+  const sourceGid = feature._sourceGid || pickVisorFeatureGid(feature.properties, feature);
   const payload = {
     distance_m: distanceM,
     layer_id: apiLayer,
@@ -879,6 +1087,8 @@ async function buildLineSideBufferLocal(feature, distanceM, lineSide) {
       const { feature: full } = await fetchVisorFeatureGeometry({
         layer_id: feature._apiLayerId,
         gid: feature._sourceGid,
+        attrs: feature.properties,
+        ...clickLonLatFromFeature(feature),
       });
       source = full;
     } catch (err) {
@@ -927,7 +1137,10 @@ async function applyPickBuffer() {
       : `Área de influencia generada · ${distanceM.toLocaleString("es-MX")} m (PostGIS).`;
 
     publishVisorBufferFeature(buffered, msg);
-    if (_pickedFeature) void refreshPickHighlight(_pickedFeature, _pickedFeature._layerId);
+    if (_pickedFeature) {
+      void refreshPickHighlight(_pickedFeature, _pickedFeature._layerId);
+      raisePickHighlightLayers(_mapRef || getLeafletMap());
+    }
     setStatus(msg, false);
   } catch (err) {
     console.warn("[visorFeaturePickBuffer]", err);
@@ -1060,6 +1273,12 @@ function attachToMap(map) {
   schedulePickButtonInjection(map);
   bindMapClick(map);
   bindCloseListener();
+  if (!map.__visorPickHighlightRestackBound) {
+    map.__visorPickHighlightRestackBound = true;
+    const refocus = () => raisePickHighlightLayers(map);
+    map.on("moveend", refocus);
+    map.on("zoomend", refocus);
+  }
   map.once("idle", () => schedulePickButtonInjection(map));
 }
 

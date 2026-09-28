@@ -1154,10 +1154,24 @@ function renderDetailTable(columns, rows, title, options = {}) {
 }
 
 function detailCellClass(field) {
-  if (field === "num" || field === "cve_mun" || field === "cve_loc") {
+  if (
+    field === "num" ||
+    field === "cve_ent" ||
+    field === "cve_mun" ||
+    field === "cve_loc" ||
+    field === "ambito"
+  ) {
     return "text-center";
   }
-  if (field === "domicilio" || field === "nom_insti" || field === "nom_comer" || field === "nom_estab") {
+  if (
+    field === "domicilio" ||
+    field === "nom_insti" ||
+    field === "nom_comer" ||
+    field === "nom_estab" ||
+    field === "nom_loc" ||
+    field === "nom_mun" ||
+    field === "nom_ent"
+  ) {
     return "visor-spatial-cell--left";
   }
   return "text-center";
@@ -1328,7 +1342,24 @@ function renderResults(data) {
   }
   tbl += "</tbody></table></div>";
 
-  host.innerHTML = `<h3 class=\"h6 fw-bold mb-2\">Resultados</h3>${metaHtml}${tbl}`;
+  let detailPanel = "";
+  if (data.rows?.length && data.columns?.length) {
+    const isIter = (data.capa_id || "") === "iter";
+    const detailTitle = isIter ? "Localidades e indicadores" : `Detalle — ${data.capa_etiqueta || "Elementos"}`;
+    const toggleLabel = isIter
+      ? `Mostrar detalle por localidad (${data.rows.length.toLocaleString("es-MX")})`
+      : "Mostrar detalle de elementos";
+    detailPanel = buildDetailToggleSection(
+      renderDetailTable(data.columns, data.rows, detailTitle, {
+        truncated: data.filas_truncadas,
+        maxHeight: 420,
+      }),
+      toggleLabel,
+    );
+  }
+
+  host.innerHTML = `<h3 class=\"h6 fw-bold mb-2\">Resultados</h3>${metaHtml}${tbl}${detailPanel}`;
+  wireDetailToggleButtons(host);
   scrollResultsIntoView();
 }
 

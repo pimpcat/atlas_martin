@@ -765,62 +765,124 @@ function normCveMun3(cve_mun) {
 
 const _geoContextoCache = new Map();
 let _geoContextoBulkPromise = null;
+let _geoContextoBulkEnt = null;
 
-/** @param {string} cve_mun */
-export function getGeoContextoCached(cve_mun) {
-  const cve = normCveMun3(cve_mun);
-  return _geoContextoCache.has(cve) ? _geoContextoCache.get(cve) : undefined;
+function _geoContextoEntKey(cve_ent) {
+  const d = String(cve_ent ?? "").replace(/\D/g, "");
+  return d.length >= 2 ? d.slice(-2) : "";
+}
+
+function _geoContextoCacheKey(cve_mun, cve_ent) {
+  const ent = _geoContextoEntKey(cve_ent) || "_";
+  if (!cve_mun) return `${ent}:__bulk__`;
+  return `${ent}:${normCveMun3(cve_mun)}`;
+}
+
+async function _activeEntForGeoContexto(explicit) {
+  if (explicit != null && String(explicit).trim() !== "") {
+    return _geoContextoEntKey(explicit);
+  }
+  try {
+    const { getActiveCveEnt } = await import("./amigoDeployment.js");
+    return _geoContextoEntKey(getActiveCveEnt());
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * @param {string} cve_mun
+ * @param {string} [cve_ent]
+ */
+export function getGeoContextoCached(cve_mun, cve_ent) {
+  const key = _geoContextoCacheKey(cve_mun, cve_ent);
+  return _geoContextoCache.has(key) ? _geoContextoCache.get(key) : undefined;
+}
+
+/** Limpia cache al cambiar entidad (modo nacional). */
+export function invalidateGeoContextoCache(cve_ent) {
+  if (cve_ent == null || cve_ent === "") {
+    _geoContextoCache.clear();
+    _geoContextoBulkPromise = null;
+    _geoContextoBulkEnt = null;
+    return;
+  }
+  const prefix = `${_geoContextoEntKey(cve_ent)}:`;
+  for (const k of [..._geoContextoCache.keys()]) {
+    if (k.startsWith(prefix)) _geoContextoCache.delete(k);
+  }
+  if (_geoContextoBulkEnt === _geoContextoEntKey(cve_ent)) {
+    _geoContextoBulkPromise = null;
+    _geoContextoBulkEnt = null;
+  }
 }
 
 /** Precarga textos de Geography Context (o legacy) en una sola petición. */
-export async function ensureGeoContextoBulk() {
-  if (_geoContextoCache.size > 0) return _geoContextoCache;
-  if (!_geoContextoBulkPromise) {
-    _geoContextoBulkPromise = (async () => {
-      let url = new URL(`${API_GEO_CONTEXTO_URL}/all`, window.location.href);
-      let res = await fetch(url.toString(), { cache: "no-store" });
-      if (!res.ok) {
-        url = new URL(`${API_GEO_CONTEXTO_LEGACY_URL}/all`, window.location.href);
-        res = await fetch(url.toString(), { cache: "no-store" });
-      }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      if (!json || !json.ok) {
-        throw new Error(json && json.message ? String(json.message) : "Respuesta inválida");
-      }
-      const rows = json.rows || {};
-      for (const [cve, row] of Object.entries(rows)) {
-        _geoContextoCache.set(normCveMun3(cve), row || null);
-      }
-      return _geoContextoCache;
-    })().catch((err) => {
-      _geoContextoBulkPromise = null;
-      throw err;
-    });
+export async function ensureGeoContextoBulk(opts = {}) {
+  const ent = await _activeEntForGeoContexto(opts.cve_ent);
+  const prefix = `${ent || "_"}:`;
+  const hasMunData = [..._geoContextoCache.keys()].some(
+    (k) => k.startsWith(prefix) && !k.endsWith(":__bulk__"),
+  );
+  if (hasMunData) return _geoContextoCache;
+  if (_geoContextoBulkPromise && _geoContextoBulkEnt === ent) {
+    return _geoContextoBulkPromise;
   }
+  _geoContextoBulkEnt = ent;
+  _geoContextoBulkPromise = (async () => {
+    let url = new URL(`${API_GEO_CONTEXTO_URL}/all`, window.location.href);
+    if (ent) url.searchParams.set("cve_ent", ent);
+    let res = await fetch(url.toString(), { cache: "no-store" });
+    if (!res.ok) {
+      url = new URL(`${API_GEO_CONTEXTO_LEGACY_URL}/all`, window.location.href);
+      if (ent) url.searchParams.set("cve_ent", ent);
+      res = await fetch(url.toString(), { cache: "no-store" });
+    }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    if (!json || !json.ok) {
+      throw new Error(json && json.message ? String(json.message) : "Respuesta inválida");
+    }
+    const rows = json.rows || {};
+    for (const [cve, row] of Object.entries(rows)) {
+      _geoContextoCache.set(_geoContextoCacheKey(cve, ent), row || null);
+    }
+    return _geoContextoCache;
+  })().catch((err) => {
+    _geoContextoBulkPromise = null;
+    _geoContextoBulkEnt = null;
+    throw err;
+  });
   return _geoContextoBulkPromise;
 }
 
 /**
  * Textos de ficha geográfica por municipio (claves = id de pestaña del catálogo).
  * @param {string} cve_mun - clave 001..085
+ * @param {{ cve_ent?: string, signal?: AbortSignal }} [opts]
  */
-export async function fetchGeoContexto(cve_mun) {
+export async function fetchGeoContexto(cve_mun, opts = {}) {
+  const ent = await _activeEntForGeoContexto(opts.cve_ent);
   const cve = normCveMun3(cve_mun);
-  if (_geoContextoCache.has(cve)) return _geoContextoCache.get(cve);
-  try {
-    await ensureGeoContextoBulk();
-    if (_geoContextoCache.has(cve)) return _geoContextoCache.get(cve);
-  } catch {
-    /* fallback a consulta individual */
+  const cacheKey = _geoContextoCacheKey(cve, ent);
+  if (_geoContextoCache.has(cacheKey)) return _geoContextoCache.get(cacheKey);
+  if (!opts.signal) {
+    try {
+      await ensureGeoContextoBulk({ cve_ent: ent });
+      if (_geoContextoCache.has(cacheKey)) return _geoContextoCache.get(cacheKey);
+    } catch {
+      /* fallback a consulta individual */
+    }
   }
   let url = new URL(API_GEO_CONTEXTO_URL, window.location.href);
   url.searchParams.set("cve_mun", cve);
-  let res = await fetch(url.toString(), { cache: "no-store" });
+  if (ent) url.searchParams.set("cve_ent", ent);
+  let res = await fetch(url.toString(), { cache: "no-store", signal: opts.signal });
   if (!res.ok) {
     url = new URL(API_GEO_CONTEXTO_LEGACY_URL, window.location.href);
     url.searchParams.set("cve_mun", cve);
-    res = await fetch(url.toString(), { cache: "no-store" });
+    if (ent) url.searchParams.set("cve_ent", ent);
+    res = await fetch(url.toString(), { cache: "no-store", signal: opts.signal });
   }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const json = await res.json();
@@ -828,7 +890,7 @@ export async function fetchGeoContexto(cve_mun) {
     throw new Error(json && json.message ? String(json.message) : "Respuesta inválida");
   }
   const row = json.row || null;
-  _geoContextoCache.set(cve, row);
+  if (!opts.signal) _geoContextoCache.set(cacheKey, row);
   return row;
 }
 
@@ -952,10 +1014,11 @@ export function prefetchMunicipioData(cve_mun) {
         void fetchExploradorMunicipal(cve, { cve_ent: ent }).catch(() => {});
       });
     }
+    const geoEnt = await _activeEntForGeoContexto();
+    if (getGeoContextoCached(cve, geoEnt) === undefined) {
+      void ensureGeoContextoBulk({ cve_ent: geoEnt }).catch(() => {});
+    }
   })();
-  if (!_geoContextoCache.has(cve)) {
-    void ensureGeoContextoBulk().catch(() => {});
-  }
 }
 
 export async function fetchExploradorMunicipal(cve_mun, opts = {}) {

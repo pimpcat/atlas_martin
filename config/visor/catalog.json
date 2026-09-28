@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Catálogo data-driven del Visor geográfico. Edite la copia canónica en Stack_Martin/config/visor/catalog.json y sincronice aquí si no usa Docker.",
+  "description": "Catálogo data-driven del Visor geográfico (Atlas Municipal). Fuente única para panel, export, identify, buscador y metadatos de capas.",
   "search": {
     "limit_per_source": 5
   },
@@ -34,17 +34,29 @@
     {
       "id": "infraestructura",
       "label": "Infraestructura",
-      "layers": ["rnc"]
+      "layers": [
+        "rnc"
+      ]
     },
     {
       "id": "servicios",
       "label": "Servicios e instalaciones",
-      "layers": ["saneamiento_agua", "clues", "residuo_solido"]
+      "layers": [
+        "saneamiento_agua",
+        "clues",
+        "residuo_solido"
+      ]
     },
     {
       "id": "medio_fisico",
       "label": "Medio físico",
-      "layers": ["uso_suelo", "hidro_corrientes", "hidro_cuerpos", "curvas_nivel"]
+      "layers": [
+        "uso_suelo",
+        "hidro_corrientes",
+        "hidro_cuerpos",
+        "curvas_nivel",
+        "clima"
+      ]
     },
     {
       "id": "denue",
@@ -59,6 +71,16 @@
         "denue_cementerios",
         "denue_iglesias"
       ]
+    },
+    {
+      "id": "pruebas",
+      "label": "Pruebas",
+      "layers": [
+        "rnc_loc",
+        "regiones",
+        "regiones8",
+        "sip_esp_rec"
+      ]
     }
   ],
   "layers": {
@@ -69,24 +91,48 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
-      "style": { "icon_key": "locs_punto_pin" },
+      "style": {
+        "icon_key": "locs_punto_pin"
+      },
       "legend": {
-        "iconItems": [{ "icon_key": "locs_punto_pin", "label": "Localidad" }]
+        "iconItems": [
+          {
+            "icon_key": "locs_punto_pin",
+            "label": "Localidad"
+          }
+        ]
       },
       "data": {
         "table": "c_loc_punto",
         "mun_filter": "cve_mun",
         "export_columns": [
-          "gid", "cve_mun", "cvegeo", "nom_loc", "nom_mun", "ambito",
-          "latitud", "longitud", "altitud", "pob_total", "pob_femeni", "pob_mascul"
+          "gid",
+          "cve_mun",
+          "cvegeo",
+          "cve_ent",
+          "cve_loc",
+          "nomgeo",
+          "ambito"
         ]
       },
-      "identify": { "template": "locs_punto" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true },
+      "identify": {
+        "template": "locs_punto"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      },
+      "tabular": {
+        "preset": "locspunto"
+      },
       "search": {
         "enabled": true,
         "tipo": "Localidad",
-        "name_column": "nom_loc",
+        "name_column": "nomgeo",
         "id_column": "cvegeo",
         "geom_mode": "point",
         "scope": "both"
@@ -106,12 +152,28 @@
       },
       "legend": {
         "items": [
-          { "kind": "line", "color": "#3399ff", "label": "Límite de localidad con amanzanamiento" }
+          {
+            "kind": "line",
+            "color": "#3399ff",
+            "label": "Límite de localidad con amanzanamiento"
+          }
         ]
       },
-      "data": { "table": "c_l", "mun_filter": "cve_mun" },
-      "identify": { "template": "locs_atlas" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true },
+      "data": {
+        "table": "c_l",
+        "mun_filter": "cve_mun"
+      },
+      "identify": {
+        "template": "locs_atlas"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": true
+      },
       "search": {
         "enabled": true,
         "tipo": "Localidad con amanzanamiento",
@@ -123,32 +185,69 @@
     },
     "colonias": {
       "label": "Colonias",
-      "overlay_key": "colonias",
-      "checkbox_id": "visorColonias",
       "geometry": "polygon",
       "renderer": "overlay",
       "style_preset": "polygon_outline_detail",
+      "data": {
+        "table": "c_col_ase",
+        "mun_filter": "cve_mun",
+        "export": {
+          "mode": "columns",
+          "columns": [
+            "nom_asen"
+          ]
+        }
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      },
       "style": {
         "color": "#990000",
         "halo_color": "#990000",
+        "opacity": 0.9,
         "fill_hit_color": "#990000"
       },
-      "legend": {
-        "items": [
-          { "kind": "line", "color": "#990000", "label": "Límite de colonia o asentamiento" }
+      "identify": {
+        "title": "Colonia",
+        "fields": [
+          {
+            "column": "nom_asen",
+            "label": "Nombre del asentamiento"
+          }
         ]
       },
-      "data": { "table": "c_col_ase", "mun_filter": "cve_mun" },
-      "identify": { "title": "Colonia", "fields": [{ "column": "nom_asen" }] },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true },
+      "hover": {
+        "fields": [
+          {
+            "column": "nom_asen",
+            "label": "Colonia"
+          }
+        ],
+        "title": "Colonia"
+      },
       "search": {
         "enabled": true,
         "tipo": "Colonia/Asentamiento",
         "name_column": "nom_asen",
         "id_column": "cvegeo",
+        "search_columns": [
+          "nom_asen"
+        ],
         "geom_mode": "polygon",
         "scope": "both"
-      }
+      },
+      "origin": "seed",
+      "publication": {
+        "tile_strategy": "shared",
+        "published_id": "c_col_ase"
+      },
+      "overlay_key": "colonias",
+      "checkbox_id": "visorColonias"
     },
     "ageb_urbanas": {
       "label": "AGEBS Urbanas",
@@ -163,11 +262,34 @@
         "fill_hit_color": "#990000"
       },
       "legend": {
-        "items": [{ "kind": "line", "color": "#990000", "label": "AGEB urbana" }]
+        "items": [
+          {
+            "kind": "line",
+            "color": "#990000",
+            "label": "AGEB urbana"
+          }
+        ]
       },
-      "data": { "table": "c_a", "mun_filter": "cve_mun" },
-      "identify": { "title": "AGEB Urbana", "fields": [{ "column": "cvegeo" }] },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "data": {
+        "table": "c_a",
+        "mun_filter": "cve_mun"
+      },
+      "identify": {
+        "title": "AGEB Urbana",
+        "fields": [
+          {
+            "column": "cvegeo"
+          }
+        ]
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "ageb_rurales": {
       "label": "AGEBS Rurales",
@@ -182,11 +304,34 @@
         "fill_hit_color": "#666600"
       },
       "legend": {
-        "items": [{ "kind": "line", "color": "#666600", "label": "AGEB rural" }]
+        "items": [
+          {
+            "kind": "line",
+            "color": "#666600",
+            "label": "AGEB rural"
+          }
+        ]
       },
-      "data": { "table": "c_ar", "mun_filter": "cve_mun" },
-      "identify": { "title": "AGEB Rural", "fields": [{ "column": "cvegeo" }] },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "data": {
+        "table": "c_ar",
+        "mun_filter": "cve_mun"
+      },
+      "identify": {
+        "title": "AGEB Rural",
+        "fields": [
+          {
+            "column": "cvegeo"
+          }
+        ]
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "manzanas": {
       "label": "Manzanas",
@@ -199,7 +344,7 @@
         "color": "rgb(245, 225, 145)",
         "outline_color": "rgb(150, 150, 150)",
         "opacity": 0.6,
-        "minzoom": 14
+        "minzoom": 11
       },
       "legend": {
         "items": [
@@ -211,9 +356,21 @@
           }
         ]
       },
-      "data": { "table": "c_m", "mun_filter": "cve_mun" },
-      "identify": { "template": "manzanas" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "data": {
+        "table": "c_m",
+        "mun_filter": "cve_mun"
+      },
+      "identify": {
+        "template": "manzanas"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "vialidades": {
       "label": "Vialidades (Calles)",
@@ -229,18 +386,51 @@
         "halo_width": 4
       },
       "legend": {
-        "items": [{ "kind": "line", "color": "rgb(140, 95, 55)", "label": "Vialidad municipal" }]
+        "items": [
+          {
+            "kind": "line",
+            "color": "rgb(140, 95, 55)",
+            "label": "Vialidad municipal"
+          }
+        ]
       },
       "data": {
         "table": "c_e",
         "mun_filter": "cve_mun",
         "export_columns": [
-          "gid", "cve_mun", "cvegeo", "nomvial", "nomvial1", "tipo", "orden",
-          "ambito", "carretera", "longitud", "velocidad", "condicion"
+          "gid",
+          "cve_mun",
+          "cvegeo",
+          "nomvial",
+          "nomvial1",
+          "tipo",
+          "orden",
+          "ambito",
+          "carretera",
+          "longitud",
+          "velocidad",
+          "condicion"
         ]
       },
-      "identify": { "title": "Vialidad", "join": { "left": ["tipovial"], "right": ["nomvial"] } },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "identify": {
+        "title": "Vialidad",
+        "join": {
+          "left": [
+            "tipovial"
+          ],
+          "right": [
+            "nomvial"
+          ]
+        }
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "rnc": {
       "label": "Red Nacional de Caminos",
@@ -253,16 +443,40 @@
         "field": "tipo_vial",
         "default_color": "rgb(140, 95, 55)",
         "classes": [
-          { "value": "Carretera", "color": "rgb(200, 0, 0)", "label": "Carretera" },
-          { "value": "Periférico", "color": "rgb(235, 145, 60)", "label": "Periférico" },
-          { "value": "Vereda", "color": "rgb(0, 0, 0)", "label": "Vereda" },
-          { "value": "Camino", "color": "rgb(140, 95, 55)", "label": "Camino" }
+          {
+            "value": "Carretera",
+            "color": "rgb(200, 0, 0)",
+            "label": "Carretera"
+          },
+          {
+            "value": "Periférico",
+            "color": "rgb(235, 145, 60)",
+            "label": "Periférico"
+          },
+          {
+            "value": "Vereda",
+            "color": "rgb(0, 0, 0)",
+            "label": "Vereda"
+          },
+          {
+            "value": "Camino",
+            "color": "rgb(140, 95, 55)",
+            "label": "Camino"
+          }
         ],
-        "zoom": { "troncal_min": 10, "detail_min": 12 },
+        "zoom": {
+          "troncal_min": 10,
+          "detail_min": 12
+        },
         "tiers": [
           {
             "id": "estatal",
-            "filter_values": ["Boulevard", "Camino", "Carretera", "Vereda"]
+            "filter_values": [
+              "Boulevard",
+              "Camino",
+              "Carretera",
+              "Vereda"
+            ]
           },
           {
             "id": "troncal",
@@ -281,15 +495,33 @@
               "Vereda"
             ]
           },
-          { "id": "detail" }
+          {
+            "id": "detail"
+          }
         ]
       },
       "legend": {
         "items": [
-          { "kind": "line", "color": "rgb(200, 0, 0)", "label": "Carretera" },
-          { "kind": "line", "color": "rgb(235, 145, 60)", "label": "Periférico" },
-          { "kind": "line", "color": "rgb(0, 0, 0)", "label": "Vereda" },
-          { "kind": "line", "color": "rgb(140, 95, 55)", "label": "Camino / otro" }
+          {
+            "kind": "line",
+            "color": "rgb(200, 0, 0)",
+            "label": "Carretera"
+          },
+          {
+            "kind": "line",
+            "color": "rgb(235, 145, 60)",
+            "label": "Periférico"
+          },
+          {
+            "kind": "line",
+            "color": "rgb(0, 0, 0)",
+            "label": "Vereda"
+          },
+          {
+            "kind": "line",
+            "color": "rgb(140, 95, 55)",
+            "label": "Camino / otro"
+          }
         ]
       },
       "data": {
@@ -297,8 +529,17 @@
         "from_sql_preset": "rnc_simplified",
         "mun_filter": "cve_mun"
       },
-      "identify": { "template": "rnc" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "identify": {
+        "template": "rnc"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "saneamiento_agua": {
       "label": "Servicios de Agua y Saneamiento",
@@ -347,17 +588,62 @@
       },
       "legend": {
         "iconItems": [
-          { "icon_key": "agua_obra_toma", "label": "Obra de toma para la captación de agua" },
-          { "icon_key": "agua_potabilizacion", "label": "Planta de potabilización" },
-          { "icon_key": "agua_tratamiento", "label": "Planta de tratamiento" },
-          { "icon_key": "agua_prestador", "label": "Prestador de servicio de agua potable" },
-          { "icon_key": "agua_descarga", "label": "Punto de descarga" },
-          { "icon_key": "agua_default", "label": "Otro servicio de agua o saneamiento" }
+          {
+            "icon_key": "agua_obra_toma",
+            "label": "Obra de toma para la captación de agua"
+          },
+          {
+            "icon_key": "agua_potabilizacion",
+            "label": "Planta de potabilización"
+          },
+          {
+            "icon_key": "agua_tratamiento",
+            "label": "Planta de tratamiento"
+          },
+          {
+            "icon_key": "agua_prestador",
+            "label": "Prestador de servicio de agua potable"
+          },
+          {
+            "icon_key": "agua_descarga",
+            "label": "Punto de descarga"
+          },
+          {
+            "icon_key": "agua_default",
+            "label": "Otro servicio de agua o saneamiento"
+          }
         ]
       },
-      "data": { "table": "c_agua_sanea", "mun_filter": "cve_mun" },
-      "identify": { "title": "Agua/saneamiento", "join": { "left": ["tipo"], "right": ["nom_tipo"] } },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "data": {
+        "table": "c_agua_sanea",
+        "mun_filter": "cve_mun",
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "cvegeo",
+          "tipo",
+          "nom_tipo"
+        ]
+      },
+      "identify": {
+        "title": "Agua/saneamiento",
+        "join": {
+          "left": [
+            "tipo"
+          ],
+          "right": [
+            "nom_tipo"
+          ]
+        }
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": true
+      }
     },
     "clues": {
       "label": "Establecimientos de salud",
@@ -366,22 +652,52 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
-      "style": { "icon_key": "clues_health" },
+      "style": {
+        "icon_key": "clues_health"
+      },
       "legend": {
-        "iconItems": [{ "icon_key": "clues_health", "label": "Establecimiento de salud" }]
+        "iconItems": [
+          {
+            "icon_key": "clues_health",
+            "label": "Establecimiento de salud"
+          }
+        ]
       },
       "data": {
         "table": "c_clues",
         "mun_filter": "cve_mun",
-        "export_columns": ["gid", "cve_mun", "clues", "nom_insti", "nom_comer", "nom_insadm"]
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "clues",
+          "nom_insti",
+          "nom_comer",
+          "nom_insadm"
+        ]
       },
-      "identify": { "template": "clues" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true },
+      "identify": {
+        "template": "clues"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      },
+      "tabular": {
+        "preset": "clues"
+      },
       "search": {
         "enabled": true,
         "tipo": "Establecimiento de salud",
         "name_column": "nom_comer",
-        "search_columns": ["nom_comer", "clues", "nom_insti"],
+        "search_columns": [
+          "nom_comer",
+          "clues",
+          "nom_insti"
+        ],
         "id_column": "gid",
         "geom_mode": "point",
         "scope": "municipio",
@@ -402,7 +718,10 @@
         "max_scale": 3.5,
         "supersample": 4,
         "layout": {
-          "icon-offset": [0, 6]
+          "icon-offset": [
+            0,
+            6
+          ]
         },
         "default_icon_key": "residuo_default",
         "default_label": "Otro punto de residuos sólidos",
@@ -423,21 +742,50 @@
       },
       "legend": {
         "iconItems": [
-          { "icon_key": "residuo_disposicion", "label": "Sitio de disposición final de residuos" },
-          { "icon_key": "residuo_recoleccion", "label": "Prestador de servicio de recolección" },
-          { "icon_key": "residuo_default", "label": "Otro punto de residuos sólidos" }
+          {
+            "icon_key": "residuo_disposicion",
+            "label": "Sitio de disposición final de residuos"
+          },
+          {
+            "icon_key": "residuo_recoleccion",
+            "label": "Prestador de servicio de recolección"
+          },
+          {
+            "icon_key": "residuo_default",
+            "label": "Otro punto de residuos sólidos"
+          }
         ]
       },
       "data": {
         "table": "c_residuo_solido",
         "mun_filter": "cve_mun",
-        "export_columns": ["gid", "cve_mun", "cvegeo", "tipo", "nom_tipo"]
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "cvegeo",
+          "tipo",
+          "nom_tipo"
+        ]
       },
       "identify": {
         "title": "Residuos solidos urbanos",
-        "join": { "left": ["tipo"], "right": ["nom_tipo"] }
+        "join": {
+          "left": [
+            "tipo"
+          ],
+          "right": [
+            "nom_tipo"
+          ]
+        }
       },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": true
+      }
     },
     "uso_suelo": {
       "label": "Uso de suelo",
@@ -449,10 +797,32 @@
       "data": {
         "table": "usosuelo",
         "mun_filter_cvegeo": false,
-        "export_columns": ["gid", "cve_mun", "descripcio", "descrip_1", "descrip_2", "area", "perimetro"]
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "descripcio",
+          "descrip_1",
+          "descrip_2",
+          "area",
+          "perimetro"
+        ]
       },
-      "identify": { "title": "Uso de Suelo", "fields": [{ "column": "descripcio" }] },
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "identify": {
+        "title": "Uso de Suelo",
+        "fields": [
+          {
+            "column": "descripcio"
+          }
+        ]
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "hidro_corrientes": {
       "label": "Hidrografía (corrientes de agua)",
@@ -464,11 +834,33 @@
       "data": {
         "table": "hcorrientes",
         "mun_filter": "cve_mun",
-        "export_columns": ["gid", "cve_mun", "nombre", "condicion", "tipo", "longitud"]
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "nombre",
+          "condicion",
+          "tipo",
+          "longitud"
+        ]
       },
-      "identify": { "title": "Corriente de agua", "fields": [{ "label": "NOMBRE", "column": "nombre" }] },
+      "identify": {
+        "title": "Corriente de agua",
+        "fields": [
+          {
+            "label": "NOMBRE",
+            "column": "nombre"
+          }
+        ]
+      },
       "identify_visor_only": true,
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "hidro_cuerpos": {
       "label": "Hidrografía (cuerpos de agua)",
@@ -480,11 +872,51 @@
       "data": {
         "table": "hcuerpos",
         "mun_filter": "cve_mun",
-        "export_columns": ["gid", "cve_mun", "nombre", "condicion", "tipo", "area"]
+        "mun_filter_cvegeo": false,
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "nombre",
+          "condicion",
+          "tipo",
+          "area"
+        ]
       },
-      "identify": { "title": "Cuerpo de agua", "fields": [{ "label": "NOMBRE", "column": "nombre" }] },
+      "identify": {
+        "title": "Cuerpo de agua",
+        "fields": [
+          {
+            "label": "NOMBRE",
+            "column": "nombre"
+          }
+        ]
+      },
       "identify_visor_only": true,
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "labels": {
+        "enabled": true,
+        "source": "centroid",
+        "minzoom": 13,
+        "field": "nombre",
+        "id_column": "gid",
+        "parts": [
+          {
+            "type": "text",
+            "value": "Cuerpo de agua\n"
+          },
+          {
+            "type": "field",
+            "column": "nombre"
+          }
+        ]
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "curvas_nivel": {
       "label": "Curvas de nivel",
@@ -496,11 +928,60 @@
       "data": {
         "table": "curnivel",
         "mun_filter": "cve_mun",
-        "export_columns": ["gid", "cve_mun", "elev", "tipo"]
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "elev",
+          "tipo"
+        ]
       },
-      "identify": { "template": "curvas_nivel" },
+      "identify": {
+        "template": "curvas_nivel"
+      },
       "identify_visor_only": true,
-      "capabilities": { "export": ["kml", "shp"], "tabular": false, "spatial_analysis": true }
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
+    },
+    "clima": {
+      "label": "Clima",
+      "overlay_key": "clima",
+      "checkbox_id": "visorClima",
+      "geometry": "polygon",
+      "renderer": "visor_shared_martin",
+      "style_preset": "clima",
+      "data": {
+        "table": "clima",
+        "mun_filter": "cve_mun",
+        "export_columns": [
+          "gid",
+          "cve_mun",
+          "desc_mapa"
+        ]
+      },
+      "identify": {
+        "title": "Clima",
+        "fields": [
+          {
+            "label": "Descripción",
+            "column": "desc_mapa"
+          }
+        ]
+      },
+      "identify_visor_only": true,
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": false
+      }
     },
     "denue_rastros": {
       "label": "Rastros",
@@ -509,17 +990,52 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_rastros"
+      },
       "data": {
         "table": "c_denue",
-        "filter": { "codigo_act": [311611] },
+        "filter": {
+          "codigo_act": [
+            311611
+          ]
+        },
         "gid_table": "c_denue",
         "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "export": {
+          "mode": "all"
+        }
       },
-      "style": { "icon_key": "denue_rastros", "label_color": "#5d4037", "tip_title": "Rastros", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_rastros", "label": "Rastro (sacrificio de ganado)" }] },
-      "identify": { "template": "denue", "title": "Rastros" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+      "style": {
+        "icon_key": "denue_rastros",
+        "label_color": "#5d4037",
+        "tip_title": "Rastros",
+        "minzoom": 8
+      },
+      "legend": {
+        "iconItems": [
+          {
+            "icon_key": "denue_rastros",
+            "label": "Rastro (sacrificio de ganado)"
+          }
+        ]
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Rastros"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      },
+      "tabular": {
+        "preset": "denue"
+      }
     },
     "denue_gasolinerias": {
       "label": "Gasolinerías",
@@ -528,17 +1044,49 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_gasolinerias"
+      },
       "data": {
         "table": "c_denue",
-        "filter": { "codigo_act": [468411] },
+        "filter": {
+          "codigo_act": [
+            468411
+          ]
+        },
         "gid_table": "c_denue",
         "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "export": {
+          "mode": "all"
+        }
       },
-      "style": { "icon_key": "denue_gasolinerias", "label_color": "#1b5e20", "tip_title": "Gasolinerías", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_gasolinerias", "label": "Gasolinera" }] },
-      "identify": { "template": "denue", "title": "Gasolinerías" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+      "style": {
+        "icon_key": "denue_gasolinerias",
+        "label_color": "#1b5e20",
+        "tip_title": "Gasolinerías",
+        "minzoom": 8
+      },
+      "legend": {
+        "iconItems": [
+          {
+            "icon_key": "denue_gasolinerias",
+            "label": "Gasolinera"
+          }
+        ]
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Gasolinerías"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      }
     },
     "denue_gaseras": {
       "label": "Gaseras",
@@ -547,17 +1095,49 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_gaseras"
+      },
       "data": {
         "table": "c_denue",
-        "filter": { "codigo_act": [468412] },
+        "filter": {
+          "codigo_act": [
+            468412
+          ]
+        },
         "gid_table": "c_denue",
         "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "export": {
+          "mode": "all"
+        }
       },
-      "style": { "icon_key": "denue_gaseras", "label_color": "#01579b", "tip_title": "Gaseras", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_gaseras", "label": "Gasera" }] },
-      "identify": { "template": "denue", "title": "Gaseras" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+      "style": {
+        "icon_key": "denue_gaseras",
+        "label_color": "#01579b",
+        "tip_title": "Gaseras",
+        "minzoom": 8
+      },
+      "legend": {
+        "iconItems": [
+          {
+            "icon_key": "denue_gaseras",
+            "label": "Gasera"
+          }
+        ]
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Gaseras"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      }
     },
     "denue_escuelas": {
       "label": "Escuelas",
@@ -566,27 +1146,73 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_escuelas"
+      },
       "data": {
         "table": "c_denue",
         "filter": {
           "codigo_act": [
-            611112, 611122, 611132, 611142, 611152, 611162, 611172, 611182,
-            611212, 611312, 611422, 611432, 611512, 611612, 611622, 611632
+            611112,
+            611122,
+            611132,
+            611142,
+            611152,
+            611162,
+            611172,
+            611182,
+            611212,
+            611312,
+            611422,
+            611432,
+            611512,
+            611612,
+            611622,
+            611632
           ]
         },
         "gid_table": "c_denue",
         "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "export": {
+          "mode": "all"
+        }
       },
-      "style": { "icon_key": "denue_escuelas", "label_color": "#e65100", "tip_title": "Escuelas", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_escuelas", "label": "Escuela" }] },
-      "identify": { "template": "denue", "title": "Escuelas" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true },
+      "style": {
+        "icon_key": "denue_escuelas",
+        "label_color": "#e65100",
+        "tip_title": "Escuelas",
+        "minzoom": 8
+      },
+      "legend": {
+        "iconItems": [
+          {
+            "icon_key": "denue_escuelas",
+            "label": "Escuela"
+          }
+        ]
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Escuelas"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      },
       "search": {
         "enabled": true,
         "tipo": "Escuela",
         "name_column": "nom_estab",
-        "search_columns": ["nom_estab", "nombre_act", "localidad"],
+        "search_columns": [
+          "nom_estab",
+          "nombre_act",
+          "localidad"
+        ],
         "id_column": "gid",
         "geom_mode": "point",
         "scope": "municipio",
@@ -601,17 +1227,49 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_hospitales"
+      },
       "data": {
         "table": "c_denue",
-        "filter": { "codigo_act": [622112] },
+        "filter": {
+          "codigo_act": [
+            622112
+          ]
+        },
         "gid_table": "c_denue",
         "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "export": {
+          "mode": "all"
+        }
       },
-      "style": { "icon_key": "denue_hospitales", "label_color": "#b71c1c", "tip_title": "Hospitales (DENUE)", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_hospitales", "label": "Hospital (DENUE)" }] },
-      "identify": { "template": "denue", "title": "Hospitales (DENUE)" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+      "style": {
+        "icon_key": "denue_hospitales",
+        "label_color": "#b71c1c",
+        "tip_title": "Hospitales (DENUE)",
+        "minzoom": 8
+      },
+      "legend": {
+        "iconItems": [
+          {
+            "icon_key": "denue_hospitales",
+            "label": "Hospital (DENUE)"
+          }
+        ]
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Hospitales (DENUE)"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      }
     },
     "denue_museos": {
       "label": "Museos",
@@ -620,17 +1278,49 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_museos"
+      },
       "data": {
         "table": "c_denue",
-        "filter": { "codigo_act": [712112] },
+        "filter": {
+          "codigo_act": [
+            712112
+          ]
+        },
         "gid_table": "c_denue",
         "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "export": {
+          "mode": "all"
+        }
       },
-      "style": { "icon_key": "denue_museos", "label_color": "#4a148c", "tip_title": "Museos", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_museos", "label": "Museo" }] },
-      "identify": { "template": "denue", "title": "Museos" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+      "style": {
+        "icon_key": "denue_museos",
+        "label_color": "#4a148c",
+        "tip_title": "Museos",
+        "minzoom": 8
+      },
+      "legend": {
+        "iconItems": [
+          {
+            "icon_key": "denue_museos",
+            "label": "Museo"
+          }
+        ]
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Museos"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      }
     },
     "denue_cementerios": {
       "label": "Cementerios",
@@ -639,36 +1329,735 @@
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_cementerios"
+      },
       "data": {
         "table": "c_denue",
-        "filter": { "codigo_act": [812322] },
+        "filter": {
+          "codigo_act": [
+            812322
+          ]
+        },
         "gid_table": "c_denue",
         "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "export": {
+          "mode": "all"
+        }
       },
-      "style": { "icon_key": "denue_cementerios", "label_color": "#424242", "tip_title": "Cementerios", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_cementerios", "label": "Cementerio" }] },
-      "identify": { "template": "denue", "title": "Cementerios" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+      "style": {
+        "icon_key": "denue_cementerios",
+        "label_color": "#424242",
+        "tip_title": "Cementerios",
+        "minzoom": 8
+      },
+      "legend": {
+        "iconItems": [
+          {
+            "icon_key": "denue_cementerios",
+            "label": "Cementerio"
+          }
+        ]
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Cementerios"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      }
     },
     "denue_iglesias": {
       "label": "Iglesias/Templos",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "publication": {
+        "tile_strategy": "filtered",
+        "published_id": "denue_iglesias"
+      },
+      "data": {
+        "table": "c_denue",
+        "mun_filter": "cve_mun",
+        "mun_filter_cvegeo": false,
+        "export": {
+          "mode": "columns",
+          "columns": [
+            "nom_estab",
+            "raz_social"
+          ]
+        },
+        "filter": {
+          "codigo_act": [
+            813210
+          ]
+        },
+        "gid_table": "c_denue"
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      },
+      "style": {
+        "opacity": 0.9,
+        "icon_key": "denue_iglesias",
+        "minzoom": 8.0
+      },
+      "identify": {
+        "template": "denue",
+        "title": "Iglesias/Templos"
+      },
+      "hover": {
+        "fields": [
+          {
+            "column": "nom_estab",
+            "label": "Nombre del establecimiento"
+          },
+          {
+            "column": "raz_social",
+            "label": "Razón social"
+          }
+        ],
+        "title": "Iglesias/Templos"
+      },
+      "search": {
+        "enabled": true,
+        "tipo": "Iglesias/Templos",
+        "name_column": "nom_estab",
+        "id_column": "gid",
+        "search_columns": [
+          "nom_estab",
+          "raz_social",
+          "nombre_act"
+        ],
+        "geom_mode": "point",
+        "scope": "municipio",
+        "mun_filter": true,
+        "mun_filter_cvegeo": false
+      },
+      "spatial_analysis": {
+        "modo": "conteo",
+        "geom_column": "the_geom"
+      },
+      "tabular": {
+        "columns": [
+          {
+            "field": "nom_estab",
+            "label": "Nom Estab"
+          },
+          {
+            "field": "raz_social",
+            "label": "Raz Social"
+          },
+          {
+            "field": "codigo_act",
+            "label": "Codigo Act"
+          },
+          {
+            "field": "nombre_act",
+            "label": "Nombre Act"
+          }
+        ]
+      },
+      "origin": "seed",
       "overlay_key": "denueIglesias",
-      "checkbox_id": "visorDenueIglesias",
+      "checkbox_id": "visorDenueIglesias"
+    },
+    "rnc_loc": {
+      "label": "Localidades RNC",
+      "overlay_key": "rncLoc",
+      "checkbox_id": "visorRncLoc",
       "geometry": "point",
       "renderer": "overlay",
       "style_preset": "point_symbol",
       "data": {
-        "table": "c_denue",
-        "filter": { "codigo_act": [813210] },
-        "gid_table": "c_denue",
-        "mun_filter_cvegeo": false,
-        "export": { "mode": "all" }
+        "table": "c_rnc_loc",
+        "mun_filter": "cve_mun",
+        "export": {
+          "mode": "columns",
+          "columns": [
+            "id_loc",
+            "tipo",
+            "nombre",
+            "cvegeo",
+            "cve_ent",
+            "cve_mun",
+            "cve_loc"
+          ]
+        }
       },
-      "style": { "icon_key": "denue_iglesias", "label_color": "#4e342e", "tip_title": "Iglesias/Templos", "minzoom": 8 },
-      "legend": { "iconItems": [{ "icon_key": "denue_iglesias", "label": "Iglesia o templo" }] },
-      "identify": { "template": "denue", "title": "Iglesias/Templos" },
-      "capabilities": { "export": ["kml", "shp"], "tabular": true, "spatial_analysis": true }
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      },
+      "style": {
+        "opacity": 0.9,
+        "icon_key": "locs_punto_pin",
+        "cluster": {
+          "enabled": true,
+          "preset": "sparse"
+        }
+      },
+      "identify": {
+        "title": "Localidad (RNC)",
+        "fields": [
+          {
+            "column": "cvegeo",
+            "label": "Clave geoestadística"
+          },
+          {
+            "column": "nombre",
+            "label": "Nombre"
+          },
+          {
+            "column": "tipo",
+            "label": "Tipo"
+          },
+          {
+            "column": "cve_ent",
+            "label": "Clave entidad"
+          },
+          {
+            "column": "cve_mun",
+            "label": "Clave municipio"
+          },
+          {
+            "column": "cve_loc",
+            "label": "Clave localidad"
+          },
+          {
+            "column": "id_loc",
+            "label": "Id Loc"
+          }
+        ]
+      },
+      "labels": {
+        "enabled": true,
+        "minzoom": 12.0,
+        "field": "nombre",
+        "parts": [
+          {
+            "type": "text",
+            "value": "Localidad:"
+          },
+          {
+            "type": "field",
+            "column": "nombre"
+          },
+          {
+            "type": "newline",
+            "value": "\n"
+          },
+          {
+            "type": "field",
+            "column": "cvegeo"
+          }
+        ],
+        "above_icon": true,
+        "color": "#2c3e50",
+        "color_claro": "#2c3e50"
+      },
+      "hover": {
+        "fields": [
+          {
+            "column": "nombre",
+            "label": "Nombre"
+          },
+          {
+            "column": "cvegeo",
+            "label": "Clave geoestadística"
+          }
+        ],
+        "title": "Localidad (RNC)"
+      },
+      "search": {
+        "enabled": true,
+        "tipo": "Localidades RNC",
+        "name_column": "nombre",
+        "id_column": "cvegeo",
+        "search_columns": [
+          "nombre",
+          "cvegeo"
+        ],
+        "geom_mode": "point",
+        "scope": "both"
+      },
+      "spatial_analysis": {
+        "modo": "conteo",
+        "geom_column": "the_geom",
+        "grupo": "tematicas",
+        "detail_table": true,
+        "detail_columns": [
+          {
+            "columna": "tipo",
+            "etiqueta": "Tipo"
+          },
+          {
+            "columna": "nombre",
+            "etiqueta": "Nombre"
+          },
+          {
+            "columna": "cvegeo",
+            "etiqueta": "Clave geoestadística"
+          },
+          {
+            "columna": "cve_ent",
+            "etiqueta": "Clave entidad"
+          },
+          {
+            "columna": "cve_mun",
+            "etiqueta": "Clave municipio"
+          },
+          {
+            "columna": "cve_loc",
+            "etiqueta": "Clave localidad"
+          },
+          {
+            "columna": "fecha_act",
+            "etiqueta": "Fecha Act"
+          },
+          {
+            "columna": "calirepr",
+            "etiqueta": "Calirepr"
+          },
+          {
+            "columna": "ent",
+            "etiqueta": "Entidad"
+          }
+        ],
+        "ui": {
+          "unidad_registro": "Localidades RNC"
+        }
+      },
+      "tabular": {
+        "columns": [
+          {
+            "field": "tipo",
+            "label": "Tipo"
+          },
+          {
+            "field": "nombre",
+            "label": "Nombre"
+          },
+          {
+            "field": "cvegeo",
+            "label": "Clave geoestadística"
+          },
+          {
+            "field": "cve_ent",
+            "label": "Clave entidad"
+          },
+          {
+            "field": "cve_mun",
+            "label": "Clave municipio"
+          },
+          {
+            "field": "cve_loc",
+            "label": "Clave localidad"
+          },
+          {
+            "field": "fecha_act",
+            "label": "Fecha Act"
+          },
+          {
+            "field": "calirepr",
+            "label": "Calirepr"
+          },
+          {
+            "field": "ent",
+            "label": "Entidad"
+          }
+        ]
+      }
+    },
+    "regiones": {
+      "label": "Regiones",
+      "geometry": "polygon",
+      "renderer": "overlay",
+      "style_preset": "polygon_by_attribute",
+      "data": {
+        "table": "c_regiones",
+        "mun_filter": "cve_mun",
+        "export": {
+          "mode": "columns",
+          "columns": [
+            "cvegeo",
+            "nomgeo",
+            "region"
+          ]
+        }
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": true
+      },
+      "style": {
+        "opacity": 0.9,
+        "field": "region",
+        "default_color": "#94a3b8",
+        "classes": [
+          {
+            "value": "Acapulco",
+            "color": "#ef4444",
+            "label": "Acapulco"
+          },
+          {
+            "value": "Centro",
+            "color": "#f97316",
+            "label": "Centro"
+          },
+          {
+            "value": "Costa Chica",
+            "color": "#ca8a04",
+            "label": "Costa Chica"
+          },
+          {
+            "value": "Costa Grande",
+            "color": "#22c55e",
+            "label": "Costa Grande"
+          },
+          {
+            "value": "Montaña",
+            "color": "#14b8a6",
+            "label": "Montaña"
+          },
+          {
+            "value": "Norte",
+            "color": "#0ea5e9",
+            "label": "Norte"
+          },
+          {
+            "value": "Tierra Caliente",
+            "color": "#3b82f6",
+            "label": "Tierra Caliente"
+          }
+        ],
+        "outline_color": "#64748b"
+      },
+      "identify": {
+        "title": "Regiones",
+        "fields": [
+          {
+            "column": "cvegeo",
+            "label": "Clave geoestadística"
+          },
+          {
+            "column": "nomgeo",
+            "label": "Nombre geoestadístico"
+          },
+          {
+            "column": "region",
+            "label": "Region"
+          }
+        ]
+      },
+      "spatial_analysis": {
+        "modo": "conteo",
+        "geom_column": "the_geom",
+        "grupo": "tematicas",
+        "detail_table": true,
+        "detail_columns": [
+          {
+            "columna": "cvegeo",
+            "etiqueta": "Clave geoestadística"
+          },
+          {
+            "columna": "cve_ent",
+            "etiqueta": "Clave entidad"
+          },
+          {
+            "columna": "cve_mun",
+            "etiqueta": "Clave municipio"
+          },
+          {
+            "columna": "nomgeo",
+            "etiqueta": "Nombre geoestadístico"
+          },
+          {
+            "columna": "region",
+            "etiqueta": "Region"
+          }
+        ]
+      },
+      "overlay_key": "regiones",
+      "checkbox_id": "visorRegiones"
+    },
+    "regiones8": {
+      "label": "Regiones 8",
+      "geometry": "polygon",
+      "renderer": "overlay",
+      "style_preset": "polygon_by_attribute",
+      "data": {
+        "table": "c_regiones8",
+        "mun_filter": false,
+        "export": {
+          "mode": "columns",
+          "columns": [
+            "cve_ent",
+            "region"
+          ]
+        }
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": false,
+        "spatial_analysis": true
+      },
+      "style": {
+        "opacity": 0.9,
+        "field": "region",
+        "default_color": "#94a3b8",
+        "classes": [
+          {
+            "value": "Acapulco",
+            "color": "#ef4444",
+            "label": "Acapulco"
+          },
+          {
+            "value": "Centro",
+            "color": "#f97316",
+            "label": "Centro"
+          },
+          {
+            "value": "Costa Chica",
+            "color": "#ca8a04",
+            "label": "Costa Chica"
+          },
+          {
+            "value": "Costa Grande",
+            "color": "#c421ae",
+            "label": "Costa Grande"
+          },
+          {
+            "value": "Montaña",
+            "color": "#14b8a6",
+            "label": "Montaña"
+          },
+          {
+            "value": "Norte",
+            "color": "#0ea5e9",
+            "label": "Norte"
+          },
+          {
+            "value": "Sierra",
+            "color": "#428e10",
+            "label": "Sierra"
+          },
+          {
+            "value": "Tierra Caliente",
+            "color": "#6366f1",
+            "label": "Tierra Caliente"
+          }
+        ],
+        "outline_color": "#eaad06",
+        "outline_width": 3.0
+      },
+      "identify": {
+        "title": "Regiones 8",
+        "fields": [
+          {
+            "column": "cve_ent",
+            "label": "Clave entidad"
+          },
+          {
+            "column": "region",
+            "label": "Region"
+          }
+        ]
+      },
+      "labels": {
+        "field": "region",
+        "minzoom": 14.0,
+        "color": "#2c3e50",
+        "source": "centroid"
+      },
+      "spatial_analysis": {
+        "modo": "conteo",
+        "geom_column": "the_geom",
+        "grupo": "tematicas",
+        "detail_table": true,
+        "detail_columns": [
+          {
+            "columna": "cve_ent",
+            "etiqueta": "Clave entidad"
+          },
+          {
+            "columna": "region",
+            "etiqueta": "Region"
+          }
+        ]
+      },
+      "overlay_key": "regiones8",
+      "checkbox_id": "visorRegiones8"
+    },
+    "sip_esp_rec": {
+      "label": "Espacios Recreativos",
+      "geometry": "point",
+      "renderer": "overlay",
+      "style_preset": "point_symbol",
+      "data": {
+        "table": "c_sip_esp_rec",
+        "mun_filter": "cve_mun",
+        "export": {
+          "mode": "columns",
+          "columns": [
+            "cve_ent",
+            "cve_mun",
+            "cve_mza",
+            "condicion",
+            "geografico",
+            "nomserv",
+            "tipo"
+          ]
+        }
+      },
+      "capabilities": {
+        "export": [
+          "kml",
+          "shp"
+        ],
+        "tabular": true,
+        "spatial_analysis": true
+      },
+      "style": {
+        "opacity": 0.9,
+        "icon_key": "bosque"
+      },
+      "identify": {
+        "title": "Espacios Recreativos",
+        "fields": [
+          {
+            "column": "cve_ent",
+            "label": "Clave entidad"
+          },
+          {
+            "column": "cve_mun",
+            "label": "Clave municipio"
+          },
+          {
+            "column": "cve_mza",
+            "label": "Cve Mza"
+          },
+          {
+            "column": "condicion",
+            "label": "Condicion"
+          },
+          {
+            "column": "nomserv",
+            "label": "Nomserv"
+          },
+          {
+            "column": "geografico",
+            "label": "Geografico"
+          }
+        ]
+      },
+      "labels": {
+        "enabled": true,
+        "minzoom": 14.0,
+        "field": "tipo",
+        "parts": [
+          {
+            "type": "field",
+            "column": "tipo"
+          }
+        ],
+        "above_icon": true,
+        "color": "#2c3e50",
+        "color_claro": "#2c3e50"
+      },
+      "hover": {
+        "fields": [
+          {
+            "column": "cvegeo",
+            "label": "Clave geoestadística"
+          },
+          {
+            "column": "condicion",
+            "label": "Condicion"
+          }
+        ],
+        "title": "Espacios Recreativos"
+      },
+      "spatial_analysis": {
+        "modo": "conteo",
+        "geom_column": "the_geom",
+        "grupo": "tematicas",
+        "detail_table": true,
+        "detail_columns": [
+          {
+            "columna": "cve_ent",
+            "etiqueta": "Clave entidad"
+          },
+          {
+            "columna": "cve_mun",
+            "etiqueta": "Clave municipio"
+          },
+          {
+            "columna": "cve_loc",
+            "etiqueta": "Clave localidad"
+          },
+          {
+            "columna": "cve_serv",
+            "etiqueta": "Cve Serv"
+          },
+          {
+            "columna": "ambito",
+            "etiqueta": "Ambito"
+          }
+        ]
+      },
+      "tabular": {
+        "columns": [
+          {
+            "field": "condicion",
+            "label": "Condicion"
+          },
+          {
+            "field": "geografico",
+            "label": "Geografico"
+          },
+          {
+            "field": "nomserv",
+            "label": "Nomserv"
+          },
+          {
+            "field": "tipo",
+            "label": "Tipo"
+          },
+          {
+            "field": "cve_serv",
+            "label": "Cve Serv"
+          },
+          {
+            "field": "ambito",
+            "label": "Ambito"
+          }
+        ]
+      },
+      "overlay_key": "sipEspRec",
+      "checkbox_id": "visorSipEspRec"
     }
   }
 }

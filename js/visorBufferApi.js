@@ -39,12 +39,28 @@ export async function fetchVisorBuffer(payload) {
   return data;
 }
 
-/** Geometría completa desde PostGIS. */
-export async function fetchVisorFeatureGeometry({ layer_id, gid }) {
+/** Geometría completa desde PostGIS (gid, clic lon/lat sobre the_geom, o attrs de catálogo). */
+export async function fetchVisorFeatureGeometry({ layer_id, gid, attrs, lon, lat } = {}) {
   const qs = new URLSearchParams({
     layer_id: String(layer_id),
-    gid: String(gid),
   });
+  if (gid != null && String(gid).trim() !== "") {
+    qs.set("gid", String(gid).trim());
+  }
+  if (Number.isFinite(Number(lon)) && Number.isFinite(Number(lat))) {
+    qs.set("lon", String(lon));
+    qs.set("lat", String(lat));
+  }
+  if (attrs && typeof attrs === "object" && Object.keys(attrs).length) {
+    const slim = {};
+    for (const [k, v] of Object.entries(attrs)) {
+      if (v == null || typeof v === "object") continue;
+      if (/^atlas/i.test(k)) continue;
+      const s = String(v).trim();
+      if (s) slim[k] = s;
+    }
+    if (Object.keys(slim).length) qs.set("attrs", JSON.stringify(slim));
+  }
   const res = await fetch(`${API_FEATURE_GEOM_URL}?${qs}`, {
     headers: { Accept: "application/json" },
   });

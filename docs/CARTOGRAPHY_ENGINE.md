@@ -3,7 +3,8 @@
 Documentación operativa del motor de cartografía vectorial (estado al **22 jul 2026**).  
 Código: `app_api/cartography_engine/` · UI generación: panel **Cartografía** del Visor (`htdocs/atlas_gro/js/cartographyClient.js`) · Admin branding 1.0: **Cartography Studio** (`cartography-studio.html`).
 
-**Versión engine:** `1.12.51` (`cartography_engine.__version__`)
+**Versión engine:** `1.12.87` (`cartography_engine.__version__`) · historial de fases Studio P0–P15 en `TEMPLATE_SCHEMA_V1.md`  
+**P0 Template Schema v1:** [`app_api/cartography_engine/docs/TEMPLATE_SCHEMA_V1.md`](../../../../app_api/cartography_engine/docs/TEMPLATE_SCHEMA_V1.md) · `python -m cartography_engine.scripts.verify_cartography --schema-only`
 
 **Handoff condensado estatal:** [`context-condensado.md`](./context-condensado.md) · [`CONTEXT_CONDENSADO_ESTATAL.md`](./CONTEXT_CONDENSADO_ESTATAL.md)  
 **Handoff croquis municipal (chat nuevo):** [`CONTEXT_CROQUIS_MUNICIPAL.md`](./CONTEXT_CROQUIS_MUNICIPAL.md)  
@@ -170,9 +171,20 @@ Criterio UI “vivo”: HTTP OK + `enabled` + `engine === "grosig-cartography"`.
 |--------|------|-------------|
 | GET | `/api/cartography/admin/branding` | Snapshot branding + logos (JWT admin) |
 | PUT | `/api/cartography/admin/branding` | Guarda institución / advertencia / fecha / logos |
-| POST | `/api/cartography/admin/logos` | Upload PNG/JPG a `assets/logos/` |
+| POST | `/api/cartography/admin/logos` | Upload PNG/JPG/WEBP a `assets/logos/` |
+| GET | `/api/cartography/admin/logos` | Galería: tamaño, duplicados, `in_use`, `primary`, semáforo `check`, `bg_mode`, `usage` |
+| GET | `/api/cartography/admin/logos/{name}/file` | Archivo original |
+| GET | `/api/cartography/admin/logos/{name}/preview?variant=strip\|croquis&bg_mode=umbral\|bordes` | Miniatura con el tratamiento aplicado (≤ 480 px) |
+| POST | `/api/cartography/admin/logos/{name}/use` | Poner / quitar de «en uso» (orden de encabezado) |
+| POST | `/api/cartography/admin/logos/settings` | `{ primary_logo?, bg_mode? }` |
+| GET/POST | `/api/cartography/admin/branding/profiles` | Perfiles de branding (P12) · `POST …/{slug}/apply` · `DELETE …/{slug}` |
+| GET | `/api/cartography/admin/panel-symbology/defaults?kind=croquis\|condensado` | Simbología de fábrica del panel (P13) |
+| POST | `/api/cartography/admin/panel-symbology/check` | `{ template }` → avisos de incongruencia panel ↔ capas (P13) |
+| GET | `/api/cartography/admin/strip-symbology/defaults` | Columna LÍMITES de fábrica de la tira (P14) |
+| POST | `/api/cartography/products/{key}/preview` | Preview desde draft; encabezado `X-GroSIG-Render-Report` (JSON: etiquetas colocadas / recuadro) |
+| GET | `/api/cartography/preview-territory[?cve_mun=]` | Municipios (`mgn.municipios_a`) o localidades amanzanadas de `marco.l` con `ambito`, ordenados por clave (combos del Studio y filtro Ámbito del Visor) |
 
-Config: `assets/branding.json` (`advertencia`, `fecha_actualizacion`, …). Fallback: `symbols/legal_texts.py`.
+Config: `assets/branding.json` (`advertencia`, `fecha_actualizacion`, `primary_logo`, `logo_bg_mode`, …). Fallback: `symbols/legal_texts.py`.
 
 ### `POST /api/cartography/generate`
 
@@ -403,6 +415,8 @@ Si faltan archivos, la tira usa `fallback_labels` tipográficos.
 
 **Recomendación:** PNG con **fondo transparente**. Las versiones con fondo negro se ven como bloque oscuro sobre la franja clara.
 
+**Tratamiento al generar (Engine ≥ 1.12.76, `logo_processing.py`):** el original no se modifica. Tira y panel croquis/condensado usan solo el **logo principal** (`primary_logo`; si falta, el que contenga «cesieg» o el primero en uso) con fondo quitado y recorte; el encabezado de hojas usa todos los «en uso» tal cual. `logo_bg_mode`: `umbral` (histórico) o `bordes` (solo fondo conectado al borde). Caché invalidada por mtime/tamaño. Detalle: [`assets/logos/README.md`](../../../../app_api/cartography_engine/assets/logos/README.md).
+
 ```bash
 cd app_api
 python -m cartography_engine.scripts.make_logos
@@ -415,6 +429,7 @@ python -m cartography_engine.scripts.make_logos
 Archivos:
 
 - `htdocs/atlas_gro/js/cartographyClient.js`
+- `htdocs/atlas_gro/js/cartographyBatch.js` (lote «Generar todas las localidades»: cola, carpeta / ZIP, estimación)
 - estilos en `htdocs/atlas_gro/css/main.css` (`.cartography-ui*`)
 - host: `#cartographyUiHost` / botón `#btnVisorCartography` en `index.html`
 - wiring: `app.js` → `attachCartographyUi({ getCveMun, getNomgeo })`
@@ -429,6 +444,12 @@ Archivos:
 6. Descarga con nombre y tamaño (KB/MB).
 7. El panel se abre como **overlay** sobre el mapa (no desplaza el layout); ancho acotado (~22 rem).
 8. Con «Cartas detalle»: selector **Armado** — paquete plotter 90×120 + cartas (default) o solo cartas doble carta.
+9. **Ámbito** (Todos / Urbano / Rural, default Todos): filtra la lista de localidades. El ámbito sale de `marco.l` vía `GET /api/cartography/preview-territory?cve_mun=` (admin), la misma tabla con la que el motor elige plantilla urbana/rural (rural = empieza con «R»). Si esa consulta falla, no filtra. Con Urbano/Rural se ocultan localidades que no están en `marco.l` (no se podrían generar).
+10. **Más opciones → Generar todas las localidades…** (`<details>` plegable): lote de planos sin cartas de detalle, respetando Ámbito y Formato.
+    - Cola **en el navegador**: un `POST /api/cartography/generate` a la vez (`generateBlob`), así cada petición dura lo de un plano y no se tocan timeouts de Nginx/Gunicorn ni se acaparan workers.
+    - Confirmación previa con conteo urbano/rural y tiempo estimado; promedios reales por ámbito en `localStorage` (`grosig.cartography.batchAvgSec`; defaults 25 s urbano / 12 s rural).
+    - Guardado: carpeta con `showDirectoryPicker` (Chrome/Edge/Opera) o, si no existe, ZIP sin compresión armado en el navegador (`planos_localidad_{mun}[_urbanas|_rurales].zip`). Al cancelar, carpeta conserva lo guardado y ZIP descarga lo parcial.
+    - Overlay con avance, tiempo restante y Cancelar (`AbortController`); aviso `beforeunload`. 429 → espera 15 s y reintenta (hasta 4); 401/403 detiene el lote; otros errores se anotan, se sigue y se escribe `_errores.txt`.
 
 ---
 
@@ -481,6 +502,20 @@ Sesión orientada a **producto usable + formato de plano/croquis/condensado**.
 - `test_condensado_simplify_limits`
 - `test_grosig_marginalia_legend_full_column`
 - `test_strip_type_scales_with_height`
+
+---
+
+## Cambios sep 2026 — Studio P14–P15 (Engine 1.12.81 → 1.12.87)
+
+| Ver | Qué |
+|-----|-----|
+| **1.12.81–84** | P14: columna LÍMITES de la tira inferior como datos (`pdf/strip_symbology.py`), editable por plantilla en `layout.strip.simbologia`; sin la clave = salida histórica |
+| **1.12.85** | P15 pasos 1–2: motor de etiquetas v2 (`label_placement_v2.py`) opt-in con `label_placement.engine = "v2"`; solo vialidades y `sil_*` a lo largo del trazo; nunca encima, omite si no cabe; cascada nombre+clave → 3.8 pt → solo nombre |
+| **1.12.86** | P15 paso 3: recuadro de ampliación de la localidad (`pdf/locality_inset.py`, `layout.inset.enabled`); casillas en el Studio; plano rural sin óvalo duplicado del AGEB propio |
+| **1.12.87** | Diagnóstico de la vista previa (`render_diagnostics.py`, encabezado `X-GroSIG-Render-Report`): calles con nombre y ampliación del recuadro en el Studio; logs de P15 en INFO |
+| **1.12.87** (UI) | `GET /api/cartography/preview-territory` (municipios `mgn.municipios_a` / localidades `marco.l` con ámbito). Studio: combos Municipio/Localidad en el Preview, filtrados por ámbito de la plantilla. Visor: combo Ámbito y lote «Generar todas las localidades» (carpeta o ZIP) |
+
+Solo `plano_localidad_rural` trae v2 + recuadro de fábrica; los demás productos no cambian. Detalle y contrato: `TEMPLATE_SCHEMA_V1.md` §P14–P15.
 
 ---
 
@@ -556,6 +591,7 @@ PLR y PLU overview **no** cambiaron su formato de calle ni tipografía fina.
 3. SIL tipificado / glifos SIP.
 4. Croquis municipal (handoff propio) y condensado (handoff [`CONTEXT_CONDENSADO_ESTATAL.md`](./CONTEXT_CONDENSADO_ESTATAL.md); paridad visual por bloques).
 5. Logos PNG con fondo transparente si aún hay fondos opacos.
+6. `GET /api/municipios` (BD CORE, `c_mun`) respondió HTTP 500 en este equipo (sep 2026). El Studio ya no depende de él (usa `preview-territory`), pero conviene revisar el log por si otras vistas del Visor lo usan.
 
 ---
 
@@ -567,6 +603,7 @@ PLR y PLU overview **no** cambiaron su formato de calle ni tipografía fina.
 4. Docker: preferir `build` y `up -d` en pasos separados si falla la cadena.
 5. Cambios de tipografía/formato vialidad en **multipágina** no deben tocar PLR ni PLU 1 hoja.
 6. Calles sin etiqueta en MP ≈ `nomvial = NINGUNO` en marco (sin nombre oficial INEGI).
+7. Motor de etiquetas v2 y recuadro de ampliación son **opt-in por plantilla**; desmarcarlos en el Studio devuelve exactamente la salida anterior.
 
 ---
 

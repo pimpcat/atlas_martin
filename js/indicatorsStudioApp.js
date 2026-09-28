@@ -2354,4 +2354,16 @@ async function main() {
   }
 }
 
-main();
+/** Shell v2 — enlazar UI tras montar panel en #gs2StudioMount */
+export function bindIndicatorsStudioUi() {
+  bindForm();
+}
+
+/** Shell v2 — cargar meta y catálogo */
+export function enterIndicatorsStudioDashboard() {
+  return loadMetaAndCatalog();
+}
+
+if (document.getElementById("indStudioLoginForm")) {
+  main();
+}

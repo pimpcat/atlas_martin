@@ -18,10 +18,13 @@ import { trackEvent } from "./telemetry.js";
 import { getActiveCveEnt } from "./amigoDeployment.js";
 import {
   loadVisorCatalog,
+  getVisorCatalog,
   getVisorCatalogGroups,
   getOrderedVisorLayerEntries,
   resetVisorCatalogCache,
 } from "./visorCatalog.js";
+import { initDenueLayersFromCatalog } from "./denueLayers.js";
+import { refreshDenueOverlayLabelsFromCatalog } from "./map.js";
 import { resolveVisorLayerBinding } from "./visorLayerBindings.js";
 import { registerVisorCatalogIdentify } from "./visorIdentifyCatalog.js";
 import { initVisorStyleFromCatalog } from "./visorStyleRegistry.js";
@@ -45,6 +48,8 @@ import { ensureVisorSearchConfig } from "./visorSearchCatalog.js";
 /** @type {VisorLayerDef[]} */
 let _visorLayerDefs = [];
 let _catalogReady = false;
+/** @type {string|null} */
+let _catalogEnt = null;
 
 function checkboxIdFromLayerId(layerId, entry) {
   if (entry.checkbox_id) return entry.checkbox_id;
@@ -84,8 +89,16 @@ function buildDefsFromCatalog() {
  * @returns {Promise<VisorLayerDef[]>}
  */
 export async function ensureVisorLayerCatalog() {
-  if (_catalogReady && _visorLayerDefs.length) return _visorLayerDefs;
+  const ent = getActiveCveEnt();
+  if (_catalogReady && _catalogEnt === ent && _visorLayerDefs.length) return _visorLayerDefs;
+  if (_catalogReady && _catalogEnt !== ent) {
+    _catalogReady = false;
+    _visorLayerDefs = [];
+    resetVisorCatalogCache();
+  }
   await loadVisorCatalog();
+  initDenueLayersFromCatalog(getVisorCatalog());
+  refreshDenueOverlayLabelsFromCatalog();
   await initVisorStyleFromCatalog();
   initVisorLabelsFromCatalog();
   initVisorExportFromCatalog();
@@ -95,6 +108,7 @@ export async function ensureVisorLayerCatalog() {
   registerVisorCatalogIdentify();
   const liveMap = getLeafletMap();
   if (liveMap?.isStyleLoaded?.()) bindAtlasOverlayTips(liveMap);
+  _catalogEnt = ent;
   _catalogReady = true;
   return _visorLayerDefs;
 }
@@ -399,6 +413,7 @@ export function preloadVisorLayerCatalog() {
 /** Recarga catálogo y reinicializa estilos (publicación admin). */
 export async function reloadVisorLayerCatalog() {
   _catalogReady = false;
+  _catalogEnt = null;
   _visorLayerDefs = [];
   resetVisorCatalogCache();
   const { initVisorStyleFromCatalog } = await import("./visorStyleRegistry.js");
@@ -415,6 +430,7 @@ export async function reloadVisorLayerCatalog() {
   }
   _visorLayerDefs = buildDefsFromCatalog();
   registerVisorCatalogIdentify();
+  _catalogEnt = getActiveCveEnt();
   _catalogReady = true;
   try {
     const { resetVisorSearchConfig } = await import("./visorSearchCatalog.js");

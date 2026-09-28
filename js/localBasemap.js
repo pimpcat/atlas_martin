@@ -5,6 +5,7 @@
 
 import { martinTileJson, martinTileUrl, MARTIN_BASE } from "./atlasConfig.js";
 import { MAPLIBRE_GLYPHS_URL } from "./martinLayerStyle.js";
+import { OFFLINE_MODE } from "./offlineMode.js";
 
 export const LOCAL_MBTILES_ID = "mexico";
 const OMT_SOURCE_ID = "openmaptiles";
@@ -180,7 +181,7 @@ async function configureBasemapSpriteAndGlyphs(map) {
     map.setGlyphs(glyphsUrl);
   }
 
-  if (_basemapUseLocalFonts) {
+  if (_basemapUseLocalFonts && !OFFLINE_MODE) {
     const onGlyphError = (event) => {
       const url = String(event?.error?.url || event?.url || "");
       if (!url.includes("/basemap/fonts/")) return;

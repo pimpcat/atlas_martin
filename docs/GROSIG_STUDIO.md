@@ -4,40 +4,53 @@ Punto de entrada único para administración del framework.
 
 | Campo | Valor |
 |-------|--------|
-| URL | `/atlas_gro/grosig-studio.html` |
-| Auth | JWT admin (`visorAdminAuth.js`, misma sesión que el resto de Studios) |
-| Nav | `js/studioNav.js` (compartida) |
+| URL canónica (v2) | `/atlas_gro/grosig-studio.html` → redirect a `grosig-studio-v2.html` si `GROSIG_STUDIO_UI=v2` |
+| URL shell v2 | `/atlas_gro/grosig-studio-v2.html` |
+| Auth | JWT admin (`visorAdminAuth.js`, misma sesión en v2 y legacy) |
+| Nav v2 | Menú lateral (`studio-v2/js/shell/navigation.js`) |
+| Nav legacy | `js/studioNav.js` (hub tarjetas + barra compartida) |
 
-## Qué incluye el hub
+## GroSIG Studio 2 (recomendado)
 
-Tarjetas hacia:
+Con cutover Fase D, el shell **v2** unifica módulos en sidebar:
 
-- **Visor Studio** — capas, simbología, usuarios
-- **Geography Studio** — pestañas Datos Geográficos
-- **INV Studio** — Inventario de Viviendas (secciones / campos `c_inv`)
-- **Explorer Studio** — colores/grosores del Explorador Municipal
-- **Indicators Studio** — catálogo de indicadores
-- **Theme Studio** — colores claro/oscuro
-- **Data Refresh Studio** — ETL espacial (SHP/ZIP)
-- **Cartography Studio** — branding de tiras (logo, institución, advertencias, fechas); solo si `GET /api/cartography/health` indica Engine vivo. La generación de PDF/SVG sigue en el panel Cartografía del Visor
-- **Generar cartografía** — atajo a `index.html?visor=1` (Visor; Generate solo con JWT)
-- **Atlas** — portal **público** (`index.html`). **No** eleva a Capas admin ni Cartografía. Para eso: Visor Studio → **Abrir visor**
-- **Usuarios** — atajo a Visor Studio
+| Grupo | Módulos |
+|-------|---------|
+| Contenido | Resumen, Visor geográfico, Datos geográficos, Indicadores, INV, Explorador municipal |
+| Diseño | Cartografía, Tema |
+| Operaciones | Actualización de datos, Studio Respaldo, Atlas (portal) |
+| Administración | **Usuarios y roles**, Instancias (Nodo) |
 
-Bloque de estado: health Atlas API, Geography Context, **Cartography Engine** vía el contrato Core `GET /api/cartography/health` (mismo sondeo que el Visor; ver [`cartographyHealth.js`](../js/cartographyHealth.js)).
+- **Visor geográfico** — catálogo de capas (Publicar / Gestionar inline) + enlace al mapa admin.  
+- **Usuarios y roles** — cuentas admin y Mi contraseña (ya no en Visor geográfico).  
+- **Mapa** (`index.html?visor=1`) — iconos + / engranaje en panel Capas (mismo asistente, modal).
+
+Variables: `GROSIG_STUDIO_UI`, `GROSIG_NODO_STUDIO_UI` en `.env`. Doc: `docs/GroSIG_Studio_2_Fase_D_Cierre_y_Cutover.md`.
+
+## Hub legacy (contingencia)
+
+Si `GROSIG_STUDIO_UI=legacy` o `?ui=legacy`, tarjetas hacia `*-studio.html`:
+
+- Visor Studio — capas, simbología *(usuarios solo en legacy o v2 Administración)*  
+- Geography, INV, Explorer, Indicators, Theme, Data Refresh, Cartography, Backup  
+- **Generar cartografía** — atajo a `index.html?visor=1`  
+- **Atlas** — portal público (`index.html`)
+
+Bloque de estado (legacy hub): health Atlas API, Geography Context, Cartography Engine (`GET /api/cartography/health`).
 
 ## Norma canónica — Atlas vs Abrir visor (1.0)
 
 | Acción | Efecto |
 |--------|--------|
-| Nav **Atlas** / tarjeta Atlas | Vista ciudadana. Login en Studios no cambia esta página. |
-| **Abrir visor** (Visor Studio) o tarjeta Generar cartografía | `?visor=1` → Visor geográfico; con JWT → Capas admin + Generate |
+| Nav **Atlas (portal)** / tarjeta Atlas | Vista ciudadana. Login en Studios no cambia esta página. |
+| **Abrir visor en el mapa** (Visor geográfico v2 o legacy) | `?visor=1` → Visor geográfico; con JWT → Capas admin + Generate |
 
 Congelado 2026-08-12 (endurecimiento Internet S1). No mezclar portal público con herramientas de dependencia.
 
 ## Navegación
 
-Todos los Studios montan `mountStudioNav(..., { active })` para no depender de URLs sueltas.
+- **v2:** router `?view=…` en `#grosig-workspace` (`workspaceRouter.js`).  
+- **legacy:** `mountStudioNav(..., { active })` en cada `*-studio.html`.
 
 ## Relacionado
 
@@ -45,4 +58,4 @@ Todos los Studios montan `mountStudioNav(..., { active })` para no depender de U
 - [GEOGRAPHY_CONTEXT.md](./GEOGRAPHY_CONTEXT.md)
 - [INV_ENGINE.md](./INV_ENGINE.md)
 - [EXPLORER_STUDIO.md](./EXPLORER_STUDIO.md)
-- Manual del Administrador § acceso a Studios
+- [Manual del Administrador](../../docs/manuales/MANUAL_ADMINISTRADOR_GroSIG.md) § acceso a Studios

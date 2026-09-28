@@ -2,12 +2,18 @@
  * Vista estatal del Visor geográfico — alterna el filtro CVE_MUN del municipio seleccionado.
  */
 import { getVisorStateWideMode, setVisorStateWideMode } from "./map.js";
+import { getEntidadNombre, onAmigoTerritoryChange } from "./amigoDeployment.js";
 import { refreshVisorMapUi } from "./visorMapUi.js";
 import { refreshVisorGeocoder } from "./visorGeocoder.js";
 import { scheduleVisorCompareSync } from "./visorMapCompare.js";
 import { ensureVisorLayersHeaderToolbar } from "./visorLayersToolbar.js";
 
 let _toggleBtn = null;
+let _territoryUnsub = null;
+
+function stateWideEntityLabel() {
+  return getEntidadNombre() || "la entidad activa";
+}
 
 const STATE_WIDE_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
   <path d="M3 7.2 9 4.6l6 2.4 6-2.4v9.6L15 19.4l-6-2.4L3 14.6V7.2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
@@ -25,7 +31,9 @@ function syncToggleUi() {
     : "Visor estatal";
   _toggleBtn.setAttribute(
     "aria-label",
-    on ? "Desactivar vista estatal y volver al municipio" : "Activar vista estatal de Guerrero",
+    on
+      ? "Desactivar vista estatal y volver al municipio"
+      : `Activar vista estatal de ${stateWideEntityLabel()}`,
   );
 }
 
@@ -57,6 +65,7 @@ function ensureToggleButton() {
     btn.addEventListener("click", onToggleClick);
     toolbar.insertBefore(btn, toolbar.firstChild);
     document.addEventListener("atlasgro-visor-statewide-change", onStateWideChange);
+    _territoryUnsub = onAmigoTerritoryChange(syncToggleUi);
   }
   _toggleBtn = btn;
   syncToggleUi();
@@ -73,6 +82,8 @@ export function attachVisorStateWide() {
 
 export function teardownVisorStateWide() {
   document.removeEventListener("atlasgro-visor-statewide-change", onStateWideChange);
+  _territoryUnsub?.();
+  _territoryUnsub = null;
   _toggleBtn?.remove();
   _toggleBtn = null;
   if (getVisorStateWideMode()) {

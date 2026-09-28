@@ -49,6 +49,7 @@ let _lastLayerId = null;
 let _lastPoint = null;
 let _lastPrimary = null;
 let _prefetchGen = 0;
+let _lastGeomIsFull = false;
 
 export function setVisorMapIdentifyActive(fn) {
   setOverlayIdentifyActive(fn);
@@ -92,6 +93,7 @@ function resetIdentifySelection() {
   _lastLayerId = null;
   _lastPoint = null;
   _lastPrimary = null;
+  _lastGeomIsFull = false;
 }
 
 function rebuildIdentifyPanelHtml() {
@@ -121,6 +123,7 @@ function refreshIdentifyPanelContent() {
   if (content) content.innerHTML = html;
 }
 
+/** Precarga geometría PostGIS para el zoom; no pinta resaltado. */
 function prefetchLastFeatureGeometry() {
   const map = _mapRef || getLeafletMap();
   if (!map || !_lastFeature) return;
@@ -135,6 +138,7 @@ function prefetchLastFeatureGeometry() {
       properties: { ...(_lastFeature.properties || {}), ...(full.properties || {}) },
       geometry: full.geometry || _lastFeature.geometry,
     };
+    if (full.geometry) _lastGeomIsFull = true;
     refreshIdentifyPanelContent();
   });
 }
@@ -188,19 +192,27 @@ function applyIdentifyHighlight() {
   const map = _mapRef || getLeafletMap();
   if (!map || !_lastFeature) return;
 
-  showIdentifyHighlight(map, _lastFeature, _lastLayerId, _lastPoint, (full) => {
-    if (!_lastFeature) return;
-    _lastFeature = {
-      type: "Feature",
-      properties: { ...(_lastFeature.properties || {}), ...(full.properties || {}) },
-      geometry: full.geometry || _lastFeature.geometry,
-    };
-  });
+  showIdentifyHighlight(
+    map,
+    _lastFeature,
+    _lastLayerId,
+    _lastPoint,
+    (full) => {
+      if (!_lastFeature) return;
+      _lastFeature = {
+        type: "Feature",
+        properties: { ...(_lastFeature.properties || {}), ...(full.properties || {}) },
+        geometry: full.geometry || _lastFeature.geometry,
+      };
+      if (full.geometry) _lastGeomIsFull = true;
+    },
+    { allowFeatureGeom: _lastGeomIsFull },
+  );
 }
 
 function zoomToLastFeature() {
   const map = _mapRef || getLeafletMap();
-  if (!map) return;
+  if (!map || !_lastFeature) return;
 
   const feature = _lastFeature;
   const lngLat = _lastLngLat;
@@ -256,6 +268,7 @@ function onFeatureIdentifyClick(map, lngLat, html, feature, meta = {}) {
 
   _mapRef = map;
   _prefetchGen += 1;
+  _lastGeomIsFull = false;
   clearIdentifyHighlight(map);
   warmIdentifyHighlightLayers(map);
 
@@ -275,12 +288,20 @@ function onFeatureIdentifyClick(map, lngLat, html, feature, meta = {}) {
   const catalogId = resolveVisorApiLayerId(
     normalizeIdentifyPrimary(_lastPrimary || _lastLayerId || ""),
   );
-  const gid = pickVisorFeatureGid(feature?.properties);
-  if (!catalogId || !gid) return;
+  const gid = pickVisorFeatureGid(feature?.properties, feature, _lastLayerId);
+  if (!catalogId) return;
 
-  void fetchVisorFeatureGeometry({ layer_id: catalogId, gid })
+  void fetchVisorFeatureGeometry({
+    layer_id: catalogId,
+    gid,
+    attrs: feature?.properties,
+    lon: lngLat?.lng,
+    lat: lngLat?.lat,
+  })
     .then(({ feature: full }) => {
-      if (!_lastFeature || gid !== pickVisorFeatureGid(_lastFeature.properties)) return;
+      if (!_lastFeature) return;
+      const lastGid = pickVisorFeatureGid(_lastFeature.properties, _lastFeature, _lastLayerId);
+      if (gid && lastGid && String(gid) !== String(lastGid)) return;
       if (full?.properties && Object.keys(full.properties).length) {
         _lastFeature = {
           type: "Feature",

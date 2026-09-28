@@ -18,7 +18,8 @@
     /* Tema antes del paint: evita flash claro/oscuro (persistido en localStorage). */
     (function () {
       var k = "atlasgro-theme";
-      var d = "claro";
+      var d = localStorage.getItem("atlasgro-theme-default");
+      if (d !== "oscuro" && d !== "claro") d = "claro";
       var t = localStorage.getItem(k);
       if (t !== "oscuro" && t !== "claro") t = d;
       document.documentElement.setAttribute("data-theme", t);
@@ -32,12 +33,18 @@
   <link rel="shortcut icon" href="./icon.png" type="image/png" />
   <link rel="apple-touch-icon" href="./icon.png" />
 
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link
-    href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap"
-    rel="stylesheet"
-  />
+  <script src="./js/deployConfig.js"></script>
+  <script>
+    /* Offline: Source Sans 3 local (tools/offline/fetch_offline_assets.py); online: Google Fonts. */
+    (function () {
+      var l = document.createElement("link");
+      l.rel = "stylesheet";
+      l.href = window.GROSIG_OFFLINE
+        ? "./fonts/source-sans-3/source-sans-3.css"
+        : "https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,600;0,700;1,400&display=swap";
+      document.head.appendChild(l);
+    })();
+  </script>
 
   <!-- Bootstrap (local) -->
   <link rel="stylesheet" href="./css/bootstrap/bootstrap.min.css" />
@@ -49,9 +56,9 @@
   <link rel="stylesheet" href="./css/maplibre-gl-geocoder.css" />
   <link rel="stylesheet" href="./css/maplibre-gl-export.css" />
 
-  <link rel="stylesheet" href="./css/layout.css" />
-  <link rel="stylesheet" href="./css/main.css" />
-  <link rel="stylesheet" href="./css/home.css" />
+  <link rel="stylesheet" href="./css/layout.css?v=20260928a" />
+  <link rel="stylesheet" href="./css/main.css?v=20260928a" />
+  <link rel="stylesheet" href="./css/home.css?v=20260925b" />
   <link rel="stylesheet" href="./css/responsive-layout.css" />
   <link rel="stylesheet" href="./css/viewport-fit.css" />
 </head>
@@ -207,6 +214,9 @@
             </section>
 
             <aside id="homeRightPanel" class="home-aside-zone" aria-label="Resumen del municipio">
+              <div id="homeBanner" class="home-banner" hidden>
+                <a class="home-banner__link" target="_blank" rel="noopener noreferrer"><img class="home-banner__img" alt="" /></a>
+              </div>
               <section class="home-panel home-panel--mun" aria-labelledby="homePanelMunTitle">
                 <div id="homePanelMunTitle" class="home-panel__title">Municipio seleccionado</div>
                 <div id="homeMunEmpty" class="home-mun-empty small text-muted">
@@ -699,6 +709,6 @@
     });
   </script>
   <!-- Punto de entrada: orquestador SPA (menú, mapa, indicadores, exportaciones) -->
-  <script type="module" src="./js/app.js"></script>
+  <script type="module" src="./js/app.js?v=20260902c"></script>
 </body>
 </html>

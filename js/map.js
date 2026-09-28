@@ -4,6 +4,7 @@
  */
 
 import { martinTileJson, martinTileUrl, apiUrl } from "./atlasConfig.js";
+import { OFFLINE_MODE, ONLINE_ONLY_BASEMAPS } from "./offlineMode.js";
 import {
   loadExplorerCatalog,
   getExplorerStyleCached,
@@ -78,6 +79,7 @@ import {
   isNationalMode,
   onAmigoTerritoryChange,
   fetchExplorerHomeBounds,
+  fetchEntidadBounds,
   GRO_FALLBACK_BOUNDS,
   MX_FALLBACK_BOUNDS,
 } from "./amigoDeployment.js";
@@ -103,6 +105,7 @@ import {
   registerCatalogPolygonLabelCtx,
   scheduleCatalogPolygonLabelsSync,
 } from "./mapCatalogPolygonLabels.js";
+import { getVisorLayerEntry } from "./visorCatalog.js";
 import { locsPuntoLayerUsesLegacyCircle } from "./mapLocsPuntoIcons.js";
 import { cluesLayerUsesLegacyCircle } from "./mapCluesIcons.js";
 import {
@@ -236,18 +239,29 @@ const OVERLAY_LABEL_BY_KEY = {
     paint: CLUES_LABEL_PAINT,
     paintClaro: CLUES_LABEL_PAINT_CLARO,
   },
-  ...buildDenueOverlayLabelByKey(),
 };
+
+/** Etiquetas DENUE (runtime catalog) — cache tras initDenueLayersFromCatalog. */
+let _denueOverlayLabelByKey = {};
 
 /** Etiquetas declaradas en catalog.json (visorLabelRegistry). */
 let _visorCatalogLabelByKey = {};
 
 function getOverlayLabelDef(overlayKey) {
+  if (isDenueOverlayKey(overlayKey)) {
+    return _denueOverlayLabelByKey[overlayKey] || buildDenueOverlayLabelByKey()[overlayKey] || null;
+  }
   return OVERLAY_LABEL_BY_KEY[overlayKey] || _visorCatalogLabelByKey[overlayKey] || null;
 }
 
+/** Llamar tras initDenueLayersFromCatalog (visorLayers). */
+export function refreshDenueOverlayLabelsFromCatalog() {
+  _denueOverlayLabelByKey = buildDenueOverlayLabelByKey();
+}
+
 export function hasBuiltinOverlayLabel(overlayKey) {
-  return Boolean(OVERLAY_LABEL_BY_KEY[overlayKey]);
+  if (OVERLAY_LABEL_BY_KEY[overlayKey]) return true;
+  return Object.values(VISOR_ONLY_LABEL_SPECS).some((spec) => spec.overlayKey === overlayKey);
 }
 
 export function hasOverlayLabelDef(overlayKey) {
@@ -397,6 +411,24 @@ function visorOnlyLabelPaintForTheme(spec) {
   return readDocumentTheme() === "claro" ? spec.paintClaro || spec.paint : spec.paint;
 }
 
+function visorOnlyCentroidCatalogId(layerKey, spec) {
+  const catalogId = spec?.centroidLayerId || layerKey;
+  const entry = getVisorLayerEntry(catalogId);
+  if (entry) {
+    if (String(entry.geometry || "").toLowerCase() !== "polygon") return null;
+    if (entry.labels && entry.labels.enabled === false) return null;
+    const src = String(entry.labels?.source || "centroid").toLowerCase();
+    return src === "centroid" ? catalogId : null;
+  }
+  return spec?.centroidLayerId || null;
+}
+
+function visorOnlyCentroidOverlayKey(layerKey, spec) {
+  const catalogId = visorOnlyCentroidCatalogId(layerKey, spec);
+  if (!catalogId) return spec?.overlayKey || null;
+  return spec?.overlayKey || getVisorLayerEntry(catalogId)?.overlay_key || null;
+}
+
 function applyVisorOnlyLabelSpec(map, layerKey) {
   const spec = VISOR_ONLY_LABEL_SPECS[layerKey];
   if (!spec || !map?.getLayer(spec.labelId)) return;
@@ -423,6 +455,27 @@ function ensureVisorOnlyLabelLayer(map, layerKey) {
   const spec = VISOR_ONLY_LABEL_SPECS[layerKey];
   if (!spec || !map) return;
   ensureMapGlyphs(map);
+  const centroidId = visorOnlyCentroidCatalogId(layerKey, spec);
+  const overlayKey = visorOnlyCentroidOverlayKey(layerKey, spec);
+  if (centroidId && overlayKey) {
+    const labelDef = {
+      minzoom: spec.minzoom,
+      layout: spec.layout,
+      paint: spec.paint,
+      paintClaro: spec.paintClaro,
+      source: "centroid",
+      layerId: centroidId,
+    };
+    ensureCatalogPolygonLabelLayer(
+      map,
+      overlayKey,
+      labelDef,
+      spec.labelId,
+      () => visorOnlyLabelPaintForTheme(spec),
+    );
+    applyVisorOnlyLabelSpec(map, layerKey);
+    return;
+  }
   addMartinSource(map, spec.sourceId, spec.table);
   if (map.getLayer(spec.labelId)) {
     applyVisorOnlyLabelSpec(map, layerKey);
@@ -442,7 +495,34 @@ function ensureVisorOnlyLabelLayer(map, layerKey) {
 
 function setVisorOnlyLabelVisible(map, layerKey, visible, cve) {
   const spec = VISOR_ONLY_LABEL_SPECS[layerKey];
-  if (!spec || !map?.getLayer(spec.labelId)) return;
+  if (!spec || !map) return;
+  const centroidId = visorOnlyCentroidCatalogId(layerKey, spec);
+  const overlayKey = visorOnlyCentroidOverlayKey(layerKey, spec);
+  if (centroidId && overlayKey) {
+    ensureVisorOnlyLabelLayer(map, layerKey);
+    if (!map.getLayer(spec.labelId)) return;
+    if (visible) {
+      registerCatalogPolygonLabelCtx(overlayKey, {
+        layerId: centroidId,
+        labelId: spec.labelId,
+        minzoom: spec.minzoom,
+        active: true,
+        stateWide: _visorStateWideMode,
+        focusCve: cve || _focusCve || "001",
+      });
+      scheduleCatalogPolygonLabelsSync(map, overlayKey);
+    } else {
+      registerCatalogPolygonLabelCtx(overlayKey, { active: false });
+      clearCatalogPolygonLabels(map, overlayKey);
+      try {
+        map.setLayoutProperty(spec.labelId, "visibility", "none");
+      } catch {
+        /* noop */
+      }
+    }
+    return;
+  }
+  if (!map.getLayer(spec.labelId)) return;
   const emptyFilter = ["literal", false];
   map.setLayoutProperty(spec.labelId, "visibility", visible ? "visible" : "none");
   if (visible && _visorStateWideMode) {
@@ -600,14 +680,15 @@ function ensureOverlayLabelLayer(map, def) {
 
   if (overlayUsesCluster(def)) {
     ensureClusterLooseLabelLayer(map, def, labelDef, overlayLabelPaintForTheme(labelDef));
-    const src = `src-${def.table}`;
-    addMartinSource(map, src, def.table);
+    const src = overlayMartinSourceId(def);
+    const martinTable = overlayMartinResource(def);
+    addMartinSource(map, src, martinTable);
     if (!map.getLayer(labelId)) {
       map.addLayer({
         id: labelId,
         type: "symbol",
         source: src,
-        "source-layer": martinSourceLayer(def.table),
+        "source-layer": martinSourceLayer(martinTable),
         minzoom: mapLibreLayoutMinzoom(
           Math.max(labelDef.minzoom ?? 0, resolveClusterHandoffZoom(def)),
         ),
@@ -642,8 +723,9 @@ function ensureOverlayLabelLayer(map, def) {
     }
     return;
   }
-  const src = `src-${def.table}`;
-  addMartinSource(map, src, def.table);
+  const src = overlayMartinSourceId(def);
+  const martinTable = overlayMartinResource(def);
+  addMartinSource(map, src, martinTable);
   if (map.getLayer(labelId)) {
     if (active) applyOverlayLabelSpec(map, def.key);
     return;
@@ -652,7 +734,7 @@ function ensureOverlayLabelLayer(map, def) {
     id: labelId,
     type: "symbol",
     source: src,
-    "source-layer": martinSourceLayer(def.table),
+    "source-layer": martinSourceLayer(martinTable),
     minzoom: mapLibreLayoutMinzoom(labelDef.minzoom ?? 0),
     filter: munFilter("001"),
     layout: { ...labelDef.layout, visibility: "none" },
@@ -762,13 +844,20 @@ function applyVisorStateWideRenderQuality(map) {
 
 let _visorStateWideFitGen = 0;
 
-/** Encuadra Guerrero al activar vista estatal (misma lógica que refitHomeMapView). */
-function refitVisorStateWideView(map) {
+/** Encuadra la entidad activa al activar vista estatal (misma lógica que refitHomeMapView). */
+async function refitVisorStateWideView(map) {
   if (!map || !_visorStateWideMode) return;
   const gen = ++_visorStateWideFitGen;
   clearMapViewConstraints();
   map.resize();
-  map.fitBounds(MXSIG_BOUNDS, {
+  let bounds = MXSIG_BOUNDS;
+  try {
+    bounds = (await fetchEntidadBounds(getActiveCveEnt())) || MXSIG_BOUNDS;
+  } catch {
+    bounds = getActiveCveEnt() === "12" ? GRO_FALLBACK_BOUNDS : MX_FALLBACK_BOUNDS;
+  }
+  if (gen !== _visorStateWideFitGen || !_visorStateWideMode) return;
+  map.fitBounds(bounds, {
     padding: HOME_MAP_FIT_PADDING,
     maxZoom: 8,
     duration: 900,
@@ -879,7 +968,11 @@ export const VISOR_BASEMAP_CHOICES = [
   { key: "inegi", label: "Mapa base INEGI", short: "INEGI" },
   { key: "sat", label: "Imagen satelital Esri", short: "Satélite" },
   { key: "local", label: "Mapa base local (MBTiles)", short: "Local" },
-];
+].map((c) =>
+  OFFLINE_MODE && ONLINE_ONLY_BASEMAPS.has(c.key)
+    ? { ...c, label: `${c.label} (requiere internet)` }
+    : c,
+);
 
 function normalizeBaseKind(kind) {
   return kind === "sat" || kind === "inegi" || kind === "local" ? kind : "osm";
@@ -953,7 +1046,7 @@ function isOutlineOnlyProfile(profile) {
 
 let _map = null;
 let _maplibregl = null;
-let _activeBase = "osm";
+let _activeBase = OFFLINE_MODE ? "local" : "osm";
 let _homeMode = false;
 let _geoViewLock = false;
 let _homeHighlightCve = null;
@@ -1061,7 +1154,7 @@ function removeOverlayMapLayersForKey(map, overlayKey) {
     }
   }
   if (def && !overlayUsesCluster(def)) {
-    const srcId = `src-${def.table}`;
+    const srcId = overlayMartinSourceId(def);
     try {
       if (map.getSource(srcId)) map.removeSource(srcId);
     } catch {
@@ -1173,8 +1266,8 @@ const VISOR_ONLY_LABEL_SPECS = {
   },
   hidro_cuerpos: {
     labelId: "ly-hcuerpos-visor-labels",
-    sourceId: "src-hcuerpos",
-    table: MARTIN_TABLES.hcuerpos,
+    overlayKey: "hcuerpos",
+    centroidLayerId: "hidro_cuerpos",
     minzoom: HCUERPOS_LABEL_MIN_ZOOM,
     layout: HCUERPOS_LABEL_LAYOUT,
     paint: HCUERPOS_LABEL_PAINT,
@@ -1200,7 +1293,13 @@ function pad2(cve) {
 }
 
 function activeEntPad() {
-  return pad2(getActiveCveEnt() || "12");
+  const active = getActiveCveEnt();
+  return active ? pad2(active) : "";
+}
+
+function geoMacroFallbackBounds(cve_ent) {
+  const ent = pad2(cve_ent || activeEntPad());
+  return ent === "12" ? GRO_FALLBACK_BOUNDS : MX_FALLBACK_BOUNDS;
 }
 
 /** Filtro MapLibre: features de la entidad activa (capa nacional amigo_c_*). */
@@ -1229,6 +1328,10 @@ function munFilterExpr(cve) {
     str,
   ];
   const entStr = ["to-string", ["coalesce", ["get", "cve_ent"], ["get", "CVE_ENT"], ent]];
+  const cvegeoStr = [
+    "to-string",
+    ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ["get", "cve_geo"], ""],
+  ];
   return [
     "any",
     ["==", str, p],
@@ -1236,8 +1339,36 @@ function munFilterExpr(cve) {
     ["==", munPad, p],
     ["==", ["to-number", ["coalesce", raw, "-1"]], nNum],
     ["==", ["concat", entStr, munPad], cvegeo5],
-    ["==", ["to-string", ["coalesce", ["get", "cvegeo"], ["get", "CVEGEO"], ""]], cvegeo5],
+    ["==", cvegeoStr, cvegeo5],
+    ["==", ["slice", cvegeoStr, 0, 5], cvegeo5],
   ];
+}
+
+/** Filtro municipal solo por cve_mun (tablas sin cvegeo: DENUE, CLUES). */
+function munFilterCveMunOnlyExpr(cve) {
+  const p = pad3(cve || "001");
+  const n = String(parseInt(p, 10));
+  const nNum = parseInt(p, 10);
+  const raw = ["coalesce", ["get", "cve_mun"], ["get", "CVE_MUN"]];
+  const str = ["to-string", ["coalesce", raw, ""]];
+  const munPad = [
+    "concat",
+    ["slice", "000", 0, ["max", 0, ["-", 3, ["length", str]]]],
+    str,
+  ];
+  return [
+    "any",
+    ["==", str, p],
+    ["==", str, n],
+    ["==", munPad, p],
+    ["==", ["to-number", ["coalesce", raw, "-1"]], nNum],
+  ];
+}
+
+function overlayMunFilterExpr(def, cve) {
+  if (def?.skipMunFilter) return null;
+  if (def?.munFilterCvegeo === false) return munFilterCveMunOnlyExpr(cve);
+  return munFilterExpr(cve);
 }
 
 function munFilter(cve) {
@@ -1298,12 +1429,22 @@ function resolveVisorOverlayCve(explicitCve) {
 
 function overlayMapFilterParts(def, cve) {
   const parts = [];
-  if (!_visorStateWideMode && cve && !def?.skipMunFilter) parts.push(munFilter(cve));
-  if (def?.codigoAct?.length) parts.push(codigoActFilter(def.codigoAct));
-  if (def?.attributeFilter?.field && def?.attributeFilter?.values?.length) {
-    parts.push(fieldValueMatchFilter(def.attributeFilter.field, def.attributeFilter.values));
+  const munF = overlayMunFilterExpr(def, cve);
+  if (!_visorStateWideMode && cve && munF) parts.push(munF);
+  // filtered: el WHERE ya va en la vista tiles.<published_id>; no filtrar SCIAN otra vez
+  if (def?.tileStrategy !== "filtered") {
+    if (def?.codigoAct?.length) parts.push(codigoActFilter(def.codigoAct));
+    if (def?.attributeFilter?.field && def?.attributeFilter?.values?.length) {
+      parts.push(fieldValueMatchFilter(def.attributeFilter.field, def.attributeFilter.values));
+    }
   }
   return parts;
+}
+
+function overlayInitialMapFilter(def, cve) {
+  const parts = overlayMapFilterParts(def, cve);
+  if (!parts.length) return undefined;
+  return parts.length === 1 ? parts[0] : ["all", ...parts];
 }
 
 function applyOverlayLayerMunFilter(map, layerId, visible, cve) {
@@ -1333,13 +1474,15 @@ function applyOverlayLayerMunFilter(map, layerId, visible, cve) {
       if (_visorStateWideMode) {
         map.setFilter(layerId, null);
       } else if (cve) {
-        map.setFilter(layerId, munFilter(cve));
+        const munF = overlayMunFilterExpr(def, cve) ?? munFilter(cve);
+        map.setFilter(layerId, munF);
       }
       return;
     }
     if (tierSuffix != null) {
       const parts = [];
-      if (!_visorStateWideMode && cve) parts.push(munFilter(cve));
+      const munF = overlayMunFilterExpr(def, cve);
+      if (!_visorStateWideMode && cve && munF) parts.push(munF);
       if (tierSuffix === "-estatal" || tierSuffix === "-troncal") {
         const tier = def.rncTiers?.find((t) => t.suffix === tierSuffix);
         if (tier?.filterValues?.length) {
@@ -1368,7 +1511,8 @@ function applyOverlayLayerMunFilter(map, layerId, visible, cve) {
     if (_visorStateWideMode) {
       map.setFilter(layerId, null);
     } else if (cve) {
-      map.setFilter(layerId, munFilter(cve));
+      const munF = overlayMunFilterExpr(defCodigo, cve) ?? munFilter(cve);
+      map.setFilter(layerId, munF);
     }
   } catch {
     /* noop */
@@ -1399,7 +1543,7 @@ function applyVisorStateWideChrome(map) {
     stackHomeLayers(map);
     applyVisorStateWideRenderQuality(map);
     scheduleVisorOverlayRestack(map);
-    refitVisorStateWideView(map);
+    void refitVisorStateWideView(map);
     return;
   }
   _visorStateWideFitGen += 1;
@@ -1623,8 +1767,9 @@ export function bindAtlasOverlayTips(map) {
 }
 
 function addMartinSource(map, id, table) {
+  if (!map.__atlasMartinTables) map.__atlasMartinTables = {};
+  map.__atlasMartinTables[id] = table;
   const tileUrl = martinTileUrl(table);
-  const sl = martinSourceLayer(table);
   const existing = map.getSource(id);
   if (existing) {
     try {
@@ -1640,8 +1785,32 @@ function addMartinSource(map, id, table) {
   map.addSource(id, {
     type: "vector",
     tiles: [tileUrl],
-    promoteId: { [sl]: "gid" },
   });
+}
+
+function remapMartinSourcesForTerritory(map) {
+  if (!map) return;
+  const reg = map.__atlasMartinTables || {};
+  for (const [id, table] of Object.entries(reg)) {
+    addMartinSource(map, id, table);
+  }
+  const layers = [...(map.getStyle()?.layers || [])];
+  for (let i = 0; i < layers.length; i += 1) {
+    const lyr = layers[i];
+    const table = reg[lyr.source];
+    if (!table) continue;
+    const want = martinSourceLayer(table);
+    if ((lyr["source-layer"] || "") === want) continue;
+    const beforeId = layers[i + 1]?.id;
+    try {
+      map.removeLayer(lyr.id);
+      const next = { ...lyr, "source-layer": want };
+      if (beforeId && map.getLayer(beforeId)) map.addLayer(next, beforeId);
+      else map.addLayer(next);
+    } catch (e) {
+      console.warn("martin source-layer remap:", lyr.id, e);
+    }
+  }
 }
 
 function flushStyleReadyQueue() {
@@ -1762,11 +1931,14 @@ function ensureBaseLayerControl(map) {
     return b;
   };
 
-  wrap.append(
+  const buttons = [
     mkBtn("OSM", "osm", "OpenStreetMap"),
     mkBtn("INEGI", "inegi", "Mapa base topográfico INEGI"),
     mkBtn("Satélite", "sat", "Imagen satelital Esri"),
     mkBtn("Local", "local", "Mapa base MBTiles local (OSM)"),
+  ];
+  wrap.append(
+    ...(OFFLINE_MODE ? buttons.filter((b) => !ONLINE_ONLY_BASEMAPS.has(b.dataset.base)) : buttons),
   );
   map.getContainer().appendChild(wrap);
   _baseLayerCtrl = wrap;
@@ -2740,6 +2912,9 @@ export function restackVisorOverlayLayersByGeometry(map) {
   void import("./visorMapIdentifyHighlight.js")
     .then(({ raiseIdentifyHighlightLayers }) => raiseIdentifyHighlightLayers(map))
     .catch(() => {});
+  void import("./visorFeaturePickBuffer.js")
+    .then(({ raisePickHighlightLayers }) => raisePickHighlightLayers(map))
+    .catch(() => {});
   return changed;
 }
 
@@ -2842,7 +3017,7 @@ function overlayUsesLegacyCircle(def, map) {
 function migrateCluesSourceTable(map, def) {
   if (def.key !== "clues") return;
   const layerId = "ly-clues";
-  const expectedSrc = `src-${def.table}`;
+  const expectedSrc = overlayMartinSourceId(def);
   const layer = map.getStyle()?.layers?.find((l) => l.id === layerId);
 
   if (layer && layer.source !== expectedSrc) {
@@ -2945,13 +3120,14 @@ function rebuildSymbolOverlayLayersOnMap(map) {
   for (const def of allOverlayDefs()) {
     if (overlayUsesCluster(def)) continue;
     if (!overlayNeedsIconBootstrap(def) || def.type !== "symbol") continue;
-    const src = `src-${def.table}`;
+    const src = overlayMartinSourceId(def);
+    const martinTable = overlayMartinResource(def);
     const layerId = `ly-${def.key}`;
     if (def.key === "clues") migrateCluesSourceTable(map, def);
-    addMartinSource(map, src, def.table);
+    addMartinSource(map, src, martinTable);
     const spec = {
       source: src,
-      "source-layer": martinSourceLayer(def.table),
+      "source-layer": martinSourceLayer(martinTable),
       filter: munFilter("001"),
     };
     if (def.minzoom != null) spec.minzoom = mapLibreLayoutMinzoom(def.minzoom);
@@ -2983,17 +3159,18 @@ function finishSymbolOverlayActivation(map, def, layerId, keyGenAtStart) {
 }
 
 function ensureTieredOverlayLayers(map, def) {
-  const src = `src-${def.table}`;
+  const martinTable = overlayMartinResource(def);
+  const src = overlayMartinSourceId(def);
   const layerId = `ly-${def.key}`;
   const estatalId = `${layerId}-estatal`;
   const troncalId = `${layerId}-troncal`;
   const warmId = `${layerId}-warm`;
   const troncalMin = def.rncZoom?.troncalMin ?? RNC_TRONCAL_MIN_ZOOM;
   const detailMin = def.rncZoom?.detailMin ?? RNC_DETAIL_MIN_ZOOM;
-  addMartinSource(map, src, def.table);
+  addMartinSource(map, src, martinTable);
   const baseSpec = {
     source: src,
-    "source-layer": martinSourceLayer(def.table),
+    "source-layer": martinSourceLayer(martinTable),
   };
   const lineLayout = { visibility: "none", ...LINE_LAYOUT_SMOOTH };
   const estatalSpec = {
@@ -3193,13 +3370,14 @@ function refreshActiveClusterOverlayData(map) {
 /** Capa MVT completa desde el zoom de entrega del cluster. */
 function ensureClusterMvtDetailLayer(map, def) {
   const layerId = `ly-${def.key}`;
-  const src = `src-${def.table}`;
+  const src = overlayMartinSourceId(def);
+  const martinTable = overlayMartinResource(def);
   removeClusterLegacyHitLayer(map, def);
   removeClusterLooseProbeLayer(map, def);
-  addMartinSource(map, src, def.table);
+  addMartinSource(map, src, martinTable);
   const spec = {
     source: src,
-    "source-layer": martinSourceLayer(def.table),
+    "source-layer": martinSourceLayer(martinTable),
     filter: munFilter("001"),
     minzoom: def.minzoom != null ? mapLibreLayoutMinzoom(def.minzoom) : 0,
   };
@@ -3265,8 +3443,18 @@ function ensureClusterMvtDetailLayer(map, def) {
   return layerId;
 }
 
+/** Recurso Martin/tiles (published_id si filtered; si no, tabla geo). */
+function overlayMartinResource(def) {
+  return String(def?.martinResource || def?.table || "").trim();
+}
+
+function overlayMartinSourceId(def) {
+  return `src-${overlayMartinResource(def)}`;
+}
+
 function ensureOverlayLayer(map, def) {
-  const src = `src-${def.table}`;
+  const martinTable = overlayMartinResource(def);
+  const src = overlayMartinSourceId(def);
   const layerId = `ly-${def.key}`;
   if (overlayUsesCluster(def)) {
     ensureMapGlyphs(map);
@@ -3300,7 +3488,7 @@ function ensureOverlayLayer(map, def) {
       /* capa aún no lista */
     }
   }
-  addMartinSource(map, src, def.table);
+  addMartinSource(map, src, martinTable);
   if (def.lineStack && map.getLayer(layerId) && !map.getLayer(`${layerId}-halo`)) {
     try {
       map.removeLayer(layerId);
@@ -3310,9 +3498,10 @@ function ensureOverlayLayer(map, def) {
   }
   const spec = {
     source: src,
-    "source-layer": martinSourceLayer(def.table),
-    filter: munFilter("001"),
+    "source-layer": martinSourceLayer(martinTable),
   };
+  const initialFilter = overlayInitialMapFilter(def, resolveVisorOverlayCve(_focusCve));
+  if (initialFilter !== undefined) spec.filter = initialFilter;
   if (def.minzoom != null) spec.minzoom = mapLibreLayoutMinzoom(def.minzoom);
   const lineLayout = { visibility: "none", ...LINE_LAYOUT_SMOOTH };
 
@@ -4762,15 +4951,21 @@ function waitMapLayoutReady() {
   });
 }
 
+function resolveHomeCveInput(cveInput) {
+  const raw = typeof cveInput === "function" ? cveInput() : cveInput;
+  return raw ? pad3(String(raw)) : null;
+}
+
 function finalizeHomeMapView(map, cve_mun) {
   if (!map || !_homeMode) return;
   applyHomeMapModeLayers(map, true);
-  if (cve_mun) applyHomeMunicipioHighlight(map, cve_mun);
-  else applyHomeMunicipioHighlight(map, null);
+  const cve = cve_mun ? pad3(cve_mun) : _homeHighlightCve || null;
+  applyHomeMunicipioHighlight(map, cve);
 }
 
 /** Explorador municipal: vista estatal + resaltado del municipio activo (un solo flujo). */
-export async function enterExploradorMapView(cve_mun) {
+/** @param {string|null|(() => string|null)} cveInput CVE al entrar o getter (se re-evalúa al finalizar). */
+export async function enterExploradorMapView(cveInput) {
   const gen = ++_homeEnterGen;
   invalidateMunicipioMapFocus();
   try {
@@ -4795,10 +4990,10 @@ export async function enterExploradorMapView(cve_mun) {
   await refitHomeMapView();
   if (gen !== _homeEnterGen || !_homeMode) return;
 
-  const cve = cve_mun ? pad3(cve_mun) : null;
-  finalizeHomeMapView(_map, cve);
+  const applyFinalize = () => finalizeHomeMapView(_map, resolveHomeCveInput(cveInput));
+  applyFinalize();
   _map.once("idle", () => {
-    if (gen === _homeEnterGen && _homeMode) finalizeHomeMapView(_map, cve);
+    if (gen === _homeEnterGen && _homeMode) applyFinalize();
   });
 }
 
@@ -4843,13 +5038,23 @@ export function syncExplorerTerritoryOnMap() {
     applyExplorerTerritoryFilters(map);
     if (_homeMode) {
       applyHomeMapModeLayers(map, true);
-      void refitHomeMapView();
+      void refitHomeMapView().then(() => {
+        if (_homeMode && _homeHighlightCve) applyHomeMunicipioHighlight(map, _homeHighlightCve);
+      });
     }
   });
 }
 
 onAmigoTerritoryChange(() => {
   syncExplorerTerritoryOnMap();
+  whenAtlasMapReady((map) => {
+    remapMartinSourcesForTerritory(map);
+    if (_visorStateWideMode) void refitVisorStateWideView(map);
+  });
+  if (_geoMacro?.map) {
+    applyGeoMacroTerritoryFilters(_geoMacro.map);
+    refitGeoMacroMap(_geoMacroPendingCve);
+  }
 });
 
 export async function refitHomeMapView() {
@@ -5226,6 +5431,7 @@ function syncGeoMacroBasemap(kind = _activeBase) {
     ensureBaseLayers(macroMap);
     void applyMapInstanceBaseLayer(macroMap, kind).then(() => {
       if (macroMap.isStyleLoaded()) stackGeoMacroLayers(macroMap);
+      applyGeoMacroTerritoryFilters(macroMap);
     });
   };
   if (macroMap.isStyleLoaded()) apply();
@@ -5249,7 +5455,7 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
   destroyGeoMacroMap();
   const map = new ml.Map(
     buildAtlasMapOptions(containerEl, {
-      bounds: MXSIG_BOUNDS,
+      bounds: geoMacroFallbackBounds(activeEntPad()),
       fitBoundsOptions: { padding: GEO_MACRO_FIT_PADDING, animate: false },
       interactive: false,
       attributionControl: true,
@@ -5260,11 +5466,14 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
     void applyMapInstanceBaseLayer(map, _activeBase);
     addMartinSource(map, "gm-mun", MARTIN_TABLES.municipios);
     addMartinSource(map, "gm-ent", MARTIN_TABLES.entidad);
+    const macroMunF = explorerMunTerritoryFilter();
+    const macroEntF = entFilterExpr(activeEntPad());
     map.addLayer({
       id: "gm-mun-fill",
       type: "fill",
       source: "gm-mun",
       "source-layer": SL_MUN(),
+      filter: macroMunF,
       paint: HOME_MUN_DISP_FILL_PAINT,
     });
     map.addLayer({
@@ -5272,6 +5481,7 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
       type: "line",
       source: "gm-mun",
       "source-layer": SL_MUN(),
+      filter: macroMunF,
       paint: HOME_MUN_DISP_LINE_HALO_PAINT,
       layout: LINE_LAYOUT_SMOOTH,
     });
@@ -5280,6 +5490,7 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
       type: "line",
       source: "gm-mun",
       "source-layer": SL_MUN(),
+      filter: macroMunF,
       paint: HOME_MUN_DISP_LINE_PAINT,
       layout: LINE_LAYOUT_SMOOTH,
     });
@@ -5288,6 +5499,7 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
       type: "fill",
       source: "gm-ent",
       "source-layer": SL_ENT(),
+      filter: macroEntF,
       paint: LAYER_PAINT.entFill,
     });
     map.addLayer({
@@ -5295,6 +5507,7 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
       type: "line",
       source: "gm-ent",
       "source-layer": SL_ENT(),
+      filter: macroEntF,
       paint: LAYER_PAINT.marcoEntLineCasing,
       layout: LINE_LAYOUT_SMOOTH,
     });
@@ -5303,6 +5516,7 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
       type: "line",
       source: "gm-ent",
       "source-layer": SL_ENT(),
+      filter: macroEntF,
       paint: LAYER_PAINT.marcoEntLineHalo,
       layout: LINE_LAYOUT_SMOOTH,
     });
@@ -5311,12 +5525,13 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
       type: "line",
       source: "gm-ent",
       "source-layer": SL_ENT(),
+      filter: macroEntF,
       paint: LAYER_PAINT.marcoEntLine,
       layout: LINE_LAYOUT_SMOOTH,
     });
     addMartinSource(map, "gm-mun-sel", MARTIN_TABLES.municipios);
     const hiCve = _geoMacroPendingCve || "001";
-    const hiFilter = munFilter(hiCve);
+    const hiFilter = _geoMacroPendingCve ? marcoMunFilter(hiCve) : ["literal", false];
     const hiVis = _geoMacroPendingCve ? "visible" : "none";
     map.addLayer({
       id: "gm-mun-hi-fill",
@@ -5347,6 +5562,7 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
     });
     applyGeoMacroVectorRenderQuality(map);
     map.once("idle", () => {
+      applyGeoMacroTerritoryFilters(map);
       stackGeoMacroLayers(map);
       refitGeoMacroMap();
     });
@@ -5357,6 +5573,34 @@ export function ensureGeoMacroMap(containerEl, cve_mun = null) {
 }
 
 const GEO_MACRO_HI_LAYERS = ["gm-mun-hi-fill", "gm-mun-hi-line-halo", "gm-mun-hi-line"];
+
+/** Solo simbología de la entidad activa (municipios + contorno estatal). */
+function applyGeoMacroTerritoryFilters(map) {
+  if (!map) return;
+  const entF = entFilterExpr(activeEntPad());
+  const munF = explorerMunTerritoryFilter();
+  for (const id of ["gm-mun-fill", "gm-mun-line-halo", "gm-mun-line"]) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.setFilter(id, munF);
+    } catch {
+      /* capa aún no lista */
+    }
+  }
+  for (const id of [
+    "gm-ent-fill",
+    "gm-ent-line-casing",
+    "gm-ent-line-halo",
+    "gm-ent-line",
+  ]) {
+    if (!map.getLayer(id)) continue;
+    try {
+      map.setFilter(id, entF);
+    } catch {
+      /* capa aún no lista */
+    }
+  }
+}
 
 function stackGeoMacroLayers(map) {
   const order = [
@@ -5384,8 +5628,9 @@ function applyGeoMacroHighlightNow() {
   if (!_geoMacro?.map) return;
   try {
     const map = _geoMacro.map;
+    applyGeoMacroTerritoryFilters(map);
     const cve = _geoMacroPendingCve;
-    const f = cve ? munFilter(cve) : ["literal", false];
+    const f = cve ? marcoMunFilter(cve) : ["literal", false];
     const vis = cve ? "visible" : "none";
     let ready = false;
     for (const id of GEO_MACRO_HI_LAYERS) {
@@ -5404,7 +5649,7 @@ function applyGeoMacroHighlightNow() {
   }
 }
 
-/** Mini-mapa estatal: encuadre a Guerrero + resaltado del municipio activo. */
+/** Mini-mapa estatal: encuadre a la entidad activa + resaltado del municipio activo. */
 export function refitGeoMacroMap(cve_mun) {
   if (!_geoMacro?.map) return;
   if (cve_mun != null && String(cve_mun).trim() !== "") {
@@ -5412,21 +5657,33 @@ export function refitGeoMacroMap(cve_mun) {
   }
   const gen = ++_geoMacroHiGen;
   const map = _geoMacro.map;
+  const ent = activeEntPad();
+  const entF = entFilterExpr(ent);
 
   const finishHighlight = () => {
     if (gen !== _geoMacroHiGen) return;
     applyGeoMacroHighlightNow();
   };
 
-  const run = () => {
+  const applyFit = (bounds) => {
     if (gen !== _geoMacroHiGen) return;
     try {
       map.resize();
-      fitMapToMartinSource(map, "gm-ent", SL_ENT(), {
-        padding: GEO_MACRO_FIT_PADDING,
-        duration: 0,
-        fallbackBounds: MXSIG_BOUNDS,
-      });
+      applyGeoMacroTerritoryFilters(map);
+      if (bounds) {
+        map.fitBounds(bounds, {
+          padding: GEO_MACRO_FIT_PADDING,
+          duration: 0,
+          animate: false,
+        });
+      } else {
+        fitMapToMartinSource(map, "gm-ent", SL_ENT(), {
+          padding: GEO_MACRO_FIT_PADDING,
+          duration: 0,
+          fallbackBounds: geoMacroFallbackBounds(ent),
+          filter: entF,
+        });
+      }
       const z = map.getZoom();
       if (Number.isFinite(z)) {
         map.setMinZoom(Math.max(5, z - 0.25));
@@ -5439,11 +5696,24 @@ export function refitGeoMacroMap(cve_mun) {
     }
   };
 
+  const run = async () => {
+    if (gen !== _geoMacroHiGen) return;
+    let bounds = null;
+    try {
+      bounds = await fetchEntidadBounds(ent);
+    } catch {
+      bounds = null;
+    }
+    if (gen !== _geoMacroHiGen) return;
+    if (!bounds) bounds = geoMacroFallbackBounds(ent);
+    applyFit(bounds);
+  };
+
   if (map.isStyleLoaded()) {
-    run();
+    void run();
     map.once("idle", finishHighlight);
   } else {
-    map.once("load", run);
+    map.once("load", () => void run());
   }
 }
 

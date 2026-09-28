@@ -1,0 +1,402 @@
+/**
+ * GroSIG Studio 2 — componentes (Fase A).
+ */
+
+/* —— Botones —— */
+.gs2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--gs2-radius-sm);
+  border: 1px solid transparent;
+  cursor: pointer;
+  text-decoration: none;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+}
+
+.gs2-btn--sm {
+  font-size: 0.75rem;
+  padding: 0.35rem 0.65rem;
+}
+
+.gs2-btn--primary {
+  background: var(--gs2-accent);
+  color: #fff;
+  border-color: var(--gs2-accent);
+}
+
+.gs2-btn--primary:hover,
+.gs2-btn--primary:focus-visible {
+  filter: brightness(1.08);
+  color: #fff;
+}
+
+.gs2-btn--secondary {
+  background: transparent;
+  color: var(--gs2-text);
+  border-color: var(--gs2-border);
+}
+
+.gs2-btn--secondary:hover,
+.gs2-btn--secondary:focus-visible {
+  background: rgba(var(--gs2-accent-rgb), 0.1);
+  border-color: rgba(var(--gs2-accent-rgb), 0.35);
+}
+
+.gs2-btn--ghost {
+  background: transparent;
+  color: var(--gs2-text-muted);
+  border-color: transparent;
+}
+
+.gs2-btn--ghost:hover,
+.gs2-btn--ghost:focus-visible {
+  color: var(--gs2-text);
+  background: rgba(var(--gs2-accent-rgb), 0.08);
+}
+
+.gs2-btn--danger {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--gs2-danger);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* —— Badges de estado —— */
+.gs2-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+}
+
+.gs2-status--success {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--gs2-success);
+}
+
+.gs2-status--warning {
+  background: rgba(245, 158, 11, 0.15);
+  color: var(--gs2-warning);
+}
+
+.gs2-status--danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--gs2-danger);
+}
+
+.gs2-status--info {
+  background: rgba(var(--gs2-accent-rgb), 0.15);
+  color: var(--gs2-accent);
+}
+
+.gs2-status--muted {
+  background: rgba(148, 163, 184, 0.12);
+  color: var(--gs2-text-muted);
+}
+
+/* —— Cards —— */
+.gs2-card {
+  background: var(--gs2-bg-card);
+  border: 1px solid var(--gs2-border);
+  border-radius: var(--gs2-radius);
+  padding: 1.15rem 1.25rem;
+  box-shadow: var(--gs2-shadow-sm);
+}
+
+.gs2-card + .gs2-card {
+  margin-top: 0;
+}
+
+.gs2-mb-3 {
+  margin-bottom: var(--gs2-space-4);
+}
+
+/* —— Overview (Fase C) —— */
+.gs2-overview-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  margin-bottom: var(--gs2-space-4);
+}
+
+.gs2-overview-toolbar__meta {
+  font-size: 0.75rem;
+  color: var(--gs2-text-muted);
+}
+
+.gs2-overview-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.gs2-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.65rem;
+}
+
+.gs2-health-item {
+  border: 1px solid var(--gs2-border);
+  border-radius: var(--gs2-radius-sm);
+  padding: 0.65rem 0.75rem;
+  background: var(--gs2-bg);
+}
+
+.gs2-health-item__label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--gs2-text-muted);
+  margin-bottom: 0.35rem;
+}
+
+.gs2-health-item__detail {
+  font-size: 0.68rem;
+  color: var(--gs2-text-muted);
+  margin-top: 0.25rem;
+}
+
+.gs2-table-wrap {
+  overflow-x: auto;
+}
+
+.gs2-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.78rem;
+}
+
+.gs2-table th,
+.gs2-table td {
+  padding: 0.4rem 0.35rem;
+  border-bottom: 1px solid var(--gs2-border);
+  text-align: left;
+}
+
+.gs2-table th {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gs2-text-muted);
+}
+
+.gs2-table td.gs2-td-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.gs2-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.gs2-table code {
+  font-size: 0.72rem;
+  color: var(--gs2-text-muted);
+}
+
+.gs2-quick-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.75rem;
+}
+
+.gs2-check-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  color: var(--gs2-text-muted);
+  cursor: pointer;
+}
+
+.gs2-check-inline input {
+  accent-color: var(--gs2-accent);
+}
+
+.gs2-card__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+}
+
+.gs2-card__title {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  margin: 0;
+}
+
+.gs2-card__sub {
+  font-size: 0.78rem;
+  color: var(--gs2-text-muted);
+  margin: 0.15rem 0 0;
+}
+
+.gs2-card__body {
+  font-size: 0.8125rem;
+  color: var(--gs2-text-muted);
+  margin: 0;
+}
+
+.gs2-card--metric {
+  padding: 1rem 1.1rem;
+}
+
+.gs2-metric-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--gs2-text);
+}
+
+.gs2-metric-label {
+  font-size: 0.72rem;
+  color: var(--gs2-text-muted);
+  margin-top: 0.25rem;
+}
+
+/* —— Formularios (login) —— */
+.gs2-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.gs2-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--gs2-text-muted);
+}
+
+.gs2-input,
+.gs2-select {
+  width: 100%;
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--gs2-radius-sm);
+  border: 1px solid var(--gs2-border);
+  background: var(--gs2-bg);
+  color: var(--gs2-text);
+}
+
+.gs2-input:focus,
+.gs2-select:focus {
+  outline: 2px solid rgba(var(--gs2-accent-rgb), 0.45);
+  outline-offset: 1px;
+}
+
+.gs2-form-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.gs2-form-error {
+  font-size: 0.8rem;
+  color: var(--gs2-danger);
+}
+
+.gs2-form-error:empty,
+.gs2-form-error.d-none {
+  display: none;
+}
+
+/* —— Tema segmentado —— */
+.gs2-theme-segment {
+  display: inline-flex;
+  padding: 2px;
+  border-radius: var(--gs2-radius-sm);
+  background: var(--gs2-bg);
+  border: 1px solid var(--gs2-border);
+}
+
+.gs2-theme-segment button {
+  border: 0;
+  background: transparent;
+  color: var(--gs2-text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.3rem 0.55rem;
+  border-radius: calc(var(--gs2-radius-sm) - 2px);
+  cursor: pointer;
+}
+
+.gs2-theme-segment button.is-active {
+  background: var(--gs2-bg-elevated);
+  color: var(--gs2-text);
+  box-shadow: var(--gs2-shadow-sm);
+}
+
+/* —— Usuario topbar —— */
+.gs2-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--gs2-text-muted);
+}
+
+.gs2-user-chip__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(var(--gs2-accent-rgb), 0.25);
+  color: var(--gs2-accent);
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* —— Grid workspace —— */
+.gs2-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.gs2-grid--2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.gs2-grid--3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.gs2-grid--4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1100px) {
+  .gs2-grid--3,
+  .gs2-grid--4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .gs2-grid--2,
+  .gs2-grid--3,
+  .gs2-grid--4 {
+    grid-template-columns: 1fr;
+  }
+}

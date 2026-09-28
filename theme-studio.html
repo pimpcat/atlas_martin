@@ -67,8 +67,109 @@
       </div>
       <div id="themeStudioNav" class="mb-3"></div>
 
+      <div class="theme-studio-sections-bar mb-3">
+          <style>
+            .theme-studio-sections .nav-link { font-weight: 600; }
+            .theme-assets-slots { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 0.75rem; }
+            .theme-assets-slot__preview { height: 84px; border-radius: 0.4rem; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--bs-border-color); overflow: hidden; }
+            .theme-assets-slot__img { max-height: 70px; max-width: 90%; object-fit: contain; }
+            .theme-assets-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 0.75rem; }
+            .theme-assets-card__thumb { height: 96px; border-radius: 0.4rem; display: flex; align-items: center; justify-content: center; overflow: hidden;
+              background-color: #fff; background-image: linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%), linear-gradient(45deg, #e5e7eb 25%, transparent 25%, transparent 75%, #e5e7eb 75%);
+              background-size: 16px 16px; background-position: 0 0, 8px 8px; }
+            .theme-assets-card__thumb img { max-height: 88px; max-width: 95%; object-fit: contain; }
+            .theme-basic-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 0.75rem; }
+            .theme-basic-item { display: flex; gap: 0.6rem; align-items: flex-start; }
+            .theme-basic-item input[type="color"] { width: 3rem; height: 3rem; padding: 0.15rem; flex-shrink: 0; cursor: pointer; }
+            .theme-legibility li { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.15rem 0; }
+            .theme-legibility .lv-ok { color: #15803d; } .theme-legibility .lv-warn { color: #b45309; } .theme-legibility .lv-bad { color: #b91c1c; }
+            html[data-theme="oscuro"] .theme-legibility .lv-ok { color: #4ade80; }
+            html[data-theme="oscuro"] .theme-legibility .lv-warn { color: #fbbf24; }
+            html[data-theme="oscuro"] .theme-legibility .lv-bad { color: #f87171; }
+            .theme-diff-list { max-height: 12rem; overflow: auto; }
+            .theme-diff-sw { display: inline-block; width: 0.9rem; height: 0.9rem; border-radius: 3px; border: 1px solid var(--bs-border-color); vertical-align: middle; }
+            .theme-preview-frame-wrap { position: relative; width: 100%; height: 70vh; overflow: hidden; border: 1px solid var(--bs-border-color); border-radius: 0.5rem; }
+            .theme-preview-frame-wrap iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; background: #fff; }
+            .theme-profiles-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 0.75rem; }
+            .theme-profile-sw { display: flex; height: 1.6rem; border-radius: 0.3rem; overflow: hidden; border: 1px solid var(--bs-border-color); }
+            .theme-profile-sw span { flex: 1; }
+          </style>
+          <ul class="nav nav-pills theme-studio-sections gap-1" role="tablist">
+            <li class="nav-item"><button type="button" class="nav-link active" id="themeStudioSecColors" data-ts-section="colors">Colores</button></li>
+            <li class="nav-item"><button type="button" class="nav-link" id="themeStudioSecImages" data-ts-section="images">Imágenes del portal</button></li>
+            <li class="nav-item"><button type="button" class="nav-link" id="themeStudioSecPreview" data-ts-section="preview">Vista previa del portal</button></li>
+            <li class="nav-item"><button type="button" class="nav-link" id="themeStudioSecProfiles" data-ts-section="profiles">Temas guardados</button></li>
+          </ul>
+      </div>
       <div class="row g-3">
-        <div class="col-lg-4">
+        <div class="col-12 d-none" data-ts-pane="preview">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span class="fw-semibold">Vista previa del portal (con lo que está editando, aún sin guardar)</span>
+              <span class="d-flex gap-2 align-items-center">
+                <span class="btn-group" role="group" aria-label="Tema de la vista previa">
+                  <button type="button" class="btn btn-sm btn-outline-primary active" data-preview-theme="claro">Claro</button>
+                  <button type="button" class="btn btn-sm btn-outline-primary" data-preview-theme="oscuro">Oscuro</button>
+                </span>
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="themePreviewReloadBtn">Recargar página</button>
+              </span>
+            </div>
+            <div class="card-body">
+              <div class="theme-preview-frame-wrap" id="themePreviewWrap"></div>
+              <p class="small text-muted mt-2 mb-0">
+                Es el portal real en miniatura. Los cambios de colores e imágenes se reflejan al momento; nada se publica hasta pulsar «Guardar».
+              </p>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 d-none" data-ts-pane="profiles">
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Temas guardados</div>
+            <div class="card-body">
+              <p class="small text-muted">
+                Guarde el tema <strong>publicado</strong> (colores + imágenes) con un nombre para volver a él cuando quiera.
+                Al aplicar uno, el tema vigente se guarda antes como «Respaldo automático».
+              </p>
+              <div class="d-flex flex-wrap gap-2 mb-3">
+                <input type="text" id="themeProfileName" class="form-control form-control-sm" style="max-width:20rem" maxlength="80" placeholder="Nombre (ej. Institucional 2026)" />
+                <button type="button" class="btn btn-sm btn-primary" id="themeProfileSaveBtn">Guardar tema actual</button>
+              </div>
+              <div id="themeProfilesStatus" class="small mb-2 d-none" role="status"></div>
+              <div id="themeProfilesList" class="theme-profiles-list"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-12 d-none" data-ts-pane="images">
+          <div class="card shadow-sm visor-studio-card mb-3">
+            <div class="card-header fw-semibold d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span>Lugares del portal</span>
+              <span class="d-flex gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="themeAssetsReloadBtn">Recargar</button>
+                <button type="button" class="btn btn-primary btn-sm" id="themeAssetsSaveBtn">Guardar imágenes</button>
+              </span>
+            </div>
+            <div class="card-body">
+              <p class="small text-muted mb-2">
+                Elija qué imagen va en cada lugar. «Imagen original» deja la que trae el sistema.
+                Los logos se muestran sobre el color real de la cabecera de cada tema.
+              </p>
+              <div id="themeAssetsStatus" class="small mb-2 d-none" role="status"></div>
+              <div id="themeAssetsSlots" class="theme-assets-slots"></div>
+            </div>
+          </div>
+          <div class="card shadow-sm visor-studio-card">
+            <div class="card-header fw-semibold">Galería (imágenes guardadas)</div>
+            <div class="card-body">
+              <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
+                <input type="file" id="themeAssetsFile" class="form-control form-control-sm" style="max-width:22rem" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" />
+                <button type="button" class="btn btn-outline-primary btn-sm" id="themeAssetsUploadBtn">Subir a la galería</button>
+                <span class="small text-muted">PNG, JPG o WEBP · máx. 5 MB · PNG con fondo transparente es lo ideal para logos.</span>
+              </div>
+              <div id="themeAssetsGallery" class="theme-assets-gallery"></div>
+            </div>
+          </div>
+        </div>
+        <div class="col-lg-4" data-ts-pane="colors">
           <div class="card shadow-sm visor-studio-card mb-3">
             <div class="card-header fw-semibold">Tema a editar</div>
             <div class="card-body d-grid gap-2">
@@ -88,24 +189,42 @@
                 <p class="small mb-0" id="themeStudioPreviewMuted">Texto secundario de ejemplo</p>
                 <button type="button" class="btn btn-sm mt-2" id="themeStudioPreviewBtn">Botón acento</button>
               </div>
+              <div>
+                <div class="small fw-semibold mb-1">¿Se lee bien?</div>
+                <ul id="themeStudioLegibility" class="theme-legibility list-unstyled small mb-0"></ul>
+              </div>
             </div>
           </div>
           <div class="card shadow-sm visor-studio-card">
             <div class="card-body d-grid gap-2">
-              <button type="button" class="btn btn-primary btn-sm" id="themeStudioSaveBtn">Guardar catálogo</button>
-              <button type="button" class="btn btn-outline-secondary btn-sm" id="themeStudioReloadBtn">Recargar desde servidor</button>
-              <button type="button" class="btn btn-outline-warning btn-sm" id="themeStudioRestoreBtn">Restaurar defaults</button>
+              <button type="button" class="btn btn-primary btn-sm" id="themeStudioSaveBtn">Guardar colores</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="themeStudioReloadBtn">Descartar cambios (recargar)</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" id="themeStudioGenDarkBtn">Generar tema oscuro a partir del claro</button>
+              <button type="button" class="btn btn-outline-warning btn-sm" id="themeStudioRestoreBtn">Restaurar colores de fábrica</button>
               <div id="themeStudioStatus" class="small d-none" role="status"></div>
+              <details id="themeStudioDiffBox" class="small">
+                <summary id="themeStudioDiffSummary">Sin cambios pendientes</summary>
+                <ul id="themeStudioDiffList" class="theme-diff-list list-unstyled mt-1 mb-0"></ul>
+              </details>
+              <details id="themeStudioHealthBox" class="small">
+                <summary>Revisión técnica del tema</summary>
+                <div id="themeStudioHealth" class="mt-1 text-muted">Ábrala para revisar…</div>
+              </details>
               <p class="small text-muted mb-0">
-                Al guardar se crea respaldo <code>catalog.json.bak</code> en
-                <code>config/theme/</code>. El portal aplica los colores vía API.
+                Al guardar se crea un respaldo en <code>config/theme/</code>. El portal toma los colores al recargar.
               </p>
             </div>
           </div>
         </div>
-        <div class="col-lg-8">
+        <div class="col-lg-8" data-ts-pane="colors">
           <div class="card shadow-sm visor-studio-card">
-            <div class="card-header fw-semibold" id="themeStudioEditorTitle">Colores — tema claro</div>
+            <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <span class="fw-semibold" id="themeStudioEditorTitle">Colores — tema claro</span>
+              <span class="form-check form-switch mb-0">
+                <input class="form-check-input" type="checkbox" role="switch" id="themeStudioAdvanced" />
+                <label class="form-check-label small" for="themeStudioAdvanced">Mostrar todos los colores (avanzado)</label>
+              </span>
+            </div>
             <div class="card-body" id="themeStudioEditor" style="max-height:70vh;overflow:auto"></div>
           </div>
         </div>

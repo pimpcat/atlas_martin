@@ -1,6 +1,5 @@
 /**
- * Capas temáticas del visor derivadas de atlas.c_denue (filtro codigo_act).
- * Especificaciones cargadas desde config/visor/catalog.json (grupo denue).
+ * Capas temáticas DENUE — especificaciones desde catálogo runtime (no import estático).
  */
 import {
   DENUE_LABEL_LAYOUT,
@@ -8,54 +7,81 @@ import {
   denueLabelPaint,
   denueLabelPaintClaro,
 } from "./martinLayerStyle.js";
-import catalogJson from "../config/visor/catalog.json" with { type: "json" };
 
 /** @typedef {{ key: string, visorId: string, panelLabel: string, tipTitle: string, codigoAct: number[], labelColor: string }} DenueLayerSpec */
 
-/** Zoom mínimo de iconos en el mapa (debe coincidir con martin.yaml → c_denue.minzoom). */
+/** Zoom mínimo de iconos (paridad martin.yaml / catálogo). */
 export const DENUE_MIN_ZOOM = 8;
 
-function denueSpecsFromCatalogJson() {
-  const denueGroup = (catalogJson.groups || []).find((g) => g.id === "denue");
+/** @type {DenueLayerSpec[]} */
+let _denueSpecs = [];
+/** @type {Record<string, DenueLayerSpec>} */
+let _denueSpecByKey = {};
+
+function buildSpecsFromCatalog(catalog) {
+  if (!catalog?.layers) return [];
+  const denueGroup = (catalog.groups || []).find((g) => g.id === "denue");
   const ids =
     denueGroup?.layers ||
-    Object.keys(catalogJson.layers || {}).filter((k) => k.startsWith("denue_"));
-  return ids.map((id) => {
-    const layer = catalogJson.layers[id];
-    if (!layer) return null;
-    return {
-      key: layer.overlay_key,
-      visorId: id,
-      panelLabel: layer.label,
-      tipTitle: layer.style?.tip_title || layer.label,
-      codigoAct: layer.data?.filter?.codigo_act || [],
-      labelColor: layer.style?.label_color || "#333333",
-    };
-  }).filter(Boolean);
+    Object.keys(catalog.layers).filter((k) => k.startsWith("denue_"));
+  return ids
+    .map((id) => {
+      const layer = catalog.layers[id];
+      if (!layer) return null;
+      return {
+        key: layer.overlay_key,
+        visorId: id,
+        panelLabel: layer.label,
+        tipTitle: layer.style?.tip_title || layer.label,
+        codigoAct: layer.data?.filter?.codigo_act || [],
+        labelColor: layer.style?.label_color || "#333333",
+      };
+    })
+    .filter(Boolean);
 }
 
-export const DENUE_LAYER_SPECS = /** @type {DenueLayerSpec[]} */ (denueSpecsFromCatalogJson());
+/** Inicializar tras loadVisorCatalog() — una sola fuente runtime. */
+export function initDenueLayersFromCatalog(catalog) {
+  _denueSpecs = buildSpecsFromCatalog(catalog);
+  _denueSpecByKey = Object.fromEntries(_denueSpecs.map((s) => [s.key, s]));
+}
 
-const DENUE_SPEC_BY_KEY = Object.fromEntries(DENUE_LAYER_SPECS.map((s) => [s.key, s]));
+export function getDenueLayerSpecs() {
+  return _denueSpecs;
+}
+
+/** @deprecated usar getDenueLayerSpecs() tras initDenueLayersFromCatalog */
+export const DENUE_LAYER_SPECS = [];
 
 export function denueSpecByKey(key) {
-  return DENUE_SPEC_BY_KEY[key] ?? null;
+  return _denueSpecByKey[key] ?? null;
 }
 
 export function isDenueOverlayKey(key) {
-  return Boolean(DENUE_SPEC_BY_KEY[key]);
+  return Boolean(_denueSpecByKey[key]);
 }
 
-/** Filtro MapLibre por códigos SCIAN (codigo_act). */
+/** Filtro MapLibre por códigos SCIAN (codigo_act). Paridad con spatial_analysis (varchar). */
 export function codigoActFilter(codes) {
-  const list = (codes || []).map((c) => String(c));
+  const list = (codes || [])
+    .map((c) => String(c).trim())
+    .filter(Boolean)
+    .map((c) => String(parseInt(c, 10)))
+    .filter((c) => c !== "NaN");
   if (!list.length) return ["literal", true];
-  const raw = ["coalesce", ["get", "codigo_act"], ["get", "CODIGO_ACT"]];
+  const raw = ["coalesce", ["get", "codigo_act"], ["get", "CODIGO_ACT"], ""];
   const asStr = ["to-string", raw];
-  const tests = list.flatMap((code) => [
-    ["==", asStr, code],
-    ["==", ["to-number", raw], Number(code)],
-  ]);
+  const asNum = ["to-number", raw];
+  const tests = [];
+  for (const code of list) {
+    const n = Number(code);
+    tests.push(["==", asStr, code]);
+    tests.push(["==", asStr, String(n)]);
+    tests.push(["==", asNum, n]);
+    if (code.length < 6) {
+      tests.push(["==", asStr, code.padStart(6, "0")]);
+    }
+  }
   return ["any", ...tests];
 }
 
@@ -63,7 +89,7 @@ export function codigoActFilter(codes) {
 export function buildDenueOverlayLabelByKey() {
   /** @type {Record<string, object>} */
   const out = {};
-  for (const spec of DENUE_LAYER_SPECS) {
+  for (const spec of _denueSpecs) {
     out[spec.key] = {
       minzoom: DENUE_LABEL_MIN_ZOOM,
       layout: DENUE_LABEL_LAYOUT,
@@ -86,7 +112,7 @@ export function denueTipHtml(title, props) {
 }
 
 export function buildDenueTipDefs() {
-  return DENUE_LAYER_SPECS.map((spec) => ({
+  return _denueSpecs.map((spec) => ({
     primary: `ly-${spec.key}`,
     tipHtml: (props) => denueTipHtml(spec.tipTitle, props),
   }));

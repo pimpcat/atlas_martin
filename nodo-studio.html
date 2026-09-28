@@ -1,6 +1,18 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="oscuro">
+<html lang="es" data-studio-ui-fallback="v2">
 <head>
+  <script>
+    (function () {
+      var t = localStorage.getItem("atlasgro-theme");
+      if (t !== "oscuro" && t !== "claro") t = localStorage.getItem("atlasgro-theme-default");
+      if (t !== "oscuro" && t !== "claro") t = "claro";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
+  <script type="module">
+    import { applyStudioUiGate } from "./js/studioUiGate.js";
+    applyStudioUiGate("nodo");
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Nodo Studio — SuperAdmin</title>
@@ -18,6 +30,12 @@
             SuperAdmin de federación (CORE). No es el administrador de Guerrero.
           </p>
           <form id="nodoLoginForm" class="d-grid gap-3">
+            <div class="d-flex justify-content-end mb-1">
+              <span class="studio-theme-picker nodo-theme-picker btn-group" role="group" aria-label="Tema visual">
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-studio-theme="claro">Claro</button>
+                <button type="button" class="btn btn-sm btn-outline-secondary" data-studio-theme="oscuro">Oscuro</button>
+              </span>
+            </div>
             <div>
               <label class="form-label small" for="nodoUser">Usuario</label>
               <input id="nodoUser" class="form-control form-control-sm" autocomplete="username" required />
@@ -39,7 +57,13 @@
           <h1 class="h5 mb-0">Nodo Studio</h1>
           <p class="small text-muted mb-0" id="nodoWelcome"></p>
         </div>
-        <button type="button" class="btn btn-sm btn-outline-secondary" id="nodoLogoutBtn">Cerrar sesión</button>
+        <div class="d-flex flex-wrap align-items-center gap-2">
+          <span class="studio-theme-picker nodo-theme-picker btn-group" role="group" aria-label="Tema visual">
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-studio-theme="claro">Claro</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" data-studio-theme="oscuro">Oscuro</button>
+          </span>
+          <button type="button" class="btn btn-sm btn-outline-secondary" id="nodoLogoutBtn">Cerrar sesión</button>
+        </div>
       </div>
 
       <ul class="nav nav-tabs nodo-main-tabs mb-3" id="nodoMainTabs" role="tablist">
@@ -219,6 +243,19 @@
       </div>
     </section>
   </main>
+
+  <div class="modal fade" id="nodoKitGroModal" tabindex="-1" aria-labelledby="nodoKitGroModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h2 class="modal-title h6" id="nodoKitGroModalLabel">Kit Base</h2>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body py-3" id="nodoKitGroPanel"></div>
+      </div>
+    </div>
+  </div>
+
   <style>
     .nodo-date-input {
       min-width: 11.5rem;
@@ -227,7 +264,15 @@
     .nodo-date-input:disabled {
       cursor: not-allowed;
     }
+    /* Modal kit base: por encima del backdrop (main.css fija backdrop en 1055) */
+    #nodoKitGroModal.modal.show {
+      z-index: 1070;
+    }
+    body.modal-open .modal-backdrop.show {
+      z-index: 1060;
+    }
   </style>
-  <script type="module" src="./js/nodoStudioApp.js"></script>
+  <script src="./assets/bootstrap.js"></script>
+  <script type="module" src="./js/nodoStudioApp.js?v=20260902d"></script>
 </body>
 </html>

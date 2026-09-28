@@ -103,11 +103,14 @@ Tras crear o eliminar un grupo, el panel **Capas** del visor se actualiza sin re
 - **Hover (resumen):** constructor independiente para el **globo al pasar el ratón**. Si lo deja vacío, el hover usa el mismo contenido que Identify (capas legacy).
 - **Etiquetas en mapa:** constructor de partes (`texto` + `campo` + salto de línea), zoom mínimo, color y «encima del símbolo». Si una columna de etiqueta no aparece en el MVT, el asistente avisa con **warning** (no bloquea publicar).
 - **Buscador del visor:** marque **Incluir en buscador** para publicar el bloque `search` en `catalog.json` (campo nombre, tipo en resultados, columnas ILIKE). El alcance municipal/estatal sigue el de la capa.
+- **Publicación de tiles (Martin):** en el paso Capa, elija **Compartida** (vista de toda la tabla, default) o **Filtrada** (vista `tiles.<published_id>` con el filtro de atributo / SCIAN DENUE). Filtrada exige filtro usable; al editar capas seed DENUE el wizard refleja `codigo_act` en «Filtrar elementos por atributo». Al guardar se regenera la vista y Martin la descubre por `auto_publish`.
 - **Análisis espacial:** active para incluir la capa en la herramienta de polígono del visor. Elija **conteo** (puntos) o **agregación** (suma/promedio de columnas numéricas), tabla detalle opcional y textos de UI. Detalle en **[VISOR_SPATIAL_ANALYSIS.md](./VISOR_SPATIAL_ANALYSIS.md)**.
 - **Exportación:** columnas en KML/SHP; si no marca ninguna, se exportan todas.
 - **Iconos de punto:** SVG, PNG o JPG desde Visor Studio (preset «Punto con icono»).
 
 Tras guardar basta **Ctrl+F5** en el visor. Martin usa `auto_publish` del esquema `atlas` (todas las columnas en el MVT) y `reload_interval: 30s` para descubrir tablas nuevas **sin reiniciar** el contenedor. **No** hace falta reiniciar Martin al editar identify, etiquetas, estilo, ni al importar un SHP nuevo. Solo reinicie Martin si cambia `martin.yaml` o fuentes MBTiles.
+
+Tras **importar shapefiles** (o tras un Apply geo en Data Refresh), Studio ofrece un diálogo opcional de **reconcile Martin**: regenera vistas `tiles.*` compartidas y filtradas. Confirmar si acaba de cargar/actualizar geometría que debe verse en capas filtradas (p. ej. DENUE); cancelar deja las vistas previas.
 
 El popup usa el mismo CSS que el resto del visor: título en negrita (`atlas-loc-tip__title`), etiquetas de campo en negrita (`atlas-loc-tip__lbl`).
 
@@ -121,6 +124,7 @@ Presets disponibles: punto círculo, punto con icono, **por atributo** (punto/l�
 | GET | `/api/visor/admin/layers/{id}` | Detalle para editar |
 | PUT | `/api/visor/admin/layers/{id}` | Actualizar |
 | DELETE | `/api/visor/admin/layers/{id}` | Despublicar |
+| POST | `/api/visor/admin/martin/reconcile` | Reconcile Martin (vistas tiles; confirmado desde UI tras SHP / Data Refresh) |
 | GET | `/api/visor/admin/groups` | Grupos del catálogo (con conteo de capas) |
 | POST | `/api/visor/admin/groups` | Crear grupo vacío |
 | PATCH | `/api/visor/admin/groups/{id}` | Renombrar grupo |
@@ -135,7 +139,7 @@ Implementado en Visor Studio (asistente paso **Estilo**):
 - **Vista previa** en canvas (sin MapLibre) al editar color o clases.
 - **Aviso Martin** al elegir tabla nueva (`GET /api/visor/admin/tables/{tabla}/status`): si aún no está en tiles, ofrece **Reintentar detección** (`POST …/wait-martin`). El discovery es automático (`reload_interval`); no pide reiniciar el contenedor.
 - **Plantillas DENUE** para tabla `c_denue`: códigos SCIAN, icono sugerido y popup con plantilla `denue`.
-- **Subir shapefile** (paso 1, pestaña «Subir shapefile»): `.shp` o `.zip` → tabla `c_*` en PostGIS (`ogr2ogr`). El API espera a que Martin liste la tabla antes de devolver el resultado.
+- **Subir shapefile** (paso 1, pestaña «Subir shapefile»): `.shp` o `.zip` → tabla `c_*` en PostGIS (`ogr2ogr`). El API espera a que Martin liste la tabla antes de devolver el resultado. Al analizar se detecta la **codificación del DBF** (`.cpg`, heurística o **Windows-1252** por defecto — típico INEGI/DENUE) y se pasa a `ogr2ogr` (`SHAPE_ENCODING`) para guardar texto UTF-8 correcto (`Ñ`, acentos). Puede forzar UTF-8 / CP1252 / ISO-8859-1 por fila antes de importar.
 - **Icono SVG custom** (paso Estilo, preset «Punto con icono»): registra clave + `.svg` en `icons.json`. El asistente advierte si el SVG tiene trazo fino, viewBox desfavorable o formato Potrace.
 - **Clusters** (paso **Mapa**, solo puntos): casilla «Agrupar puntos» + preset (`standard`, `compact`, `wide`, `sparse`); escribe `style.cluster` en el catálogo. Ver **[VISOR_CLUSTERS.md](./VISOR_CLUSTERS.md)**.
 

@@ -1,23 +1,59 @@
 /**
- * Sesión admin del Visor (JWT en sessionStorage).
+ * Sesión admin del Visor (JWT en localStorage, compartida entre pestañas).
  * Login en ruta oculta: visor-studio.html (no enlazada desde el portal).
  */
 import { apiUrl } from "./atlasConfig.js";
 
 const TOKEN_KEY = "atlasVisorAdminToken";
 const USER_KEY = "atlasVisorAdminUser";
+const LEGACY_TOKEN_KEY = "atlasVisorAdminToken";
+const LEGACY_USER_KEY = "atlasVisorAdminUser";
+
+/** True solo tras /api/admin/me OK (o login fresco). Evita chrome admin con JWT muerto. */
+let _sessionVerified = false;
+
+function _storage() {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function _legacySessionStorage() {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function _migrateLegacySession() {
+  const ls = _storage();
+  const ss = _legacySessionStorage();
+  if (!ls || !ss) return;
+  if (!ls.getItem(TOKEN_KEY) && ss.getItem(LEGACY_TOKEN_KEY)) {
+    ls.setItem(TOKEN_KEY, ss.getItem(LEGACY_TOKEN_KEY));
+    const user = ss.getItem(LEGACY_USER_KEY);
+    if (user) ls.setItem(USER_KEY, user);
+    ss.removeItem(LEGACY_TOKEN_KEY);
+    ss.removeItem(LEGACY_USER_KEY);
+  }
+}
 
 export function getAdminToken() {
+  _migrateLegacySession();
   try {
-    return sessionStorage.getItem(TOKEN_KEY) || "";
+    return _storage()?.getItem(TOKEN_KEY) || "";
   } catch {
     return "";
   }
 }
 
 export function getAdminUser() {
+  _migrateLegacySession();
   try {
-    const raw = sessionStorage.getItem(USER_KEY);
+    const raw = _storage()?.getItem(USER_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch {
     return null;
@@ -25,19 +61,40 @@ export function getAdminUser() {
 }
 
 export function setAdminSession(token, user) {
-  sessionStorage.setItem(TOKEN_KEY, token);
-  sessionStorage.setItem(USER_KEY, JSON.stringify(user || {}));
+  const ls = _storage();
+  if (!ls) return;
+  ls.setItem(TOKEN_KEY, token);
+  ls.setItem(USER_KEY, JSON.stringify(user || {}));
+  _sessionVerified = true;
   document.dispatchEvent(new CustomEvent("atlasgro-visor-admin-auth-change"));
 }
 
 export function clearAdminSession() {
-  sessionStorage.removeItem(TOKEN_KEY);
-  sessionStorage.removeItem(USER_KEY);
+  const ls = _storage();
+  ls?.removeItem(TOKEN_KEY);
+  ls?.removeItem(USER_KEY);
+  _legacySessionStorage()?.removeItem(LEGACY_TOKEN_KEY);
+  _legacySessionStorage()?.removeItem(LEGACY_USER_KEY);
+  _sessionVerified = false;
   document.dispatchEvent(new CustomEvent("atlasgro-visor-admin-auth-change"));
 }
 
+/** Hay token en storage (no implica sesión válida). */
 export function isVisorAdminLoggedIn() {
   return Boolean(getAdminToken());
+}
+
+/** Sesión confirmada con el API (login o /me). */
+export function isVisorAdminSessionVerified() {
+  return _sessionVerified && Boolean(getAdminToken());
+}
+
+/**
+ * Chrome admin del portal (Agregar/Gestionar capas, Cartografía en el mapa).
+ * Fail-closed: sin verify no se muestra, aunque quede un JWT viejo en localStorage.
+ */
+export function isVisorAdminUiAllowed() {
+  return isVisorAdminSessionVerified();
 }
 
 export async function adminFetch(path, options = {}) {
@@ -201,8 +258,18 @@ export async function fillLoginInstanciasSelect(target) {
       { clearOn401: false }
     );
     if (networkError || !res || !res.ok) {
-      select.innerHTML =
-        '<option value="">No se pudieron cargar instancias</option>';
+      let hint = "No se pudieron cargar instancias";
+      if (networkError) {
+        hint += " (sin conexión al API)";
+      } else if (res) {
+        const msg =
+          data?.detail?.message ||
+          (typeof data?.detail === "string" ? data.detail : null) ||
+          data?.message;
+        hint += msg ? `: ${msg}` : ` (HTTP ${res.status})`;
+      }
+      select.innerHTML = `<option value="">${hint}</option>`;
+      console.warn("[login-instancias]", hint, data);
       return;
     }
     const items = data?.instancias || [];
@@ -253,11 +320,18 @@ export async function loginAdmin(username, password, cveEnt) {
   return data.user;
 }
 
-export async function verifyAdminSession() {
-  if (!getAdminToken()) return null;
+export async function verifyAdminSession(options = {}) {
+  const failClosed = options.failClosed === true;
+  if (!getAdminToken()) {
+    _sessionVerified = false;
+    return null;
+  }
   const { res, data, networkError } = await adminFetch("/api/admin/me", { clearOn401: false });
   if (networkError || !res) {
-    return getAdminUser();
+    // Portal: no mostrar chrome admin si no podemos confirmar.
+    // Studios: pueden mantener usuario cacheado (optimistic).
+    _sessionVerified = failClosed ? false : Boolean(getAdminUser());
+    return failClosed ? null : getAdminUser();
   }
   if (res.status === 401) {
     const errCode = data?.detail?.error || "UNAUTHORIZED";
@@ -267,9 +341,16 @@ export async function verifyAdminSession() {
     return null;
   }
   if (!res.ok || !data?.user) {
-    return getAdminUser();
+    _sessionVerified = failClosed ? false : Boolean(getAdminUser());
+    return failClosed ? null : getAdminUser();
   }
-  setAdminSession(getAdminToken(), data.user);
+  // Evitar bucle de eventos: marcar verified antes de persistir usuario.
+  _sessionVerified = true;
+  const ls = _storage();
+  if (ls) {
+    ls.setItem(USER_KEY, JSON.stringify(data.user || {}));
+  }
+  document.dispatchEvent(new CustomEvent("atlasgro-visor-admin-auth-change"));
   return data.user;
 }
 

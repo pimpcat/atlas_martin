@@ -8,6 +8,7 @@ import {
   whenAtlasMapReady,
   syncVisorOverlayLayersFromState,
 } from "./map.js";
+import { getEntidadNombre, onAmigoTerritoryChange } from "./amigoDeployment.js";
 import { formatVisorZoom, isMapZoomAtLeast } from "./visorMapZoom.js";
 import { scheduleVisorCompareSync } from "./visorMapCompare.js";
 import { syncVisorMapLegend } from "./visorMapLegend.js";
@@ -16,7 +17,15 @@ import { dismissVisorMapIdentifyIfLayerHidden } from "./visorMapIdentify.js";
 let _zoomEl = null;
 let _hintEl = null;
 let _syncHandler = null;
+let _territoryUnsub = null;
 let _getActiveLayersWithMinZoom = () => [];
+
+function stateWideHintText() {
+  const name = getEntidadNombre();
+  return name
+    ? `Vista estatal de ${name} — capas sin filtro municipal.`
+    : "Vista estatal activa — capas sin filtro municipal.";
+}
 
 function mapZoomLevel(map) {
   return typeof map.getZoom === "function" ? map.getZoom() : 0;
@@ -42,7 +51,7 @@ function syncVisorMapUi() {
   if (!_hintEl?.isConnected) return;
 
   if (getVisorStateWideMode()) {
-    _hintEl.textContent = "Vista estatal de Guerrero — capas sin filtro municipal.";
+    _hintEl.textContent = stateWideHintText();
     _hintEl.style.display = "";
     return;
   }
@@ -131,10 +140,14 @@ export function attachVisorMapUi(options = {}) {
     requestAnimationFrame(() => tryAttach(0));
   });
   document.addEventListener("atlasgro-visor-statewide-change", syncVisorMapUi);
+  _territoryUnsub?.();
+  _territoryUnsub = onAmigoTerritoryChange(syncVisorMapUi);
 }
 
 export function teardownVisorMapUi() {
   document.removeEventListener("atlasgro-visor-statewide-change", syncVisorMapUi);
+  _territoryUnsub?.();
+  _territoryUnsub = null;
   const map = getLeafletMap();
   detachMapHandlers(map);
   _getActiveLayersWithMinZoom = () => [];

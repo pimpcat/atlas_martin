@@ -1,0 +1,301 @@
+/**
+ * GroSIG Studio 2 — Administrative Shell (Fase B).
+ */
+.grosig-shell-v2 {
+  min-height: 100vh;
+  display: flex;
+  width: 100%;
+}
+
+.grosig-shell-v2__sidebar {
+  width: var(--gs2-sidebar-w);
+  flex-shrink: 0;
+  background: var(--gs2-bg-elevated);
+  border-right: 1px solid var(--gs2-border);
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 0.85rem 0.65rem;
+  transition: width 0.2s ease, transform 0.2s ease;
+}
+
+.grosig-shell-v2__sidebar.is-collapsed {
+  width: 56px;
+}
+
+.grosig-shell-v2__sidebar.is-collapsed .grosig-shell-v2__brand-logo,
+.grosig-shell-v2__sidebar.is-collapsed .grosig-shell-v2__nav-label,
+.grosig-shell-v2__sidebar.is-collapsed .grosig-shell-v2__nav-link span,
+.grosig-shell-v2__sidebar.is-collapsed .grosig-shell-v2__sidebar-foot {
+  display: none;
+}
+
+.grosig-shell-v2__sidebar-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
+  padding: 0.15rem 0.35rem 0.85rem;
+}
+
+.grosig-shell-v2__brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  font-size: 0.95rem;
+  letter-spacing: -0.02em;
+  min-width: 0;
+  flex: 1;
+}
+
+.grosig-shell-v2__brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: 80px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.grosig-shell-v2__login-logo {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  min-height: 5.5rem;
+  max-height: 9.5rem;
+  object-fit: contain;
+  object-position: center center;
+  margin: 0 0 1rem;
+}
+
+.grosig-shell-v2__sidebar.is-collapsed .grosig-shell-v2__brand-logo {
+  max-height: 36px;
+  object-fit: cover;
+  object-position: left center;
+}
+
+.grosig-shell-v2__brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--gs2-accent), rgba(var(--gs2-accent-rgb), 0.55));
+  flex-shrink: 0;
+}
+
+.grosig-shell-v2__sidebar-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--gs2-text-muted);
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 6px;
+  line-height: 1;
+  font-size: 1rem;
+}
+
+.grosig-shell-v2__sidebar-toggle:hover {
+  background: rgba(var(--gs2-accent-rgb), 0.1);
+  color: var(--gs2-text);
+}
+
+.grosig-shell-v2__sidebar nav {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 0.15rem;
+}
+
+.grosig-shell-v2__nav-group {
+  margin-bottom: 1rem;
+}
+
+.grosig-shell-v2__nav-label {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--gs2-text-muted);
+  padding: 0 0.55rem 0.45rem;
+  opacity: 0.9;
+}
+
+.grosig-shell-v2__nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: var(--gs2-text-muted);
+  font-size: 0.875rem;
+  line-height: 1.35;
+  padding: 0.48rem 0.6rem;
+  border-radius: var(--gs2-radius-sm);
+  text-decoration: none;
+  cursor: pointer;
+  margin-bottom: 0.1rem;
+}
+
+.grosig-shell-v2__nav-link:hover,
+.grosig-shell-v2__nav-link:focus-visible {
+  color: var(--gs2-text);
+  background: rgba(var(--gs2-accent-rgb), 0.1);
+}
+
+.grosig-shell-v2__nav-link.is-active {
+  color: #fff;
+  background: var(--gs2-accent);
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(var(--gs2-accent-rgb), 0.35);
+}
+
+.grosig-shell-v2__nav-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.45;
+  flex-shrink: 0;
+}
+
+.grosig-shell-v2__nav-link.is-active .grosig-shell-v2__nav-dot {
+  opacity: 1;
+  background: #fff;
+}
+
+.grosig-shell-v2__sidebar-foot {
+  padding: 0.65rem 0.45rem 0.15rem;
+  border-top: 1px solid var(--gs2-border);
+  margin-top: 0.5rem;
+}
+
+.grosig-shell-v2__version {
+  font-size: 0.68rem;
+  color: var(--gs2-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.grosig-shell-v2__version-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--gs2-success);
+}
+
+.grosig-shell-v2__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--gs2-bg);
+}
+
+.grosig-shell-v2__topbar {
+  min-height: var(--gs2-topbar-h);
+  border-bottom: 1px solid var(--gs2-border);
+  background: var(--gs2-bg-elevated);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.55rem 1.25rem;
+  flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.grosig-shell-v2__topbar-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.grosig-shell-v2__topbar-sub {
+  font-size: 0.78rem;
+  color: var(--gs2-text-muted);
+  margin: 0.1rem 0 0;
+}
+
+.grosig-shell-v2__topbar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.grosig-shell-v2__topbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.grosig-shell-v2__workspace {
+  flex: 1;
+  padding: 1.15rem 1.25rem 1.5rem;
+  overflow: auto;
+}
+
+.grosig-shell-v2__login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1rem;
+}
+
+.grosig-shell-v2__login-card {
+  width: 100%;
+  max-width: 26rem;
+  background: var(--gs2-bg-card);
+  border: 1px solid var(--gs2-border);
+  border-radius: var(--gs2-radius);
+  padding: 1.75rem;
+  box-shadow: var(--gs2-shadow-md);
+}
+
+.grosig-shell-v2__login-title {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+}
+
+.grosig-shell-v2__login-blurb {
+  font-size: 0.8125rem;
+  color: var(--gs2-text-muted);
+  margin: 0 0 1.25rem;
+}
+
+/* Restaurar sesión JWT: evitar flash de login antes de boot() */
+html.gs2-session-hint #gs2LoginView {
+  display: none !important;
+}
+
+html.gs2-session-hint #gs2Dashboard {
+  display: block !important;
+}
+
+@media (max-width: 900px) {
+  .grosig-shell-v2 {
+    flex-direction: column;
+  }
+  .grosig-shell-v2__sidebar {
+    width: 100%;
+    min-height: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--gs2-border);
+  }
+  .grosig-shell-v2__sidebar.is-collapsed {
+    width: 100%;
+  }
+  .grosig-shell-v2__sidebar.is-collapsed nav {
+    display: none;
+  }
+}

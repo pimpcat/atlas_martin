@@ -1,0 +1,192 @@
+/**
+ * GroSIG Studio 2 — ajuste FHD 1080p (sin scroll vertical, estilo Atlas SPA).
+ */
+body.gs2-page:has(#gs2Dashboard:not(.d-none)) {
+  height: 100%;
+  overflow: hidden;
+}
+
+#gs2Dashboard:not(.d-none) {
+  height: 100vh;
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2 {
+  height: 100%;
+  max-height: 100vh;
+  min-height: 0;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__sidebar {
+  min-height: 0;
+  height: 100%;
+  max-height: 100vh;
+  padding: 0.6rem 0.65rem;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__topbar {
+  min-height: 50px;
+  padding: 0.45rem 0.95rem;
+  flex-shrink: 0;
+  flex-wrap: nowrap;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__topbar-title {
+  font-size: 1.125rem;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__topbar-sub {
+  font-size: 0.78rem;
+  margin: 0.05rem 0 0;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__workspace.gs2-overview-fit {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.55rem 0.75rem 0.6rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto auto auto minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem;
+  align-content: stretch;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-span-2 {
+  grid-column: 1 / -1;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__main {
+  min-height: 0;
+  height: 100%;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-card {
+  padding: 0.55rem 0.65rem;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-card__head {
+  margin-bottom: 0.45rem;
+  gap: 0.45rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-card__title {
+  font-size: 0.9375rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-card__sub {
+  font-size: 0.75rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-metric-value {
+  font-size: 1.25rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-metric-label {
+  font-size: 0.72rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-card--metric {
+  padding: 0.48rem 0.55rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-health-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-health-item {
+  padding: 0.48rem 0.55rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-health-item__label {
+  font-size: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-status {
+  font-size: 0.68rem;
+  padding: 0.15rem 0.4rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-table {
+  font-size: 0.78rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-table th,
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-table td {
+  padding: 0.3rem 0.35rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-table th {
+  font-size: 0.7rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-overview-toolbar {
+  margin: 0;
+  gap: 0.35rem;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__nav-group {
+  margin-bottom: 0.75rem;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__nav-link {
+  font-size: 0.9rem;
+  padding: 0.42rem 0.6rem;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__nav-label {
+  font-size: 0.72rem;
+  padding-bottom: 0.35rem;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__sidebar-head {
+  padding-bottom: 0.65rem;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__sidebar nav {
+  overflow: hidden;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-quick-links {
+  margin-top: 0.35rem;
+}
+
+#gs2Dashboard:not(.d-none) .gs2-overview-fit .gs2-quick-links .gs2-btn {
+  font-size: 0.75rem;
+  padding: 0.28rem 0.5rem;
+}
+
+@media (max-width: 1100px) {
+  #gs2Dashboard:not(.d-none) .grosig-shell-v2__workspace.gs2-overview-fit {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+}
+
+/* —— Módulos studio (visor, geografía…) en FHD —— */
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__workspace:not(.gs2-overview-fit) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0.45rem 0.65rem 0.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+#gs2Dashboard:not(.d-none) .grosig-shell-v2__workspace:not(.gs2-overview-fit) .gs2-studio-workspace {
+  padding: 0.35rem 0.55rem 0.4rem;
+}

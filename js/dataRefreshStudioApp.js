@@ -4,16 +4,28 @@
 import {
   adminFetch,
   adminUpload,
+  adminDownloadBlob,
   getAdminToken,
+  getAdminUser,
 } from "./visorAdminAuth.js";
+import { offerMartinReconcile } from "./martinReconcileOffer.js";
 import { createStudioShell } from "./studioShell.js";
 import { apiUrl } from "./atlasConfig.js";
 import {
   DATA_REFRESH_TERMINAL,
   pollDataRefreshJobUntilTerminal,
 } from "./dataRefreshJobPoll.js";
+import {
+  adminKitGroEndpoints,
+  bindKitGroCollapsible,
+  KIT_GRO_PANEL_INNER_HTML,
+  mountKitGroPanel,
+} from "./kitGroStudio.js";
 
 const $ = (id) => document.getElementById(id);
+
+let _kitGroMounted = false;
+let _kitGroCollapsibleBound = false;
 
 const TERMINAL = DATA_REFRESH_TERMINAL;
 const STATUS_PCT = {
@@ -32,7 +44,7 @@ let _currentJobId = null;
 let _currentJobKind = "spatial";
 let _busy = false;
 let _pollTimer = null;
-let _mode = "spatial"; // spatial | indicators
+let _mode = "spatial"; // spatial | indicators | contexto
 let _indScope = "estatal"; // estatal (tab_municipal) | nacional (tab_nacional)
 let _templates = [];
 
@@ -75,7 +87,7 @@ function setBusyUi(on) {
   document.body.classList.toggle("dr-is-busy", _busy);
   const overlay = $("drBusyOverlay");
   if (overlay) overlay.hidden = !_busy;
-  ["drUploadBtn", "drApplyBtn", "drCancelBtn", "drLogoutBtn", "drTarget", "drFile", "drTemplate", "drIndFile", "drModeSpatial", "drModeIndicators", "drMoldBtn", "drSynthBtn", "drSynthSeed", "drSynthChanges", "drSynthJitter", "drScopeEstatal", "drScopeNacional"].forEach(
+  ["drUploadBtn", "drApplyBtn", "drCancelBtn", "drLogoutBtn", "drTarget", "drFile", "drDbfEncoding", "drTemplate", "drIndFile", "drContextoFile", "drModeSpatial", "drModeIndicators", "drModeContexto", "drMoldBtn", "drSynthBtn", "drSynthSeed", "drSynthChanges", "drSynthJitter", "drScopeEstatal", "drScopeNacional"].forEach(
     (id) => {
       const el = $(id);
       if (el) el.disabled = _busy;
@@ -152,14 +164,63 @@ function setIndScope(scope) {
   void loadVersions();
 }
 
+function syncKitGroPanelVisibility() {
+  const card = $("drKitGroCard");
+  if (!card) return;
+  const user = getAdminUser();
+  const ent = String(user?.cve_ent || "").padStart(2, "0");
+  // Entidad 12 y núcleo 00 no siembran desde sí mismos; el resto usa kit base.
+  card.classList.toggle("d-none", ent === "12" || ent === "00");
+  const title = card.querySelector(".kit-gro-card-toggle .fw-semibold");
+  if (title && ent && ent !== "12" && ent !== "00") {
+    title.textContent = `Kit Base · destino entidad ${ent}`;
+  }
+}
+
+function mountKitGroPanelContent() {
+  const panel = $("drKitGroPanel");
+  if (!panel || _kitGroMounted) return;
+  panel.innerHTML = KIT_GRO_PANEL_INNER_HTML;
+  mountKitGroPanel(panel, {
+    ...adminKitGroEndpoints(),
+    fetchFn: adminFetch,
+    onSuccess: () => {
+      void loadTargets();
+      void loadTemplates();
+    },
+  });
+  _kitGroMounted = true;
+}
+
+function initKitGroPanel() {
+  const card = $("drKitGroCard");
+  if (!card || _kitGroCollapsibleBound) return;
+  bindKitGroCollapsible(card, { onFirstExpand: mountKitGroPanelContent });
+  _kitGroCollapsibleBound = true;
+}
+
+function syncPreviewPanels(mode) {
+  const isCtx = mode === "contexto";
+  $("drPreviewCard")?.classList.toggle("d-none", isCtx);
+  $("drContextoPanel")?.classList.toggle("d-none", !isCtx);
+  $("drHistoryTable")?.closest(".card")?.classList.toggle("d-none", isCtx);
+  $("drVersionsList")?.closest(".card")?.classList.toggle("d-none", isCtx);
+}
+
 function setMode(mode) {
-  _mode = mode === "indicators" ? "indicators" : "spatial";
+  _mode = mode === "indicators" ? "indicators" : mode === "contexto" ? "contexto" : "spatial";
+  syncPreviewPanels(_mode);
   $("drSpatialFields")?.classList.toggle("d-none", _mode !== "spatial");
   $("drIndicatorFields")?.classList.toggle("d-none", _mode !== "indicators");
+  $("drContextoFields")?.classList.toggle("d-none", _mode !== "contexto");
   $("drIndScopeTabs")?.classList.toggle("d-none", _mode !== "indicators");
-  $("drDerivedCard")?.classList.toggle("d-none", _mode !== "spatial");
+  $("drDerivedCard")?.classList.toggle("d-none", _mode !== "spatial" && _mode !== "indicators");
+  if (_mode === "spatial" || _mode === "indicators") {
+    void loadResumenMeta();
+  }
   const spat = $("drModeSpatial");
   const ind = $("drModeIndicators");
+  const ctx = $("drModeContexto");
   if (spat) {
     spat.classList.toggle("btn-primary", _mode === "spatial");
     spat.classList.toggle("btn-outline-secondary", _mode !== "spatial");
@@ -168,17 +229,116 @@ function setMode(mode) {
     ind.classList.toggle("btn-primary", _mode === "indicators");
     ind.classList.toggle("btn-outline-secondary", _mode !== "indicators");
   }
+  if (ctx) {
+    ctx.classList.toggle("btn-primary", _mode === "contexto");
+    ctx.classList.toggle("btn-outline-secondary", _mode !== "contexto");
+  }
   const btn = $("drUploadBtn");
   if (btn) {
-    btn.textContent = _mode === "indicators" ? "Subir y validar CSV" : "Subir y comparar";
+    btn.textContent =
+      _mode === "indicators"
+        ? "Subir y validar CSV"
+        : _mode === "contexto"
+          ? "Cargar contexto"
+          : "Subir y comparar";
   }
   setMsg($("drUploadMsg"), "", true);
   if (_mode === "indicators") {
     setIndScope(_indScope);
+  } else if (_mode === "contexto") {
+    void loadContextoMeta();
   } else {
     void loadJobs();
     void loadVersions();
   }
+}
+
+async function downloadContextoMold() {
+  const { ok, message, filename } = await adminDownloadBlob("/api/data-refresh/contexto/mold", {
+    filename: "molde_contexto_geo.xlsx",
+  });
+  if (!ok) {
+    setMsg($("drUploadMsg"), message || "No se pudo descargar el molde Excel", false);
+  }
+}
+
+async function loadResumenMeta() {
+  const metaEl = $("drResumenMeta");
+  if (!metaEl) return;
+  const { res, data } = await adminFetch("/api/data-refresh/resumen/meta");
+  if (!res?.ok) {
+    metaEl.textContent = "No se pudo leer explorador.municipio_resumen.";
+    return;
+  }
+  metaEl.innerHTML =
+    `Entidad <code>${data.cve_ent || "—"}</code> · ` +
+    `${data.filas_con_dato ?? 0}/${data.municipios ?? 0} municipios con dato · ` +
+    `campos: ${(data.fields || []).join(", ")}`;
+}
+
+async function downloadResumenMold() {
+  const { ok, message } = await adminDownloadBlob("/api/data-refresh/resumen/mold", {
+    filename: "molde_municipio_resumen.xlsx",
+  });
+  if (!ok) {
+    setMsg($("drResumenMsg"), message || "No se pudo descargar el molde", false);
+  }
+}
+
+async function uploadResumenFile() {
+  const file = $("drResumenFile")?.files?.[0];
+  if (!file) {
+    setMsg($("drResumenMsg"), "Seleccione un Excel/CSV del molde municipio_resumen.", false);
+    return;
+  }
+  if (_busy) return;
+  setBusyUi(true);
+  setProgress(20, "Cargando municipio_resumen…", { indeterminate: true });
+  setMsg($("drResumenMsg"), "", true);
+  try {
+    const fd = new FormData();
+    fd.append("file", file);
+    const { res, data, networkError } = await adminFetch("/api/data-refresh/resumen/upload", {
+      method: "POST",
+      body: fd,
+    });
+    if (networkError || !res) {
+      setMsg($("drResumenMsg"), "Error de red al cargar municipio_resumen.", false);
+      return;
+    }
+    if (!res.ok) {
+      setMsg(
+        $("drResumenMsg"),
+        data?.detail?.message || data?.message || data?.detail || `Error HTTP ${res.status}`,
+        false
+      );
+      return;
+    }
+    setMsg(
+      $("drResumenMsg"),
+      `✓ ${data.upserted ?? 0} municipio(s) · campos: ${(data.fields_written || []).join(", ")}. ` +
+        `Panel: superficie, densidad, región, marginación/rezago.`,
+      true
+    );
+    await loadResumenMeta();
+  } finally {
+    setBusyUi(false);
+    setProgress(0, "");
+  }
+}
+
+async function loadContextoMeta() {
+  const metaEl = $("drContextoMeta");
+  const { res, data } = await adminFetch("/api/data-refresh/contexto/meta");
+  if (!metaEl) return;
+  if (!res?.ok) {
+    metaEl.textContent = "No se pudo leer el estado de geo.c_contexto.";
+    return;
+  }
+  metaEl.innerHTML =
+    `<strong>geo.c_contexto</strong> · entidad ${data.cve_ent} · ` +
+    `${data.row_count ?? 0} fila(s) cargada(s) · ` +
+    `${data.municipio_count ?? "?"} municipios en marco CORE.`;
 }
 
 function syncTemplateUi() {
@@ -231,9 +391,11 @@ function fillTemplateSelect() {
       _indScope === "nacional"
         ? `<option value="">(sin plantillas nacionales)</option>`
         : `<option value="">(sin plantillas estatales)</option>`;
+    syncKitGroPanelVisibility();
     syncTemplateUi();
     return;
   }
+  syncKitGroPanelVisibility();
   const prev = sel.value;
   sel.innerHTML =
     `<option value="">— Seleccione indicador —</option>` +
@@ -405,9 +567,19 @@ async function loadTargets() {
     })
     .join("");
   if (!targets.length) {
-    sel.innerHTML = `<option value="">(sin tablas candidatas)</option>`;
+    sel.innerHTML = `<option value="">(sin capas espaciales aún)</option>`;
+    const hint = $("drInstanceEmptyHint");
+    if (hint) {
+      hint.classList.remove("d-none");
+      hint.innerHTML =
+        "<strong>Instancia lista para cargar datos.</strong> No hay tablas con geometría en producción. " +
+        "Suba su primer SHP/ZIP aquí o use Visor Studio (+) para importar una capa.";
+    }
+    syncKitGroPanelVisibility();
     return;
   }
+  $("drInstanceEmptyHint")?.classList.add("d-none");
+  syncKitGroPanelVisibility();
   sel.innerHTML = `<option value="">— Seleccione tabla destino —</option>${opts}`;
 }
 
@@ -458,7 +630,7 @@ async function loadJobs() {
       )}" style="cursor:pointer">
           <td class="text-nowrap">${escapeHtml(when)}</td>
           <td>${escapeHtml(j.username || "—")}</td>
-          <td><code>${escapeHtml(j.target_table || "")}</code></td>
+          <td><code>${escapeHtml(j.table_label || j.target_table || "")}</code></td>
           <td>${escapeHtml(kind)}</td>
           <td class="text-truncate" style="max-width:12rem" title="${escapeHtml(
             j.summary || ""
@@ -505,10 +677,7 @@ async function loadVersions() {
   if (!host) return;
   const params = new URLSearchParams({ limit: "30" });
   if (_mode === "indicators") {
-    params.set(
-      "table_name",
-      _indScope === "nacional" ? "tab_nacional" : "tab_municipal"
-    );
+    params.set("table_name", "valor");
   }
   const { res, data } = await adminFetch(`/api/data-refresh/versions?${params}`);
   if (!res?.ok) {
@@ -518,9 +687,13 @@ async function loadVersions() {
   let versions = data.versions || [];
   if (_mode === "spatial") {
     versions = versions.filter((v) => (v.kind || "spatial") === "spatial");
+  } else if (_mode === "indicators") {
+    versions = versions.filter(
+      (v) => (v.kind || "") === "amigo_valor" || (v.table_name || "") === "valor"
+    );
   }
   if (!versions.length) {
-    host.innerHTML = `<p class="small text-muted mb-0">Sin versiones retenidas aún (aparecen tras un apply exitoso).</p>`;
+    host.innerHTML = `<p class="small text-muted mb-0">Sin versiones retenidas aún (aparecen tras un apply exitoso). Máx. 3 por instancia.</p>`;
     return;
   }
   host.innerHTML = versions
@@ -528,12 +701,11 @@ async function loadVersions() {
       const when = formatHistoryDate(v.created_at);
       const rows =
         v.row_count != null ? `${fmtInt(v.row_count)} filas` : "—";
+      const qual = `${v.schema_name || "—"}.${v.table_name || ""}`;
       return `<div class="border rounded p-2 mb-1 small">
         <div class="d-flex justify-content-between gap-2 align-items-start">
           <div>
-            <div><code>${escapeHtml(v.table_name)}</code> · ${escapeHtml(
-        when
-      )}</div>
+            <div><code>${escapeHtml(qual)}</code> · ${escapeHtml(when)}</div>
             <div class="text-muted">${escapeHtml(rows)} · <code>${escapeHtml(
         v.backup_table || ""
       )}</code></div>
@@ -556,7 +728,7 @@ async function loadVersions() {
 async function restoreVersion(versionId) {
   if (!versionId || _busy) return;
   const ok = window.confirm(
-    "¿Restaurar esta versión? La producción actual se conservará como nueva versión (máx. 3)."
+    "¿Restaurar esta versión? El estado actual se guardará como nueva versión (máx. 3 por instancia)."
   );
   if (!ok) return;
   setBusyUi(true);
@@ -617,7 +789,7 @@ function renderJobSummary(job) {
       <div class="dr-info">
         <span class="dr-info__tag">En curso</span>
         ${escapeHtml(r.label || labelFromJob(job))}
-        · Destino: <code>${escapeHtml(job.target_table || r.target_table || "—")}</code>
+        · Destino: <code>${escapeHtml(job.table_label || r.table_label || job.target_table || r.target_table || "—")}</code>
       </div>`;
     return;
   }
@@ -630,16 +802,37 @@ function renderJobSummary(job) {
           `<li class="${c.ok ? "dr-check--ok" : "dr-check--warn"}">${c.ok ? "✔" : "△"} ${escapeHtml(c.label)}</li>`
       )
       .join("");
+    const dest = s.connection_key || r.connection_key;
+    const db = s.instance_db || r.instance_db;
+    const requestEnt = s.request_ent || r.request_ent;
+    const resolvedEnt = s.resolved_ent || r.resolved_ent || s.cve_ent || r.cve_ent;
+    const destLine =
+      dest || db || resolvedEnt
+        ? `<p class="dr-report__time">Instancia: <code>${escapeHtml(db || dest || "—")}</code>${
+            resolvedEnt
+              ? ` · entidad <code>${escapeHtml(String(resolvedEnt))}</code>`
+              : ""
+          }${
+            requestEnt && String(requestEnt) !== String(resolvedEnt)
+              ? ` · request_ent=${escapeHtml(String(requestEnt))}`
+              : ""
+          }</p>`
+        : "";
     const title =
       r.kind === "indicator"
         ? "Indicadores actualizados"
         : r.kind === "derived"
-          ? "Tabla derivada recalculada"
+          ? "Tabla derivada recalculada (ya en producción)"
           : "Swap completado";
+    const derivedHint =
+      r.kind === "derived"
+        ? `<p class="small text-muted mb-0 mt-2">Este tipo de job escribe al instante en la BD de la instancia. No use «Aplicar a producción».</p>`
+        : "";
     host.innerHTML = `
       <div class="dr-report__card dr-report__card--success">
         <h2 class="dr-report__h">${escapeHtml(title)}</h2>
         <ul class="dr-check-list">${checks}</ul>
+        ${destLine}
         <p class="dr-report__time">Tiempo total: <strong>${escapeHtml(String(s.elapsed_seconds ?? "—"))} s</strong>
           ${
             r.kind === "indicator"
@@ -648,6 +841,7 @@ function renderJobSummary(job) {
                 ? `· Municipios: <strong>${fmtInt(r.rows_written)}</strong>`
                 : `· Registros finales: <strong>${fmtInt(r.final_count)}</strong>`
           }</p>
+        ${derivedHint}
       </div>`;
     return;
   }
@@ -690,7 +884,7 @@ function renderJobSummary(job) {
       </div>
       <div class="dr-sum">
         ${checkRow(true, "Plantilla", escapeHtml(r.template_label || r.template_id || "—"))}
-        ${checkRow(true, "Tabla destino", escapeHtml(r.target_table || job?.target_table || "—"))}
+        ${checkRow(true, "Tabla destino", escapeHtml(r.table_label || job?.table_label || r.target_table || job?.target_table || "—"))}
         ${checkRow(checks.metrics !== false, "Columnas a actualizar", escapeHtml(metrics || "—"))}
         ${checkRow(checks.municipalities !== false, unitMatch, fmtInt(matched))}
         ${checkRow(checks.types !== false, "Tipos numéricos", checks.types === false ? "Con errores" : "OK")}
@@ -904,8 +1098,25 @@ function renderJob(job) {
     !isDerived &&
     !["applied", "cancelled", "applying"].includes(job.status) &&
     !_busy;
-  if ($("drApplyBtn")) $("drApplyBtn").disabled = !canApply;
-  if ($("drCancelBtn")) $("drCancelBtn").disabled = !canCancel;
+  const applyBtn = $("drApplyBtn");
+  const cancelBtn = $("drCancelBtn");
+  if (applyBtn) {
+    applyBtn.disabled = !canApply;
+    applyBtn.classList.toggle("d-none", isDerived);
+  }
+  if (cancelBtn) {
+    cancelBtn.disabled = !canCancel;
+    cancelBtn.classList.toggle("d-none", isDerived);
+  }
+  if (isDerived && job.status === "applied") {
+    setMsg(
+      $("drApplyMsg"),
+      "Listo: el recálculo ya escribió en producción (AMIGO-NN). No hay paso «Aplicar».",
+      true
+    );
+  } else if (isDerived) {
+    setMsg($("drApplyMsg"), "", true);
+  }
 }
 
 async function normalizeGeometry(accept) {
@@ -975,6 +1186,10 @@ async function uploadAndCompare() {
     await uploadIndicatorCsv();
     return;
   }
+  if (_mode === "contexto") {
+    await uploadContextoFile();
+    return;
+  }
   const table = $("drTarget")?.value?.trim();
   const file = $("drFile")?.files?.[0];
   if (!table) {
@@ -993,6 +1208,8 @@ async function uploadAndCompare() {
   const fd = new FormData();
   fd.append("target_table", table);
   fd.append("file", file, file.name);
+  const enc = $("drDbfEncoding")?.value?.trim() || "auto";
+  fd.append("dbf_encoding", enc);
 
   let job = null;
   try {
@@ -1043,6 +1260,47 @@ async function uploadAndCompare() {
     setMsg($("drUploadMsg"), "Comparación lista. Revise el informe antes de aplicar.", true);
   } else {
     setMsg($("drUploadMsg"), `Job terminó en estado: ${job.status}`, false);
+  }
+}
+
+async function uploadContextoFile() {
+  const file = $("drContextoFile")?.files?.[0];
+  if (!file) {
+    setMsg($("drUploadMsg"), "Seleccione un CSV o Excel con cve_mun y campos de contexto.", false);
+    return;
+  }
+  setBusyUi(true);
+  setMsg($("drUploadMsg"), "", true);
+  const fd = new FormData();
+  fd.append("file", file, file.name);
+  try {
+    const { status, data, networkError } = await adminUpload(
+      "/api/data-refresh/contexto/upload",
+      fd
+    );
+    if (networkError || status >= 400 || !data?.ok) {
+      const msg =
+        data?.detail?.message ||
+        (typeof data?.detail === "string" ? data.detail : null) ||
+        data?.message ||
+        `HTTP ${status}`;
+      throw new Error(msg);
+    }
+    setMsg(
+      $("drUploadMsg"),
+      `Contexto actualizado: ${data.upserted} fila(s), ${data.skipped} omitida(s). Campos: ${(data.fields_written || []).join(", ")}.`,
+      true
+    );
+    const resEl = $("drContextoResult");
+    if (resEl) {
+      resEl.innerHTML =
+        `<span class="text-success">Última carga: ${data.upserted} fila(s) en entidad ${data.cve_ent}.</span>`;
+    }
+    await loadContextoMeta();
+  } catch (err) {
+    setMsg($("drUploadMsg"), err?.message || "No se pudo cargar contexto.", false);
+  } finally {
+    setBusyUi(false);
   }
 }
 
@@ -1103,7 +1361,11 @@ async function uploadIndicatorCsv() {
 async function applyCurrent() {
   if (!_currentJobId || _busy) return;
   if (_currentJobKind === "derived") {
-    setMsg($("drApplyMsg"), "Este job ya está aplicado (recálculo derivado).", false);
+    setMsg(
+      $("drApplyMsg"),
+      "El recálculo de municipio_conteos ya quedó en producción al pulsar «Recalcular». No requiere «Aplicar».",
+      true
+    );
     return;
   }
   const kind = _currentJobKind === "indicator" ? "indicator" : "spatial";
@@ -1111,7 +1373,7 @@ async function applyCurrent() {
   if (
     !confirm(
       kind === "indicator"
-        ? "¿Aplicar actualización de indicadores? Solo se actualizarán las columnas del archivo. Se creará un snapshot restaurable (máx. 3)."
+        ? "¿Aplicar actualización de indicadores? Se creará un snapshot restaurable de indicadores.valor en esta instancia (máx. 3)."
         : "¿Aplicar swap a producción? La tabla actual se conservará como versión restaurable (máx. 3)."
     )
   ) {
@@ -1173,6 +1435,13 @@ async function applyCurrent() {
       $("drDerivedConteosBtn")?.focus();
     }
     renderJob(data.job);
+    if (kind !== "indicator") {
+      void offerMartinReconcile({
+        reason: "data_refresh",
+        hint: `Tabla actualizada: ${tgt || "geo"}. El reconcile alinea vistas tiles (compartidas y filtradas) con la nueva geometría.`,
+        onStatus: (msg, ok) => setMsg($("drApplyMsg"), msg, ok !== false),
+      });
+    }
     if (kind === "spatial") await loadTargets();
     await loadJobs();
     await loadVersions();
@@ -1208,7 +1477,7 @@ async function refreshMunicipioConteos() {
   if (_busy) return;
   if (
     !window.confirm(
-      "¿Recalcular atlas.municipio_conteos?\n\nActualiza n_localidades y n_denue por municipio (KPIs del explorador). Puede tardar si c_denue es grande."
+      "¿Recalcular explorador.municipio_conteos en la instancia activa?\n\nActualiza n_localidades y n_denue (KPIs del explorador). Requiere geo.c_loc_punto / geo.c_denue en AMIGO-NN."
     )
   ) {
     return;
@@ -1226,12 +1495,16 @@ async function refreshMunicipioConteos() {
       return;
     }
     if (!res.ok) {
-      setMsg(
-        $("drDerivedMsg"),
-        data?.detail?.message || data?.message || `Fallo (HTTP ${res.status})`,
-        false
-      );
-      if (data?.detail?.job) renderJob(data.detail.job);
+      const detail = data?.detail;
+      const msg =
+        (detail && typeof detail === "object" && detail.message) ||
+        (typeof detail === "string" ? detail : null) ||
+        data?.message ||
+        `Fallo (HTTP ${res.status})`;
+      setMsg($("drDerivedMsg"), msg, false);
+      if (detail?.job) renderJob(detail.job);
+      else if (data?.job) renderJob(data.job);
+      await loadJobs();
       return;
     }
     const n = data.municipios_actualizados ?? data.job?.report?.rows_written;
@@ -1251,6 +1524,8 @@ async function refreshMunicipioConteos() {
 
 async function bootDashboard() {
   setMode(_mode);
+  syncKitGroPanelVisibility();
+  initKitGroPanel();
 
   const sel = $("drTarget");
   if (sel) sel.innerHTML = `<option value="">Cargando tablas…</option>`;
@@ -1299,7 +1574,7 @@ async function bootDashboard() {
   }
 }
 
-async function init() {
+function wireDataRefreshStudioUi() {
   $("drUploadBtn")?.addEventListener("click", () => void uploadAndCompare());
   $("drApplyBtn")?.addEventListener("click", () => void applyCurrent());
   $("drCancelBtn")?.addEventListener("click", () => void cancelCurrent());
@@ -1309,6 +1584,9 @@ async function init() {
   $("drModeIndicators")?.addEventListener("click", () => {
     if (!_busy) setMode("indicators");
   });
+  $("drModeContexto")?.addEventListener("click", () => {
+    if (!_busy) setMode("contexto");
+  });
   $("drScopeEstatal")?.addEventListener("click", () => {
     if (!_busy) setIndScope("estatal");
   });
@@ -1316,12 +1594,30 @@ async function init() {
     if (!_busy) setIndScope("nacional");
   });
   $("drMoldBtn")?.addEventListener("click", () => void downloadIndicatorMold());
+  $("drContextoMoldBtn")?.addEventListener("click", () => void downloadContextoMold());
   $("drSynthBtn")?.addEventListener("click", () => void downloadSyntheticIndicator());
   $("drHistoryRefresh")?.addEventListener("click", () => void loadJobs());
   $("drVersionsRefresh")?.addEventListener("click", () => void loadVersions());
   $("drDerivedConteosBtn")?.addEventListener("click", () => void refreshMunicipioConteos());
+  $("drResumenMoldBtn")?.addEventListener("click", () => void downloadResumenMold());
+  $("drResumenUploadBtn")?.addEventListener("click", () => void uploadResumenFile());
+}
+
+/** Shell v2 — enlazar UI tras montar panel en #gs2StudioMount */
+export function bindDataRefreshStudioUi() {
+  wireDataRefreshStudioUi();
+}
+
+/** Shell v2 — cargar tablas, plantillas e historial */
+export function enterDataRefreshStudioDashboard() {
+  return bootDashboard();
+}
+
+async function init() {
+  wireDataRefreshStudioUi();
 
   const shell = createStudioShell(
+
     {
       loginView: "drLoginView",
       dashboard: "drDashboard",
@@ -1344,4 +1640,6 @@ async function init() {
   await shell.boot();
 }
 
-void init();
+if (document.getElementById("drLoginForm")) {
+  void init();
+}

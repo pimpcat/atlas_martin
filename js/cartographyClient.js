@@ -5,13 +5,14 @@
  */
 import { apiUrl } from "./atlasConfig.js";
 import { fetchLocsAtlasLabels } from "./api.js";
+import { canPickFolder, estimateBatch, formatDuration, pickFolder, runBatch } from "./cartographyBatch.js";
 import {
   getCartographyHealth,
   isCartographyEnabled,
   probeCartographyEngine,
   probeCartographyHealth,
 } from "./cartographyHealth.js";
-import { getAdminToken, isVisorAdminLoggedIn } from "./visorAdminAuth.js";
+import { getAdminToken, isVisorAdminLoggedIn, isVisorAdminUiAllowed, verifyAdminSession } from "./visorAdminAuth.js";
 
 export { getCartographyHealth, isCartographyEnabled, probeCartographyEngine, probeCartographyHealth };
 
@@ -86,6 +87,23 @@ function _formatBytes(n) {
  * Genera un producto y dispara descarga.
  */
 export async function generateAndDownload(opts) {
+  const { blob, filename, format } = await generateBlob(opts);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+  return { filename, size: blob.size, format };
+}
+
+/**
+ * Genera un producto y devuelve el archivo sin descargarlo (lotes).
+ * Errores HTTP llevan ``status`` (p. ej. 429 límite, 401 sesión).
+ */
+export async function generateBlob(opts) {
   const format = String(opts.format || "pdf").toLowerCase();
   const template_id = String(opts.template_id || "").trim();
   if (!template_id) throw new Error("Falta plantilla de cartografía.");
@@ -115,6 +133,7 @@ export async function generateAndDownload(opts) {
       "X-Atlas-Authorization": `Bearer ${token}`,
     },
     body: JSON.stringify(body),
+    signal: opts.signal,
   });
 
   if (!res.ok) {
@@ -128,7 +147,9 @@ export async function generateAndDownload(opts) {
     } catch {
       /* cuerpo no JSON */
     }
-    throw new Error(String(detail));
+    const error = new Error(String(detail));
+    error.status = res.status;
+    throw error;
   }
 
   const blob = await res.blob();
@@ -143,16 +164,7 @@ export async function generateAndDownload(opts) {
     res.headers.get("Content-Disposition"),
     fallback
   );
-
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 2000);
-  return { filename, size: blob.size, format };
+  return { blob, filename, format };
 }
 
 /** @deprecated Usar generateAndDownload */
@@ -271,6 +283,14 @@ function _renderControls(host, health) {
         ${croquisOpts || '<option value="croquis_municipal">Estándar</option>'}
       </select>
     </div>
+    <div class="cartography-ui__row" id="cartographyAmbitoRow" hidden>
+      <label class="cartography-ui__label" for="cartographyAmbito">Ámbito</label>
+      <select id="cartographyAmbito" class="form-select form-select-sm cartography-ui__select" aria-label="Ámbito de la localidad">
+        <option value="" selected>Todos</option>
+        <option value="U">Urbano</option>
+        <option value="R">Rural</option>
+      </select>
+    </div>
     <div class="cartography-ui__row" id="cartographyLocRow" hidden>
       <label class="cartography-ui__label" for="cartographyCveLoc">Localidad</label>
       <div class="cartography-ui__loc-wrap">
@@ -285,6 +305,19 @@ function _renderControls(host, health) {
     <div class="cartography-ui__hint" id="cartographyLocHint" hidden>
       Solo localidades amanzanadas del municipio seleccionado.
     </div>
+    <details id="cartographyBatchRow" class="cartography-ui__hint mb-1" hidden>
+      <summary style="cursor:pointer;user-select:none">Más opciones</summary>
+      <button type="button" id="btnCartographyBatch" class="btn btn-sm btn-outline-info w-100 mt-1">
+        Generar todas las localidades…
+      </button>
+      <div id="cartographyBatchConfirm" class="cartography-ui__hint border rounded p-2 mt-1" hidden>
+        <div id="cartographyBatchSummary"></div>
+        <div class="d-flex gap-1 mt-2">
+          <button type="button" id="btnCartographyBatchStart" class="btn btn-sm btn-info flex-grow-1">Empezar</button>
+          <button type="button" id="btnCartographyBatchCancel" class="btn btn-sm btn-outline-secondary">Cancelar</button>
+        </div>
+      </div>
+    </details>
     <div class="cartography-ui__row cartography-ui__row--check" id="cartographyMpRow" hidden>
       <label class="cartography-ui__check" for="cartographyMultipage"
         title="Multipágina a escala aproximada 1:7 500 (solo localidades urbanas)">
@@ -336,6 +369,15 @@ function _syncProductRows(root) {
   if (tplRow) tplRow.hidden = product !== "croquis";
   if (atlasRow) atlasRow.hidden = product !== "atlas";
   if (locRow) locRow.hidden = product !== "localidad";
+  const ambitoRow = root.querySelector("#cartographyAmbitoRow");
+  if (ambitoRow) ambitoRow.hidden = product !== "localidad";
+  const batchRow = root.querySelector("#cartographyBatchRow");
+  if (batchRow) batchRow.hidden = product !== "localidad";
+  if (product !== "localidad") {
+    const confirmBox = root.querySelector("#cartographyBatchConfirm");
+    if (confirmBox) confirmBox.hidden = true;
+    if (batchRow) batchRow.open = false;
+  }
   if (locHint) locHint.hidden = product !== "localidad";
   if (mpRow) mpRow.hidden = product !== "localidad";
   if (product !== "localidad" && mpChk) mpChk.checked = false;
@@ -394,15 +436,18 @@ async function _loadLocalidades(host, cveMun) {
     return;
   }
 
+  host.dataset.locMun = cve;
+  const batchBox = host.querySelector("#cartographyBatchConfirm");
+  if (batchBox) batchBox.hidden = true;
   if (_locCache.has(cve)) {
-    _fillLocSelect(sel, manual, _locCache.get(cve));
+    _fillLocSelect(sel, manual, _filterByAmbito(host, _locCache.get(cve)));
     return;
   }
 
   sel.innerHTML = '<option value="">Cargando localidades…</option>';
   sel.disabled = true;
   try {
-    const fc = await fetchLocsAtlasLabels(cve);
+    const [fc, ambitos] = await Promise.all([fetchLocsAtlasLabels(cve), _fetchAmbitos(cve)]);
     const items = [];
     const seen = new Set();
     for (const f of fc?.features || []) {
@@ -413,11 +458,11 @@ async function _loadLocalidades(host, cveMun) {
       if (!loc || seen.has(loc)) continue;
       seen.add(loc);
       const nom = String(props.nomgeo || props.NOMGEO || "").trim() || loc;
-      items.push({ cve_loc: loc, nomgeo: nom });
+      items.push({ cve_loc: loc, nomgeo: nom, ambito: ambitos?.get(loc) || "" });
     }
     items.sort((a, b) => a.cve_loc.localeCompare(b.cve_loc, "es", { numeric: true }));
     _locCache.set(cve, items);
-    _fillLocSelect(sel, manual, items);
+    if (host.dataset.locMun === cve) _fillLocSelect(sel, manual, _filterByAmbito(host, items));
   } catch (err) {
     console.warn("[cartography] localidades", err);
     sel.innerHTML =
@@ -429,6 +474,38 @@ async function _loadLocalidades(host, cveMun) {
   } finally {
     sel.disabled = false;
   }
+}
+
+/** cve_loc → "U" | "R" desde marco.l (la misma tabla con la que el motor elige plantilla); null si no hay. */
+async function _fetchAmbitos(cveMun) {
+  const token = getAdminToken();
+  if (!token) return null;
+  try {
+    const res = await fetch(
+      apiUrl(`/api/cartography/preview-territory?cve_mun=${encodeURIComponent(cveMun)}`),
+      {
+        headers: { Authorization: `Bearer ${token}`, "X-Atlas-Authorization": `Bearer ${token}` },
+        cache: "no-store",
+      }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const out = new Map();
+    for (const r of data?.rows || []) {
+      const loc = _normCve4(r.cve);
+      if (loc) out.set(loc, /^\s*R/i.test(String(r.ambito || "")) ? "R" : "U");
+    }
+    return out;
+  } catch (err) {
+    console.warn("[cartography] ámbito localidades", err);
+    return null;
+  }
+}
+
+function _filterByAmbito(host, items) {
+  const want = host.querySelector("#cartographyAmbito")?.value || "";
+  if (!want || !items?.some((it) => it.ambito)) return items;
+  return items.filter((it) => it.ambito === want);
 }
 
 function _fillLocSelect(sel, manual, items) {
@@ -494,6 +571,10 @@ function _ensureBusyOverlay() {
         <div class="cartography-busy__spinner" aria-hidden="true"></div>
         <p class="cartography-busy__title" id="cartographyBusyTitle">Generando cartografía…</p>
         <p class="cartography-busy__msg" id="cartographyBusyMsg">Puede tardar varios minutos. No pulses de nuevo ni cierres la pestaña.</p>
+        <div id="cartographyBusyProgress" hidden style="height:6px;background:rgba(255,255,255,.15);border-radius:3px;overflow:hidden;margin:.5rem 0">
+          <div id="cartographyBusyBar" style="height:100%;width:0;background:#17a2b8;transition:width .3s"></div>
+        </div>
+        <button type="button" id="cartographyBusyCancel" class="btn btn-sm btn-outline-light mt-1" hidden>Cancelar</button>
       </div>`;
     root.appendChild(el);
   }
@@ -534,7 +615,7 @@ function _setCartographyBusy(host, busy, message) {
 
 /**
  * Muestra el botón Cartografía en el Visor si el engine está activo
- * y hay sesión admin (ciudadano no genera; la dependencia sí).
+ * y hay sesión admin verificada (ciudadano no genera; la dependencia sí).
  * @param {{ getCveMun: () => string | null, getNomgeo?: () => string | null }} options
  */
 export async function attachCartographyUi(options) {
@@ -556,19 +637,29 @@ export async function attachCartographyUi(options) {
     }
   };
 
-  const adminOk = isVisorAdminLoggedIn();
+  // Empezar oculto; solo mostrar tras /me OK (fail-closed).
+  setToggleVisible(false);
+  if (isVisorAdminLoggedIn()) {
+    await verifyAdminSession({ failClosed: true });
+  }
+  const adminOk = isVisorAdminUiAllowed();
   const ok = engineOk && adminOk;
   setToggleVisible(ok);
 
   if (!document.documentElement.dataset.cartographyAuthBound) {
     document.documentElement.dataset.cartographyAuthBound = "1";
     document.addEventListener("atlasgro-visor-admin-auth-change", () => {
-      const show = engineOk && isVisorAdminLoggedIn();
-      setToggleVisible(show);
-      if (!show) return;
-      if (host.dataset.bound !== "1") {
-        void attachCartographyUi(options);
-      }
+      void (async () => {
+        if (isVisorAdminLoggedIn() && !isVisorAdminUiAllowed()) {
+          await verifyAdminSession({ failClosed: true });
+        }
+        const show = engineOk && isVisorAdminUiAllowed();
+        setToggleVisible(show);
+        if (!show) return;
+        if (host.dataset.bound !== "1") {
+          void attachCartographyUi(options);
+        }
+      })();
     });
   }
 
@@ -593,6 +684,14 @@ export async function attachCartographyUi(options) {
 
   host.querySelector("#cartographyMultipage")?.addEventListener("change", () => {
     _syncProductRows(host);
+  });
+  host.querySelector("#cartographyAmbito")?.addEventListener("change", () => {
+    const cve = host.dataset.locMun;
+    const sel = host.querySelector("#cartographyCveLoc");
+    const batchBox = host.querySelector("#cartographyBatchConfirm");
+    if (batchBox) batchBox.hidden = true;
+    if (!cve || !sel || !_locCache.has(cve)) return;
+    _fillLocSelect(sel, host.querySelector("#cartographyCveLocManual"), _filterByAmbito(host, _locCache.get(cve)));
   });
   host.querySelector("#cartographyPackage")?.addEventListener("change", () => {
     _syncProductRows(host);
@@ -781,6 +880,182 @@ export async function attachCartographyUi(options) {
         status.textContent = err?.message || "No se pudo generar el archivo.";
       }
     } finally {
+      host.dataset.generating = "0";
+      _setCartographyBusy(host, false);
+    }
+  });
+
+  _bindBatch(host, options, status);
+}
+
+function _escapeText(value) {
+  const d = document.createElement("div");
+  d.textContent = String(value ?? "");
+  return d.innerHTML;
+}
+
+function _batchItems(host) {
+  const cve = host.dataset.locMun || "";
+  if (!cve || !_locCache.has(cve)) return { cve, items: [] };
+  return { cve, items: _filterByAmbito(host, _locCache.get(cve)) };
+}
+
+function _bindBatch(host, options, status) {
+  const btn = host.querySelector("#btnCartographyBatch");
+  const box = host.querySelector("#cartographyBatchConfirm");
+  const summary = host.querySelector("#cartographyBatchSummary");
+  const start = host.querySelector("#btnCartographyBatchStart");
+  const cancel = host.querySelector("#btnCartographyBatchCancel");
+  if (!btn || !box || !summary || !start) return;
+
+  btn.addEventListener("click", () => {
+    if (host.dataset.generating === "1") return;
+    const { items } = _batchItems(host);
+    if (!items.length) {
+      box.hidden = true;
+      if (status) status.textContent = "Elige un municipio con localidades amanzanadas primero.";
+      return;
+    }
+    const est = estimateBatch(items);
+    const nom = typeof options.getNomgeo === "function" ? options.getNomgeo() : "";
+    const kinds = [];
+    if (est.urban) kinds.push(`${est.urban} ${est.urban === 1 ? "urbana" : "urbanas"}`);
+    if (est.rural) kinds.push(`${est.rural} ${est.rural === 1 ? "rural" : "rurales"}`);
+    summary.innerHTML = `
+      <strong>${items.length} ${items.length === 1 ? "plano" : "planos"}</strong>${
+        nom ? ` de ${_escapeText(nom)}` : ""
+      } (${kinds.join(", ")}).<br />
+      Tiempo estimado: <strong>~${formatDuration(est.seconds)}</strong>${
+        est.measured ? "" : " (aproximado; se ajusta con los primeros planos)"
+      }.<br />
+      ${
+        canPickFolder()
+          ? "Al empezar elegirás la carpeta donde se guardará cada PDF."
+          : "Al terminar se descargará un ZIP con todos los PDF."
+      }<br />
+      Sin cartas de detalle. Se genera un plano a la vez; puedes cancelar.`;
+    box.hidden = false;
+  });
+
+  cancel?.addEventListener("click", () => {
+    box.hidden = true;
+  });
+  host.querySelector("#cartographyBatchRow")?.addEventListener("toggle", (ev) => {
+    if (!ev.target.open) box.hidden = true;
+  });
+
+  start.addEventListener("click", async () => {
+    if (host.dataset.generating === "1") return;
+    const { cve, items } = _batchItems(host);
+    if (!items.length) return;
+
+    let folder = null;
+    if (canPickFolder()) {
+      try {
+        folder = await pickFolder();
+        if (!folder) {
+          if (status) status.textContent = "Lote cancelado: no se eligió carpeta.";
+          return;
+        }
+      } catch (err) {
+        console.warn("[cartography] carpeta no disponible; se usará ZIP", err);
+        folder = null;
+      }
+    }
+    box.hidden = true;
+
+    const format = host.querySelector("#cartographyFormat")?.value || "pdf";
+    const ext = _extForFormat(format);
+    const amb = host.querySelector("#cartographyAmbito")?.value || "";
+    const zipName = `planos_localidad_${cve}${amb === "U" ? "_urbanas" : amb === "R" ? "_rurales" : ""}.zip`;
+    const ctrl = new AbortController();
+
+    host.dataset.generating = "1";
+    _setCartographyBusy(host, true, "Generando planos de localidad…");
+    const title = document.getElementById("cartographyBusyTitle");
+    const msg = document.getElementById("cartographyBusyMsg");
+    const progress = document.getElementById("cartographyBusyProgress");
+    const bar = document.getElementById("cartographyBusyBar");
+    const cancelBtn = document.getElementById("cartographyBusyCancel");
+    const onCancel = () => {
+      ctrl.abort();
+      if (cancelBtn) {
+        cancelBtn.disabled = true;
+        cancelBtn.textContent = "Cancelando…";
+      }
+    };
+    const warnUnload = (ev) => {
+      ev.preventDefault();
+      ev.returnValue = "";
+    };
+    if (cancelBtn) {
+      cancelBtn.hidden = false;
+      cancelBtn.disabled = false;
+      cancelBtn.textContent = "Cancelar";
+      cancelBtn.addEventListener("click", onCancel);
+    }
+    if (progress) progress.hidden = false;
+    if (bar) bar.style.width = "0";
+    window.addEventListener("beforeunload", warnUnload);
+
+    try {
+      const result = await runBatch({
+        items,
+        folder,
+        zipName,
+        signal: ctrl.signal,
+        generate: (item, signal) =>
+          generateBlob({
+            template_id: "plano_localidad",
+            format,
+            params: { cve_mun: cve, cve_loc: item.cve_loc, cve_ent: "12" },
+            fallbackName: `plano_localidad_${cve}_${item.cve_loc}.${ext}`,
+            signal,
+          }),
+        onProgress: ({ done, total, current, etaSec, ok, failed }) => {
+          if (bar) bar.style.width = `${Math.round((done / total) * 100)}%`;
+          if (title) {
+            title.textContent = current
+              ? `Generando ${done + 1} de ${total}: ${current.nomgeo} (${current.cve_loc})`
+              : folder
+                ? "Terminando…"
+                : "Armando ZIP…";
+          }
+          if (msg) {
+            msg.textContent = current
+              ? `Listos ${ok}${failed ? ` · con error ${failed}` : ""} · faltan ~${formatDuration(
+                  etaSec
+                )}. No cierres la pestaña.`
+              : "";
+          }
+        },
+      });
+      const where = folder
+        ? " en la carpeta elegida"
+        : result.zipName
+          ? ` en ${result.zipName}`
+          : "";
+      const errs = result.failed.length
+        ? ` · ${result.failed.length} con error (ver _errores.txt): ${result.failed
+            .slice(0, 5)
+            .map((f) => f.item.cve_loc)
+            .join(", ")}${result.failed.length > 5 ? "…" : ""}`
+        : "";
+      if (status) {
+        status.textContent = `${result.cancelled ? "Lote cancelado" : "Lote terminado"}: ${result.ok} de ${
+          items.length
+        } planos${where}${errs}.${result.aborted ? ` ${result.aborted}` : ""}`;
+      }
+    } catch (err) {
+      console.warn("[cartography] lote", err);
+      if (status) status.textContent = `El lote se detuvo: ${err?.message || err}`;
+    } finally {
+      window.removeEventListener("beforeunload", warnUnload);
+      if (cancelBtn) {
+        cancelBtn.removeEventListener("click", onCancel);
+        cancelBtn.hidden = true;
+      }
+      if (progress) progress.hidden = true;
       host.dataset.generating = "0";
       _setCartographyBusy(host, false);
     }

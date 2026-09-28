@@ -5,6 +5,8 @@
 import { apiUrl } from "./atlasConfig.js";
 
 const STORAGE_KEY = "atlasgro-theme";
+/** default_theme del catálogo, cacheado para el script inline anti-flash. */
+const DEFAULT_KEY = "atlasgro-theme-default";
 export const THEMES = /** @type {const} */ (["claro", "oscuro"]);
 
 let _themeUiBound = false;
@@ -13,13 +15,22 @@ let _catalogCache = null;
 let _catalogPromise = null;
 /** @type {string[]} */
 let _appliedTokenKeys = [];
+/** Vista previa del Theme Studio: el borrador manda sobre el catálogo del servidor. */
+let _previewLock = false;
 
 /**
  * @returns {"claro" | "oscuro"}
  */
 export function readStoredTheme() {
   const v = localStorage.getItem(STORAGE_KEY);
-  return THEMES.includes(/** @type {any} */ (v)) ? v : "claro";
+  if (THEMES.includes(/** @type {any} */ (v))) return v;
+  const d = localStorage.getItem(DEFAULT_KEY);
+  return THEMES.includes(/** @type {any} */ (d)) ? d : "claro";
+}
+
+/** true si el visitante eligió tema explícitamente (si no, manda default_theme). */
+export function hasUserTheme() {
+  return THEMES.includes(/** @type {any} */ (localStorage.getItem(STORAGE_KEY)));
 }
 
 function clearAppliedTokens() {
@@ -66,6 +77,7 @@ export async function loadThemeCatalog(force = false) {
         cache: "no-store",
       });
       const data = await res.json().catch(() => ({}));
+      if (_previewLock) return _catalogCache;
       if (!res.ok || !data?.ok) {
         _catalogCache = null;
         return null;
@@ -73,6 +85,7 @@ export async function loadThemeCatalog(force = false) {
       _catalogCache = data;
       return data;
     } catch {
+      if (_previewLock) return _catalogCache;
       _catalogCache = null;
       return null;
     } finally {
@@ -84,11 +97,12 @@ export async function loadThemeCatalog(force = false) {
 
 /**
  * @param {"claro" | "oscuro"} name
+ * @param {{ persist?: boolean }} [opts] persist=false no fija la elección del visitante
  */
-export function applyTheme(name) {
+export function applyTheme(name, opts = {}) {
   const t = THEMES.includes(name) ? name : "claro";
   document.documentElement.setAttribute("data-theme", t);
-  localStorage.setItem(STORAGE_KEY, t);
+  if (opts.persist !== false && !_previewLock) localStorage.setItem(STORAGE_KEY, t);
   applyCatalogTokens(t);
   window.dispatchEvent(
     new CustomEvent("atlasgro-themechange", { detail: { theme: t } })
@@ -106,6 +120,12 @@ function syncThemeUi(theme) {
   }
   lblClaro?.classList.toggle("is-active", t === "claro");
   lblOscuro?.classList.toggle("is-active", t === "oscuro");
+  document.querySelectorAll(".studio-theme-picker [data-studio-theme]").forEach((btn) => {
+    const on = btn.getAttribute("data-studio-theme") === t;
+    btn.classList.toggle("active", on);
+    btn.classList.toggle("is-active", on);
+    btn.setAttribute("aria-pressed", on ? "true" : "false");
+  });
 }
 
 function toggleTheme() {
@@ -119,12 +139,16 @@ export function initThemeSelector() {
   if (!THEMES.includes(/** @type {any} */ (t))) {
     t = readStoredTheme();
     document.documentElement.setAttribute("data-theme", t);
-    localStorage.setItem(STORAGE_KEY, t);
   }
   syncThemeUi(/** @type {"claro"|"oscuro"} */ (t));
 
   void loadThemeCatalog().then((cat) => {
-    if (!cat) return;
+    if (!cat || _previewLock) return;
+    const def = cat.default_theme;
+    if (THEMES.includes(def)) {
+      localStorage.setItem(DEFAULT_KEY, def);
+      if (!hasUserTheme()) document.documentElement.setAttribute("data-theme", def);
+    }
     const cur =
       document.documentElement.getAttribute("data-theme") || readStoredTheme();
     applyCatalogTokens(/** @type {"claro"|"oscuro"} */ (cur));
@@ -135,6 +159,17 @@ export function initThemeSelector() {
 
   if (_themeUiBound) return;
   _themeUiBound = true;
+
+  document.addEventListener("click", (ev) => {
+    const studioBtn = /** @type {HTMLElement|null} */ (
+      ev.target instanceof Element
+        ? ev.target.closest(".studio-theme-picker [data-studio-theme]")
+        : null
+    );
+    if (studioBtn) {
+      applyTheme(studioBtn.getAttribute("data-studio-theme") === "oscuro" ? "oscuro" : "claro");
+    }
+  });
 
   const picker = document.querySelector(".sidebar-theme-picker");
   if (picker) {
@@ -174,4 +209,15 @@ export function resetThemeCatalogCache() {
 export function setThemeCatalogCache(payload) {
   _catalogCache = payload;
   _catalogPromise = null;
+}
+
+/**
+ * Vista previa (portal dentro del Theme Studio): aplica un borrador sin guardar nada.
+ * @param {{themes: object, default_theme?: string}} payload
+ * @param {"claro"|"oscuro"} themeName
+ */
+export function applyPreviewCatalog(payload, themeName) {
+  _previewLock = true;
+  _catalogCache = { ok: true, ...payload };
+  applyTheme(themeName, { persist: false });
 }

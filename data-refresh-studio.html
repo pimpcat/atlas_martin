@@ -1,6 +1,14 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
+  <script>
+    (function () {
+      var t = localStorage.getItem("atlasgro-theme");
+      if (t !== "oscuro" && t !== "claro") t = localStorage.getItem("atlasgro-theme-default");
+      if (t !== "oscuro" && t !== "claro") t = "claro";
+      document.documentElement.setAttribute("data-theme", t);
+    })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Data Refresh Studio — GroSIG</title>
@@ -61,20 +69,40 @@
       </div>
       <div id="drStudioNav" class="mb-3"></div>
 
-      <div class="btn-group btn-group-sm mb-3" role="group" aria-label="Modo Data Refresh">
+      <div class="btn-group btn-group-sm mb-0" role="group" aria-label="Modo Data Refresh">
         <button type="button" class="btn btn-primary" id="drModeSpatial" data-mode="spatial">Capas espaciales</button>
         <button type="button" class="btn btn-outline-secondary" id="drModeIndicators" data-mode="indicators">Indicadores (tabular)</button>
+        <button type="button" class="btn btn-outline-secondary" id="drModeContexto" data-mode="contexto">Contexto geo</button>
+      </div>
+      <div id="drInstanceEmptyHint" class="alert alert-light border small py-1 px-3 mb-0 d-none" role="status"></div>
+      <div id="drKitGroCard" class="card shadow-sm visor-studio-card mb-0 d-none kit-gro-card">
+        <div class="card-body py-2 px-3">
+          <button
+            type="button"
+            class="kit-gro-card-toggle"
+            id="drKitGroToggle"
+            aria-expanded="false"
+            aria-controls="drKitGroBody"
+          >
+            <span class="fw-semibold small">Kit Base</span>
+            <span class="kit-gro-card-chev" aria-hidden="true">▸</span>
+          </button>
+          <div id="drKitGroBody" class="kit-gro-card-body d-none" hidden>
+            <div id="drKitGroPanel" class="pt-2"></div>
+          </div>
+        </div>
       </div>
 
-      <div class="row g-3">
-        <div class="col-lg-5">
-          <div id="drIndScopeTabs" class="btn-group btn-group-sm mb-2 d-none" role="group" aria-label="Ámbito indicadores">
+      <div class="row g-2">
+        <div class="col-lg-5 dr-refresh-col">
+          <div class="dr-refresh-lead">
+          <div id="drIndScopeTabs" class="btn-group btn-group-sm mb-1 d-none" role="group" aria-label="Ámbito indicadores">
             <button type="button" class="btn btn-primary" id="drScopeEstatal" data-scope="estatal">Estatal</button>
             <button type="button" class="btn btn-outline-secondary" id="drScopeNacional" data-scope="nacional">Nacional</button>
           </div>
-          <div class="card shadow-sm visor-studio-card mb-3">
+          <div class="card shadow-sm visor-studio-card mb-2">
             <div class="card-header fw-semibold">1. Nueva actualización</div>
-            <div class="card-body d-grid gap-3">
+            <div class="card-body d-grid gap-2">
               <div id="drSpatialFields">
                 <div class="mb-3">
                   <label class="form-label small" for="drTarget">Tabla destino (producción)</label>
@@ -84,6 +112,27 @@
                 <div>
                   <label class="form-label small" for="drFile">Archivo SHP o ZIP</label>
                   <input id="drFile" type="file" class="form-control form-control-sm" accept=".zip,.shp" />
+                </div>
+                <div class="mt-2">
+                  <label class="form-label small" for="drDbfEncoding">Codificación DBF</label>
+                  <select id="drDbfEncoding" class="form-select form-select-sm">
+                    <option value="auto" selected>Auto (detectar / Windows-1252)</option>
+                    <option value="CP1252">Windows-1252 (INEGI / DENUE)</option>
+                    <option value="UTF-8">UTF-8</option>
+                    <option value="ISO-8859-1">ISO-8859-1</option>
+                  </select>
+                  <div class="form-text">Si en QGIS solo se ve bien con Windows-1252, elija esa opción o deje Auto.</div>
+                </div>
+              </div>
+              <div id="drContextoFields" class="d-none">
+                <p class="small text-muted mb-2" id="drContextoMeta">
+                  Textos narrativos por municipio en <code>geo.c_contexto</code> (Geography Context).
+                </p>
+                <div>
+                  <label class="form-label small" for="drContextoFile">Archivo Excel (.xlsx)</label>
+                  <input id="drContextoFile" type="file" class="form-control form-control-sm" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+                  <p class="form-text mb-2">Molde con todos los municipios de su instancia (<code>cve_mun</code>, <code>nom_mun</code> + campos narrativos). También acepta CSV exportado desde Excel.</p>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" id="drContextoMoldBtn">Descargar molde Excel</button>
                 </div>
               </div>
               <div id="drIndicatorFields" class="d-none dr-ind-fields">
@@ -133,12 +182,32 @@
               <div id="drUploadMsg" class="small"></div>
             </div>
           </div>
-          <div id="drDerivedCard" class="card shadow-sm visor-studio-card mb-3">
-            <div class="card-header fw-semibold">Tablas derivadas (KPIs)</div>
+          <div id="drDerivedCard" class="card shadow-sm visor-studio-card mb-2">
+            <div class="card-header fw-semibold">Tablas derivadas / Panel Inicio (KPIs)</div>
             <div class="card-body d-grid gap-2">
               <p class="small text-muted mb-0">
-                Tras actualizar <code>c_loc_punto</code> o <code>c_denue</code>, recalcule los conteos
-                que usa el explorador municipal (localidades y unidades económicas DENUE).
+                Lo que <strong>no</strong> cubren los moldes de indicadores:
+                superficie, región, marginación/rezago (`municipio_resumen`) y
+                localidades / DENUE (`municipio_conteos`).
+              </p>
+              <hr class="my-1" />
+              <p class="small mb-1 fw-semibold">1) municipio_resumen (superficie, región, grados)</p>
+              <p class="small text-muted mb-1" id="drResumenMeta">—</p>
+              <input id="drResumenFile" type="file" class="form-control form-control-sm" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" />
+              <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="drResumenMoldBtn">
+                  Descargar molde Excel
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="drResumenUploadBtn">
+                  Cargar municipio_resumen
+                </button>
+              </div>
+              <div id="drResumenMsg" class="small"></div>
+              <hr class="my-1" />
+              <p class="small mb-1 fw-semibold">2) municipio_conteos (localidades + DENUE)</p>
+              <p class="small text-muted mb-0">
+                Tras actualizar <code>c_loc_punto</code> o <code>c_denue</code> en esta instancia,
+                recalcule los conteos del explorador.
               </p>
               <button type="button" class="btn btn-outline-primary btn-sm" id="drDerivedConteosBtn">
                 Recalcular municipio_conteos
@@ -146,13 +215,15 @@
               <div id="drDerivedMsg" class="small"></div>
             </div>
           </div>
+          </div>
+          <div class="dr-refresh-tail">
           <div class="card shadow-sm visor-studio-card">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
               <span>Historial</span>
               <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="drHistoryRefresh">Actualizar</button>
             </div>
             <div class="card-body p-0">
-              <div class="table-responsive" style="max-height:32vh;overflow:auto">
+              <div class="table-responsive" style="max-height:14vh;overflow:auto">
                 <table class="table table-sm table-hover mb-0 small dr-history-table" id="drHistoryTable">
                   <thead class="sticky-top">
                     <tr>
@@ -172,18 +243,19 @@
               </div>
             </div>
           </div>
-          <div class="card shadow-sm visor-studio-card mt-3">
+          <div class="card shadow-sm visor-studio-card mt-2">
             <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
               <span>Versiones (rollback)</span>
               <button type="button" class="btn btn-outline-secondary btn-sm py-0" id="drVersionsRefresh">Actualizar</button>
             </div>
-            <div class="card-body p-2" id="drVersionsList" style="max-height:22vh;overflow:auto">
-              <p class="small text-muted mb-0">Últimas 3 copias por tabla tras un apply exitoso.</p>
+            <div class="card-body p-2" id="drVersionsList" style="max-height:18vh;overflow:auto">
+              <p class="small text-muted mb-0">Últimas 3 copias de esta instancia tras un apply exitoso.</p>
             </div>
+          </div>
           </div>
         </div>
         <div class="col-lg-7">
-          <div class="card shadow-sm visor-studio-card">
+          <div class="card shadow-sm visor-studio-card" id="drPreviewCard">
             <div class="card-header fw-semibold">2. Vista previa / aplicar</div>
             <div class="card-body">
               <div id="drJobEmpty" class="text-muted small">Suba un dataset para ver el informe de diferencias.</div>
@@ -203,6 +275,13 @@
                 </div>
                 <div id="drApplyMsg" class="small mt-2"></div>
               </div>
+            </div>
+          </div>
+          <div class="card shadow-sm visor-studio-card d-none" id="drContextoPanel">
+            <div class="card-header fw-semibold">2. Contexto municipal (geo.c_contexto)</div>
+            <div class="card-body small">
+              <p class="mb-2">Carga directa a producción (sin job de diff). Descargue el molde Excel, rellene textos por municipio y pulse <strong>Cargar contexto</strong>.</p>
+              <p class="text-muted mb-0" id="drContextoResult">Aún no hay cargas en esta sesión.</p>
             </div>
           </div>
         </div>

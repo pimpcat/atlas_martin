@@ -1,7 +1,8 @@
 /**
  * Asistente admin: publicar capa en el catálogo del visor (Fase 1).
  */
-import { adminFetch, isVisorAdminLoggedIn, verifyAdminSession } from "./visorAdminAuth.js";
+import { adminFetch, isVisorAdminLoggedIn, isVisorAdminUiAllowed, verifyAdminSession } from "./visorAdminAuth.js";
+import { offerMartinReconcile } from "./martinReconcileOffer.js";
 import { ensureVisorLayersHeaderToolbar } from "./visorLayersToolbar.js";
 import { reloadVisorLayerCatalog } from "./visorLayers.js";
 import { purgeOrphanModalBackdrops } from "./atlasModalCleanup.js";
@@ -25,10 +26,16 @@ import {
   normalizeStyleClasses,
   styleClassRowsHtml,
 } from "./visorCatalogAdminStyleClasses.js";
+import {
+  isBuiltinMapStylePreset,
+  resolveBuiltinMapStyleHydration,
+} from "./visorBuiltinStyleDefaults.js";
 
 let _publishBtn = null;
 let _manageBtn = null;
 let _modalEl = null;
+let _inlineHost = null;
+let _inlineShellEl = null;
 let _meta = null;
 let _attached = false;
 let _wizardBusy = false;
@@ -81,9 +88,140 @@ function setWizardBusy(on, message = "Procesando…") {
   }
 }
 
+const LIFECYCLE_GROUP_CLASS = {
+  pendientes: "visor-admin-lc--pendientes",
+  en_trabajo: "visor-admin-lc--en-trabajo",
+  listas: "visor-admin-lc--listas",
+  activas: "visor-admin-lc--activas",
+  problemas: "visor-admin-lc--problemas",
+  inactivas: "visor-admin-lc--inactivas",
+};
+
+function lifecycleFromRow(row) {
+  const lc = row && row.lifecycle;
+  return lc && typeof lc === "object" && lc.state ? lc : null;
+}
+
+function lifecycleBadgeHtml(lc, extraClass = "") {
+  if (!lc || !lc.state) return "";
+  const group = String(lc.group || "").trim();
+  const cls = LIFECYCLE_GROUP_CLASS[group] || "visor-admin-lc--pendientes";
+  const label = lc.label || lc.state;
+  const title = lc.error_message || label;
+  return `<span class="badge visor-admin-lc ${cls}${extraClass ? ` ${extraClass}` : ""}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
+}
+
+function filterRowsByLifecycleGroup(rows, group) {
+  const g = (group || "").trim();
+  if (!g) return rows;
+  return rows.filter((row) => (lifecycleFromRow(row)?.group || "") === g);
+}
+
+function lifecycleFilterBarHtml(rows, activeGroup) {
+  const counts = {};
+  for (const row of rows) {
+    const g = lifecycleFromRow(row)?.group || "";
+    if (g) counts[g] = (counts[g] || 0) + 1;
+  }
+  const items = [
+    ["", "Todas", rows.length],
+    ["pendientes", "Pendientes", counts.pendientes || 0],
+    ["en_trabajo", "En trabajo", counts.en_trabajo || 0],
+    ["listas", "Listas", counts.listas || 0],
+    ["activas", "Activas", counts.activas || 0],
+    ["problemas", "Problemas", counts.problemas || 0],
+    ["inactivas", "Inactivas", counts.inactivas || 0],
+  ];
+  return `<div class="visor-admin-lc-filters d-flex flex-wrap gap-1 mb-2" role="group" aria-label="Filtrar por estado">
+    ${items
+      .filter(([, , n], i) => i === 0 || n > 0)
+      .map(([id, label, n]) => {
+        const on = (activeGroup || "") === id;
+        return `<button type="button" class="btn btn-sm ${on ? "btn-secondary" : "btn-outline-secondary"} visor-admin-lc-filter" data-lc-group="${id}">${label} (${n})</button>`;
+      })
+      .join("")}
+  </div>`;
+}
+
 function updateWizardBusyMessage(message) {
-  const msgEl = document.querySelector("#visorCatalogAdminModal .visor-admin-busy__msg");
+  const msgEl = getAdminShellRoot()?.querySelector(".visor-admin-busy__msg");
   if (msgEl && message) msgEl.textContent = message;
+}
+
+const ADMIN_PANEL_INNER_HTML = `
+      <div class="card-header d-flex align-items-start justify-content-between gap-2 py-2">
+        <div class="min-w-0 flex-grow-1">
+          <div class="fw-semibold small" id="visorCatalogAdminTitle">Publicar capa en el visor</div>
+          <nav id="visorAdminStepNav" class="visor-admin-step-nav" aria-label="Pasos del asistente"></nav>
+        </div>
+        <button type="button" class="btn-close btn-close-sm mt-1 flex-shrink-0" aria-label="Cerrar"></button>
+      </div>
+      <div class="card-body visor-admin-modal__body atlas-scroll"></div>
+      <div class="card-footer d-flex justify-content-between gap-2 py-2">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-act="prev">Atrás</button>
+        <div class="d-flex gap-2">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-act="cancel">Cancelar</button>
+          <button type="button" class="btn btn-sm btn-primary" data-act="next">Siguiente</button>
+        </div>
+      </div>`;
+
+function getAdminShellRoot() {
+  if (_inlineHost && _inlineShellEl?.isConnected) return _inlineShellEl;
+  return _modalEl;
+}
+
+function isInlineAdminMode() {
+  return Boolean(_inlineHost);
+}
+
+function showAdminShell() {
+  const shell = ensureModal();
+  if (isInlineAdminMode()) {
+    _inlineHost?.classList.add("gs2-studio-visor-catalog-embed--active");
+    _inlineHost?.classList.remove("gs2-studio-visor-catalog-embed--idle");
+  } else {
+    shell.classList.remove("d-none");
+  }
+}
+
+function resetInlineHostPlaceholder() {
+  if (!_inlineHost) return;
+  _inlineHost.classList.remove("gs2-studio-visor-catalog-embed--active");
+  _inlineHost.classList.add("gs2-studio-visor-catalog-embed--idle");
+  _inlineHost.innerHTML =
+    `<p class="gs2-card__sub mb-0" id="visorStudioCatalogEmbedHint">Seleccione Publicar capa o Gestionar capas.</p>`;
+  _inlineShellEl = null;
+}
+
+function bindAdminShellEvents(shellRoot, { inline = false } = {}) {
+  if (!shellRoot || shellRoot.dataset.adminShellBound) return;
+  shellRoot.dataset.adminShellBound = "1";
+  if (!inline) {
+    shellRoot.querySelector(".visor-admin-modal__backdrop")?.addEventListener("click", closeModal);
+  }
+  shellRoot.querySelector(".btn-close")?.addEventListener("click", closeModal);
+  shellRoot.querySelector('[data-act="cancel"]')?.addEventListener("click", closeModal);
+  bindWizardStepNavOnce(shellRoot);
+}
+
+function ensureInlineShell() {
+  if (!_inlineHost) throw new Error("visor catalog inline host not set");
+  if (_inlineShellEl && _inlineHost.contains(_inlineShellEl)) return _inlineShellEl;
+  _inlineHost.innerHTML = "";
+  _inlineHost.classList.add("gs2-studio-visor-catalog-embed--active");
+  _inlineHost.classList.remove("gs2-studio-visor-catalog-embed--idle");
+  const root = document.createElement("div");
+  root.className = "visor-admin-inline-root";
+  root.setAttribute("role", "region");
+  root.setAttribute("aria-labelledby", "visorCatalogAdminTitle");
+  const panel = document.createElement("div");
+  panel.className = "visor-admin-modal__panel card shadow visor-admin-modal__panel--inline";
+  panel.innerHTML = ADMIN_PANEL_INNER_HTML;
+  root.appendChild(panel);
+  _inlineHost.appendChild(root);
+  bindAdminShellEvents(root, { inline: true });
+  _inlineShellEl = root;
+  return root;
 }
 let _modalFooterMode = "wizard";
 
@@ -149,7 +287,7 @@ async function refreshCatalogAfterGroupChange() {
 
 function syncPublishButton() {
   if (!_publishBtn) return;
-  const show = isVisorAdminLoggedIn();
+  const show = isVisorAdminUiAllowed();
   _publishBtn.classList.toggle("d-none", !show);
   _publishBtn.disabled = !show;
 }
@@ -164,6 +302,7 @@ async function loadMeta() {
 }
 
 function ensureModal() {
+  if (_inlineHost) return ensureInlineShell();
   if (_modalEl) return _modalEl;
   const wrap = document.createElement("div");
   wrap.id = "visorCatalogAdminModal";
@@ -173,39 +312,21 @@ function ensureModal() {
   wrap.setAttribute("aria-labelledby", "visorCatalogAdminTitle");
   wrap.innerHTML = `
     <div class="visor-admin-modal__backdrop"></div>
-    <div class="visor-admin-modal__panel card shadow">
-      <div class="card-header d-flex align-items-start justify-content-between gap-2 py-2">
-        <div class="min-w-0 flex-grow-1">
-          <div class="fw-semibold small" id="visorCatalogAdminTitle">Publicar capa en el visor</div>
-          <nav id="visorAdminStepNav" class="visor-admin-step-nav" aria-label="Pasos del asistente"></nav>
-        </div>
-        <button type="button" class="btn-close btn-close-sm mt-1 flex-shrink-0" aria-label="Cerrar"></button>
-      </div>
-      <div class="card-body visor-admin-modal__body atlas-scroll"></div>
-      <div class="card-footer d-flex justify-content-between gap-2 py-2">
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-act="prev">Atrás</button>
-        <div class="d-flex gap-2">
-          <button type="button" class="btn btn-sm btn-outline-secondary" data-act="cancel">Cancelar</button>
-          <button type="button" class="btn btn-sm btn-primary" data-act="next">Siguiente</button>
-        </div>
-      </div>
-    </div>`;
+    <div class="visor-admin-modal__panel card shadow">${ADMIN_PANEL_INNER_HTML}</div>`;
   document.body.appendChild(wrap);
-  wrap.querySelector(".visor-admin-modal__backdrop")?.addEventListener("click", closeModal);
-  wrap.querySelector(".btn-close")?.addEventListener("click", closeModal);
-  wrap.querySelector('[data-act="cancel"]')?.addEventListener("click", closeModal);
+  bindAdminShellEvents(wrap, { inline: false });
   _modalEl = wrap;
-  bindWizardStepNavOnce();
   return wrap;
 }
 
-function bindWizardStepNavOnce() {
-  const modal = _modalEl;
+function bindWizardStepNavOnce(shellRoot) {
+  const modal = shellRoot || getAdminShellRoot();
   if (!modal || modal.dataset.stepNavBound) return;
   modal.dataset.stepNavBound = "1";
   modal.addEventListener("click", async (ev) => {
     const btn = ev.target.closest("[data-wizard-step]");
-    if (!btn || btn.disabled || modal.classList.contains("d-none")) return;
+    if (!btn || btn.disabled) return;
+    if (!isInlineAdminMode() && modal.classList.contains("d-none")) return;
     const idx = Number(btn.getAttribute("data-wizard-step"));
     if (!Number.isFinite(idx)) return;
     await goToWizardStep(idx);
@@ -217,10 +338,14 @@ function closeModal({ force = false } = {}) {
   if (force) {
     _wizardBusy = false;
     _wizardBusyDepth = 0;
-    const panel = _modalEl?.querySelector(".visor-admin-modal__panel");
+    const panel = getAdminShellRoot()?.querySelector(".visor-admin-modal__panel");
     const overlay = panel?.querySelector(".visor-admin-busy");
     if (overlay) overlay.hidden = true;
     panel?.classList.remove("visor-admin-modal__panel--busy");
+  }
+  if (isInlineAdminMode()) {
+    resetInlineHostPlaceholder();
+    return;
   }
   _modalEl?.classList.add("d-none");
   purgeOrphanModalBackdrops();
@@ -234,7 +359,7 @@ function setModalTitle(text) {
 function syncAdminButtons() {
   syncPublishButton();
   if (!_manageBtn) return;
-  const show = isVisorAdminLoggedIn();
+  const show = isVisorAdminUiAllowed();
   _manageBtn.classList.toggle("d-none", !show);
   _manageBtn.disabled = !show;
 }
@@ -257,9 +382,16 @@ const wizard = {
   denue_use_template: true,
   denue_preset_key: "",
   martin_needs_restart: false,
+  martin_needs_reload: false,
   pending_martin: false,
   table_source: "martin",
   shp_uploaded: false,
+  shp_discover_items: [],
+  shp_batch_done: false,
+  shp_batch_selected_id: "",
+  shp_last_summary: null,
+  table_lc_group: "",
+  manage_lc_group: "",
   export_kml: true,
   export_shp: true,
   export_kml_name_field: "",
@@ -305,6 +437,8 @@ const wizard = {
   data_filter_enabled: false,
   data_filter_field: "",
   data_filter_values: [],
+  tile_strategy: "shared",
+  published_id: "",
   spatial_enabled: false,
   spatial_modo: "",
   spatial_fields: [],
@@ -316,6 +450,10 @@ const wizard = {
   tabular_columns: [],
   cluster_enabled: false,
   cluster_preset: "standard",
+  /** Capas legacy con paint fijo en mapa: mostrar config real sin persistir style Studio. */
+  system_symbology_readonly: false,
+  catalog_style_preset: "",
+  system_symbology_note: "",
   table_column_defs: [],
 };
 
@@ -394,8 +532,13 @@ function canNavigateToStep(targetIndex) {
 
 function validateWizardStep(stepId) {
   if (wizard.mode === "create" && stepId === WIZARD_STEP.TABLES) {
-    if (wizard.table_source === "shp" && !wizard.shp_uploaded) {
-      return "Importe el shapefile antes de continuar.";
+    if (wizard.table_source === "shp") {
+      if (wizard.shp_batch_done && wizard.table) {
+        return null;
+      }
+      if (!wizard.shp_uploaded && !wizard.shp_batch_done) {
+        return "Analice e importe los shapefiles, o seleccione «Terminar» si solo desea dejarlas en publicables.";
+      }
     }
     if (!wizard.table) {
       return "Seleccione o importe una tabla.";
@@ -552,6 +695,7 @@ function resetWizardForCreate() {
   wizard.denue_use_template = true;
   wizard.denue_preset_key = "";
   wizard.martin_needs_restart = false;
+  wizard.martin_needs_reload = false;
   wizard.pending_martin = false;
   wizard.export_kml = true;
   wizard.export_shp = true;
@@ -598,6 +742,8 @@ function resetWizardForCreate() {
   wizard.data_filter_enabled = false;
   wizard.data_filter_field = "";
   wizard.data_filter_values = [];
+  wizard.tile_strategy = "shared";
+  wizard.published_id = "";
   wizard.spatial_enabled = false;
   wizard.spatial_modo = "";
   wizard.spatial_fields = [];
@@ -609,7 +755,46 @@ function resetWizardForCreate() {
   wizard.tabular_columns = [];
   wizard.cluster_enabled = false;
   wizard.cluster_preset = "standard";
+  wizard.system_symbology_readonly = false;
+  wizard.catalog_style_preset = "";
+  wizard.system_symbology_note = "";
   wizard.table_column_defs = [];
+  wizard.table_source = "martin";
+  wizard.shp_uploaded = false;
+  wizard.shp_discover_items = [];
+  wizard.shp_batch_done = false;
+  wizard.shp_batch_selected_id = "";
+}
+
+/**
+ * Rellena el wizard con la simbología real del mapa para capas compartidas
+ * (sin bloque style Studio). No altera el render del mapa.
+ */
+function applyBuiltinMapStyleHydration(layerId, data = {}) {
+  wizard.system_symbology_readonly = false;
+  wizard.catalog_style_preset = "";
+  wizard.system_symbology_note = "";
+  const hydration = resolveBuiltinMapStyleHydration(layerId, {
+    style: data.style,
+    style_preset: data.style_preset,
+    renderer: data.renderer,
+  });
+  if (!hydration) return false;
+  wizard.system_symbology_readonly = true;
+  wizard.catalog_style_preset = hydration.catalog_style_preset;
+  wizard.system_symbology_note = hydration.note || "";
+  wizard.style_preset = hydration.ui_style_preset;
+  wizard.style_field = hydration.field || "";
+  wizard.default_color = hydration.default_color || wizard.default_color;
+  wizard.style_classes = normalizeStyleClasses(hydration.classes || []);
+  if (hydration.color) wizard.color = hydration.color;
+  else if (wizard.style_classes[0]?.color) wizard.color = wizard.style_classes[0].color;
+  if (Number.isFinite(hydration.opacity_pct)) {
+    wizard.style_opacity_pct = hydration.opacity_pct;
+  }
+  if (hydration.line_dash) wizard.style_line_dash = hydration.line_dash;
+  wizard.style_tab = defaultStyleTabForPreset(wizard.style_preset);
+  return true;
 }
 
 const LINE_DASH_PRESETS = {
@@ -797,7 +982,10 @@ function syncStyleAdvancedUi() {
   show("visorAdminStyleIconScaleWrap", preset === "point_symbol" || preset === "point_symbol_by_attribute");
   show("visorAdminStyleWidthWrap", geom === "line");
   show("visorAdminStyleHaloWidthWrap", preset === "line_outline");
-  show("visorAdminStyleHaloColorWrap", preset === "line_outline");
+  show(
+    "visorAdminStyleHaloColorWrap",
+    preset === "line_outline" || preset === "polygon_outline_detail" || preset === "polygon_outline",
+  );
   show("visorAdminStyleOutlineColorWrap", geom === "polygon");
   show("visorAdminStyleOutlineWidthWrap", geom === "polygon");
   show("visorAdminStyleStrokeColorWrap", preset === "point_default");
@@ -913,8 +1101,17 @@ function presetOptionsHtml() {
           `<option value="${escapeHtml(p.id)}" data-geometry="${escapeHtml(p.geometry)}">${escapeHtml(p.label || p.id)}</option>`,
       )
       .join("");
-  if (!byAttr.length) return render(presets);
+  const catalogPreset = wizard.catalog_style_preset || "";
+  const known = new Set(presets.map((p) => p.id));
+  const systemOpt =
+    wizard.system_symbology_readonly && catalogPreset && !known.has(catalogPreset)
+      ? `<optgroup label="Mapa (sistema)"><option value="${escapeHtml(catalogPreset)}" disabled>${escapeHtml(catalogPreset)} — fija en mapa</option></optgroup>`
+      : wizard.system_symbology_readonly && isBuiltinMapStylePreset(catalogPreset)
+        ? `<optgroup label="Mapa (sistema)"><option value="${escapeHtml(catalogPreset)}" disabled>${escapeHtml(catalogPreset)} — fija en mapa</option></optgroup>`
+        : "";
+  if (!byAttr.length) return `${systemOpt}${render(presets)}`;
   return `
+    ${systemOpt}
     <optgroup label="Símbolo único">${render(basic)}</optgroup>
     <optgroup label="Por atributo (colores por campo)">${render(byAttr)}</optgroup>`;
 }
@@ -1051,14 +1248,22 @@ async function fetchTablePublishStatus(table) {
   }
 }
 
+function martinPreparingHintSeconds(status) {
+  const n = Number(status?.reload_interval_hint_s);
+  return Number.isFinite(n) && n > 0 ? n : 10;
+}
+
 function applyMartinFlagsFromStatus(status) {
   wizard.pending_martin =
     Boolean(status?.pending_martin) ||
+    Boolean(status?.needs_martin_reload) ||
     (status && status.in_martin === false && !status.needs_martin_restart);
   wizard.martin_needs_restart = Boolean(status?.needs_martin_restart);
+  wizard.martin_needs_reload = Boolean(status?.needs_martin_reload);
   if (status?.in_martin) {
     wizard.pending_martin = false;
     wizard.martin_needs_restart = false;
+    wizard.martin_needs_reload = false;
   }
 }
 
@@ -1076,7 +1281,7 @@ function friendlyUserMessage(msg, fallback = "") {
     return "El servicio de mapa no está disponible. Espere unos segundos y reintente.";
   }
   if (/aún no listó|no listó la tabla|esperando martin|discovery/i.test(s) && /martin|postgis/i.test(s)) {
-    return "La capa aún se está preparando para el mapa (~30 s). Puede reintentar.";
+    return "La capa aún se está preparando para el mapa (~10 s). Puede reintentar.";
   }
   if (/importado.*martin/i.test(s) || /visible en martin/i.test(s)) {
     return "Archivo importado y listo para el mapa. Puede publicar la capa.";
@@ -1093,23 +1298,43 @@ function friendlyUserMessage(msg, fallback = "") {
 function renderMartinStatusBanner(container, status) {
   if (!container) return;
   applyMartinFlagsFromStatus(status);
+  const lcHtml = lifecycleBadgeHtml(lifecycleFromRow(status), "ms-1");
   if (status?.in_martin) {
-    container.innerHTML = "";
-    container.classList.add("d-none");
+    if (lcHtml) {
+      container.classList.remove("d-none");
+      container.innerHTML = `<p class="small text-muted mb-2">Ciclo de vida:${lcHtml}</p>`;
+    } else {
+      container.innerHTML = "";
+      container.classList.add("d-none");
+    }
     return;
   }
   container.classList.remove("d-none");
+  const lcLine = lcHtml ? `<div class="mb-1">Ciclo de vida:${lcHtml}</div>` : "";
   if (status?.needs_martin_restart) {
     container.innerHTML = `
       <div class="alert alert-warning py-2 px-2 small mb-2 visor-admin-martin-banner">
+        ${lcLine}
         El servicio de mapa no está disponible. Espere unos segundos y pulse
         <button type="button" class="btn btn-sm btn-outline-warning ms-1" data-act="retry-martin">Comprobar de nuevo</button>
       </div>`;
     return;
   }
+  if (status?.needs_martin_reload || status?.pending_martin) {
+    const hint = martinPreparingHintSeconds(status);
+    container.innerHTML = `
+      <div class="alert alert-info py-2 px-2 small mb-2 visor-admin-martin-banner">
+        ${lcLine}
+        La capa se está preparando para el mapa (automático, ~${hint}&nbsp;s).
+        <button type="button" class="btn btn-sm btn-outline-primary ms-1" data-act="retry-martin">Comprobar de nuevo</button>
+      </div>`;
+    return;
+  }
+  const legacyHint = martinPreparingHintSeconds(status);
   container.innerHTML = `
     <div class="alert alert-info py-2 px-2 small mb-2 visor-admin-martin-banner">
-      La capa aún se está preparando para el mapa (automático, ~30&nbsp;s).
+      ${lcLine}
+      La capa aún se está preparando para el mapa (automático, ~${legacyHint}&nbsp;s).
       <button type="button" class="btn btn-sm btn-outline-primary ms-1" data-act="retry-martin">Comprobar de nuevo</button>
     </div>`;
 }
@@ -1232,54 +1457,357 @@ async function ensureMartinAfterShpUpload(body, data) {
 }
 
 async function uploadShpFromWizard(body) {
+  await discoverShpBatch(body);
+}
+
+function readShpDiscoverRows() {
+  const rows = [];
+  document.querySelectorAll("#visorAdminShpBatchTable tbody tr[data-shp-id]").forEach((tr) => {
+    const id = tr.getAttribute("data-shp-id") || "";
+    const tableInput = tr.querySelector(".visor-admin-shp-table-name");
+    const encSel = tr.querySelector(".visor-admin-shp-encoding");
+    rows.push({
+      id,
+      source_file: tr.getAttribute("data-source-file") || "",
+      shp_path: tr.getAttribute("data-shp-path") || "",
+      table_name: (tableInput?.value || "").trim(),
+      dbf_encoding: (encSel?.value || "auto").trim(),
+    });
+  });
+  return rows;
+}
+
+function shpGeometryLabel(geom) {
+  const g = String(geom || "").toLowerCase();
+  if (g.includes("line")) return "Líneas";
+  if (g.includes("polygon")) return "Polígonos";
+  if (g.includes("point")) return "Puntos";
+  return geom || "—";
+}
+
+function renderShpBatchSummaryBox(summary, message) {
+  if (!summary?.imported) return "";
+  const geomParts = Object.entries(summary.by_geometry || {}).map(
+    ([k, n]) => `${shpGeometryLabel(k)}: ${n}`,
+  );
+  const waited =
+    summary.waited_ms != null && summary.waited_ms > 0
+      ? ` · espera mapa ${Math.round(summary.waited_ms / 1000)} s`
+      : "";
+  const mapLine =
+    summary.pending_martin > 0 && summary.in_martin === 0
+      ? `Mapa: incorporando capas (~${martinPreparingHintSeconds({})} s)`
+      : `Mapa: <strong>${summary.in_martin ?? 0}</strong> lista(s) · <strong>${summary.pending_martin ?? 0}</strong> preparando (~${martinPreparingHintSeconds({})} s)`;
+  return `
+    <div class="alert alert-success py-2 px-2 small visor-admin-shp-batch-summary mb-2" role="status">
+      <div class="fw-semibold mb-1">Importación completada</div>
+      <div>${escapeHtml(message || "")}</div>
+      <ul class="mb-0 ps-3 mt-1">
+        <li><strong>${summary.imported}</strong> capa(s) en PostGIS · <strong>${summary.total_features ?? 0}</strong> elementos${escapeHtml(waited)}</li>
+        <li>Geometría: ${escapeHtml(geomParts.join(" · ") || "—")}</li>
+        <li>${mapLine}</li>
+      </ul>
+    </div>`;
+}
+
+function shpBatchPollDelayMs(tableCount) {
+  const hint = martinPreparingHintSeconds({});
+  return Math.min(45000, (hint + 4 + tableCount * 1.5) * 1000);
+}
+
+async function pollShpBatchMartinReady(body, results) {
+  const okRows = (results || []).filter((r) => r.ok && r.table);
+  const pending = okRows.filter((r) => r.pending_martin || !r.in_martin);
+  if (!pending.length) return;
+
+  const maxMs = shpBatchPollDelayMs(okRows.length);
+  const started = Date.now();
+  const statusEl = body?.querySelector("#visorAdminShpStatus");
+
+  while (Date.now() - started < maxMs) {
+    await new Promise((resolve) => window.setTimeout(resolve, 2000));
+    const statuses = await Promise.all(
+      okRows.map(async (row) => {
+        const { res, data } = await adminFetch(
+          `/api/visor/admin/tables/${encodeURIComponent(row.table)}/status`,
+        );
+        return res?.ok ? data : null;
+      }),
+    );
+    let inMartin = 0;
+    let stillPending = 0;
+    okRows.forEach((row, i) => {
+      const st = statuses[i];
+      if (!st) return;
+      row.in_martin = Boolean(st.in_martin);
+      row.pending_martin =
+        Boolean(st.pending_martin) ||
+        Boolean(st.needs_martin_reload) ||
+        (!st.in_martin && !st.needs_martin_restart);
+      if (row.in_martin) inMartin += 1;
+      else if (row.pending_martin) stillPending += 1;
+    });
+    const summary = wizard.shp_last_summary;
+    if (summary) {
+      summary.in_martin = inMartin;
+      summary.pending_martin = stillPending;
+      summary.waited_ms = Date.now() - started;
+    }
+    const resultsHost = body?.querySelector("#visorAdminShpBatchResults");
+    if (resultsHost && summary) {
+      const existing = resultsHost.querySelector(".visor-admin-shp-batch-summary");
+      const html = renderShpBatchSummaryBox(summary, wizard.shp_last_message);
+      if (existing && html) existing.outerHTML = html;
+      const tbody = resultsHost.querySelector("tbody");
+      if (tbody) tbody.innerHTML = renderShpBatchStatusRows(okRows);
+    }
+    if (stillPending === 0) {
+      if (statusEl) {
+        statusEl.textContent = `${inMartin} capa(s) lista(s) para el mapa.`;
+        statusEl.classList.remove("text-danger");
+        statusEl.classList.add("text-success");
+      }
+      void reloadVisorLayerCatalog();
+      return;
+    }
+  }
+}
+
+function shpDiscoverNoteCell(item) {
+  if (item.sidecars_ok === false) {
+    return '<td class="small visor-admin-shp-note visor-admin-shp-note--warn">Faltan sidecars</td>';
+  }
+  if (item.table_exists) {
+    return '<td class="small visor-admin-shp-note visor-admin-shp-note--warn">Tabla ya existe</td>';
+  }
+  if (item.dbf_encoding_warning) {
+    return `<td class="small visor-admin-shp-note visor-admin-shp-note--warn" title="${escapeHtml(item.dbf_encoding_warning)}">${escapeHtml(item.dbf_encoding_note || item.dbf_encoding || "OK")}</td>`;
+  }
+  return `<td class="small visor-admin-shp-note visor-admin-shp-note--ok">${escapeHtml(item.dbf_encoding_note || "OK")}</td>`;
+}
+
+function shpEncodingSelectHtml(item) {
+  const detected = String(item.dbf_encoding || "CP1252").toUpperCase().replace("WINDOWS-1252", "CP1252");
+  const opts = [
+    { v: "auto", label: `Auto (${detected})` },
+    { v: "CP1252", label: "Windows-1252" },
+    { v: "UTF-8", label: "UTF-8" },
+    { v: "ISO-8859-1", label: "ISO-8859-1" },
+  ];
+  const options = opts
+    .map((o) => `<option value="${o.v}"${o.v === "auto" ? " selected" : ""}>${escapeHtml(o.label)}</option>`)
+    .join("");
+  return `<select class="form-select form-select-sm visor-admin-shp-encoding" title="Codificación del DBF (INEGI/DENUE: Windows-1252)">${options}</select>`;
+}
+
+function renderShpBatchStatusRows(results) {
+  return (results || [])
+    .map((row) => {
+      const ok = Boolean(row.ok);
+      const detail = ok
+        ? `${row.feature_count ?? "?"} elem. · ${escapeHtml(row.geometry || "?")}${row.in_martin ? " · lista" : row.pending_martin ? " · preparando mapa" : ""}`
+        : escapeHtml(friendlyUserMessage(row.message || row.error, "Error"));
+      return `<tr data-shp-id="${escapeHtml(row.id || "")}">
+        <td class="small visor-admin-shp-batch__file">${escapeHtml(row.source_file || "")}</td>
+        <td class="small visor-admin-shp-batch__shape"><code>${escapeHtml(row.shp_path || row.shp_stem || "")}</code></td>
+        <td class="visor-admin-shp-batch__table"><code>${escapeHtml(row.table || row.table_name || "")}</code></td>
+        <td class="small visor-admin-shp-note ${ok ? "visor-admin-shp-note--ok" : "visor-admin-shp-note--bad"}">${detail}</td>
+        <td class="text-center visor-admin-shp-batch__pick">${ok ? `<input type="radio" name="visorAdminShpPick" value="${escapeHtml(row.table || "")}" ${wizard.table === row.table ? "checked" : ""} />` : ""}</td>
+      </tr>`;
+    })
+    .join("");
+}
+
+async function discoverShpBatch(body) {
   const fileEl = body?.querySelector("#visorAdminShpFile");
   const statusEl = body?.querySelector("#visorAdminShpStatus");
-  const tableHint = body?.querySelector("#visorAdminShpTable")?.value?.trim() || "";
-  const file = fileEl?.files?.[0];
-  if (!file) {
-    if (statusEl) statusEl.textContent = "Seleccione un archivo .shp o .zip";
+  const files = fileEl?.files ? Array.from(fileEl.files) : [];
+  if (!files.length) {
+    if (statusEl) statusEl.textContent = "Seleccione uno o más archivos .shp o .zip";
     return;
   }
-  if (statusEl) statusEl.textContent = "Importando y preparando la capa para el mapa…";
-  const uploadBtn = body?.querySelector("#visorAdminShpUploadBtn");
-  if (uploadBtn) uploadBtn.disabled = true;
-  setWizardBusy(true, "Importando shapefile…");
+  if (statusEl) statusEl.textContent = "Analizando archivos…";
+  const analyzeBtn = body?.querySelector("#visorAdminShpAnalyzeBtn");
+  if (analyzeBtn) analyzeBtn.disabled = true;
+  setWizardBusy(true, "Analizando shapefiles…");
   try {
     const form = new FormData();
-    form.append("file", file);
-    if (tableHint) form.append("table_name", tableHint);
-    const { res, data } = await adminFetch("/api/visor/admin/upload/shp", { method: "POST", body: form });
+    files.forEach((f) => form.append("files", f));
+    const { res, data } = await adminFetch("/api/visor/admin/upload/shp/discover", { method: "POST", body: form });
     if (!res?.ok) {
-      let msg = friendlyUserMessage(apiErrorMessage(data, ""), "No se pudo importar el shapefile");
-      if (res?.status === 413) {
-        msg = "Archivo demasiado grande para el servidor (máx. 80 MB). Contacte al administrador si el archivo es más pequeño.";
-      }
+      const msg = friendlyUserMessage(apiErrorMessage(data, ""), "No se pudieron analizar los archivos");
       if (statusEl) {
         statusEl.textContent = msg;
         statusEl.classList.add("text-danger");
-        statusEl.classList.remove("text-success");
       }
       return;
     }
-    wizard.table = data.table || "";
-    wizard.geometry = data.geometry || "point";
-    wizard.table_columns = (data.columns || []).map((c) => String(c.name || "")).filter(Boolean);
-    wizard.shp_uploaded = true;
-    wizard.table_source = "shp";
-    applyMartinFlagsFromStatus(data);
-    const waited = data.waited_ms != null ? ` · espera ${Math.round(Number(data.waited_ms) / 1000)}s` : "";
+    wizard.shp_discover_items = data.items || [];
+    wizard.shp_batch_done = false;
+    wizard.shp_uploaded = false;
+    wizard.table = "";
+    renderShpDiscoverTable(body, wizard.shp_discover_items);
     if (statusEl) {
-      const apiMsg = friendlyUserMessage(data.message, "Importado; preparando el mapa…");
-      statusEl.innerHTML = `Importado: <code>${escapeHtml(wizard.table)}</code> (${data.feature_count ?? "?"} elementos)${escapeHtml(waited)}. ${escapeHtml(apiMsg)}`;
+      statusEl.textContent = `Detectados ${wizard.shp_discover_items.length} shapefile(s). Revise el nombre de cada tabla e importe.`;
       statusEl.classList.remove("text-danger");
       statusEl.classList.add("text-success");
     }
-    updateWizardBusyMessage("Preparando la capa para el mapa (puede tardar ~30 s)…");
-    await ensureMartinAfterShpUpload(body, data);
   } finally {
     setWizardBusy(false);
-    if (uploadBtn) uploadBtn.disabled = false;
+    if (analyzeBtn) analyzeBtn.disabled = false;
   }
+}
+
+function renderShpDiscoverTable(body, items) {
+  const host = body?.querySelector("#visorAdminShpBatchHost");
+  if (!host) return;
+  if (!items?.length) {
+    host.innerHTML = `<p class="small text-muted mb-0">No se detectaron shapefiles.</p>`;
+    return;
+  }
+  const rows = items
+    .map((item) => {
+      const warnSide = item.sidecars_ok === false ? ' title="Faltan .dbf/.shx"' : "";
+      const inputWarn = item.table_exists ? " visor-admin-shp-table-name--warn" : "";
+      const elems = item.feature_count != null ? String(item.feature_count) : "—";
+      const srid = item.srid_note || item.source_srid_label || "→ 3857";
+      return `<tr data-shp-id="${escapeHtml(item.id)}" data-source-file="${escapeHtml(item.source_file)}" data-shp-path="${escapeHtml(item.shp_path)}">
+        <td class="small visor-admin-shp-batch__file"${warnSide}>${escapeHtml(item.source_file)}</td>
+        <td class="small visor-admin-shp-batch__shape"><code>${escapeHtml(item.shp_path || item.shp_stem)}</code></td>
+        <td class="visor-admin-shp-batch__name"><input type="text" class="form-control form-control-sm visor-admin-shp-table-name${inputWarn}" value="${escapeHtml(item.suggested_table || "")}" /></td>
+        <td class="visor-admin-shp-batch__enc">${shpEncodingSelectHtml(item)}</td>
+        <td class="small text-end visor-admin-shp-batch__count">${escapeHtml(elems)}</td>
+        <td class="small visor-admin-shp-batch__srid">${escapeHtml(srid)}</td>
+        ${shpDiscoverNoteCell(item)}
+      </tr>`;
+    })
+    .join("");
+  host.innerHTML = `
+    <div class="visor-admin-shp-batch">
+      <div class="visor-admin-shp-batch__table-wrap table-responsive">
+        <table class="visor-admin-shp-batch-table table table-sm align-middle mb-0" id="visorAdminShpBatchTable">
+          <thead><tr><th>Archivo</th><th>Shape</th><th>Nombre tabla</th><th>Encoding</th><th>Elem.</th><th>SRID</th><th>Notas</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+      <div class="visor-admin-shp-batch__actions d-flex flex-wrap gap-2 mt-2">
+        <button type="button" class="btn btn-sm btn-primary" id="visorAdminShpImportBtn">Importar ${items.length} capa(s) a PostGIS</button>
+      </div>
+      <p class="small text-muted mt-1 mb-0">Encoding del DBF: Auto detecta .cpg / heurística; DENUE e INEGI suelen ser <strong>Windows-1252</strong> (se convierte a UTF-8 en PostGIS).</p>
+      <div id="visorAdminShpBatchResults" class="visor-admin-shp-batch__results mt-2"></div>
+    </div>`;
+  body.querySelector("#visorAdminShpImportBtn")?.addEventListener("click", () => void importShpBatch(body));
+}
+
+async function importShpBatch(body) {
+  const fileEl = body?.querySelector("#visorAdminShpFile");
+  const statusEl = body?.querySelector("#visorAdminShpStatus");
+  const files = fileEl?.files ? Array.from(fileEl.files) : [];
+  const assignments = readShpDiscoverRows();
+  if (!files.length || !assignments.length) {
+    if (statusEl) statusEl.textContent = "Analice los archivos antes de importar.";
+    return;
+  }
+  const names = assignments.map((a) => a.table_name.toLowerCase()).filter(Boolean);
+  if (names.length !== new Set(names).size) {
+    window.alert("Hay nombres de tabla duplicados. Corrija la tabla antes de importar.");
+    return;
+  }
+  if (assignments.some((a) => !a.table_name)) {
+    window.alert("Capture un nombre de tabla para cada shapefile.");
+    return;
+  }
+  const importBtn = body?.querySelector("#visorAdminShpImportBtn");
+  if (importBtn) importBtn.disabled = true;
+  setWizardBusy(true, `Importando ${assignments.length} capa(s) a PostGIS…`);
+  if (statusEl) statusEl.textContent = `Importando ${assignments.length} capa(s) a PostGIS…`;
+  try {
+    const form = new FormData();
+    files.forEach((f) => form.append("files", f));
+    form.append("assignments", JSON.stringify(assignments));
+    form.append("wait_martin", "false");
+    const { res, data } = await adminFetch("/api/visor/admin/upload/shp/batch", { method: "POST", body: form });
+    const resultsHost = body?.querySelector("#visorAdminShpBatchResults");
+    if (!res?.ok && !(data?.ok_count > 0)) {
+      const msg = friendlyUserMessage(apiErrorMessage(data, ""), "No se pudo completar la importación");
+      if (statusEl) statusEl.textContent = msg;
+      return;
+    }
+    const results = data.results || [];
+    wizard.shp_batch_done = (data.ok_count || 0) > 0;
+    wizard.shp_last_summary = data.summary || null;
+    wizard.shp_last_message = data.message || "";
+    wizard.shp_discover_items = results;
+    if (resultsHost) {
+      resultsHost.innerHTML = `
+        ${renderShpBatchSummaryBox(data.summary, data.message)}
+        <div class="visor-admin-shp-batch__table-wrap table-responsive">
+          <table class="visor-admin-shp-batch-table table table-sm align-middle mb-0">
+            <thead><tr><th>Archivo</th><th>Shape</th><th>Tabla</th><th>Estado</th><th>Config.</th></tr></thead>
+            <tbody>${renderShpBatchStatusRows(results)}</tbody>
+          </table>
+        </div>
+        <p class="small text-muted mt-2 mb-2">Las capas importadas ya están en la pestaña «Tablas existentes». Puede configurar una aquí o pulsar «Terminar».</p>
+        <button type="button" class="btn btn-sm btn-outline-secondary" id="visorAdminShpFinishBtn">Terminar (quedan en publicables)</button>`;
+      resultsHost.querySelector("#visorAdminShpFinishBtn")?.addEventListener("click", () => finishShpBatchWithoutWizard(body));
+      resultsHost.querySelectorAll('input[name="visorAdminShpPick"]').forEach((radio) => {
+        radio.addEventListener("change", () => {
+          const picked = results.find((r) => r.table === radio.value && r.ok);
+          if (!picked) return;
+          wizard.table = picked.table;
+          wizard.geometry = picked.geometry || "point";
+          wizard.table_columns = (picked.columns || []).map((c) => String(c.name || "")).filter(Boolean);
+          wizard.shp_uploaded = true;
+          wizard.table_source = "shp";
+        });
+      });
+      const firstOk = results.find((r) => r.ok);
+      if (firstOk) {
+        wizard.table = firstOk.table;
+        wizard.geometry = firstOk.geometry || "point";
+        wizard.table_columns = (firstOk.columns || []).map((c) => String(c.name || "")).filter(Boolean);
+        wizard.shp_uploaded = true;
+        wizard.table_source = "shp";
+      }
+    }
+    applyMartinFlagsFromStatus(data);
+    if (statusEl) {
+      statusEl.textContent = data.message || "Importación completada.";
+      statusEl.classList.remove("text-danger");
+      statusEl.classList.add("text-success");
+    }
+    if ((data.summary?.pending_martin || 0) > 0) {
+      void pollShpBatchMartinReady(body, results);
+    }
+    if ((data.ok_count || 0) > 0) {
+      void offerMartinReconcile({
+        reason: "shp_import",
+        hint: "Tras importar shapefiles conviene reconciliar para capas filtradas del catálogo (p. ej. DENUE).",
+        onStatus: (msg, ok) => {
+          if (!statusEl) return;
+          statusEl.textContent = msg;
+          statusEl.classList.toggle("text-danger", ok === false);
+          statusEl.classList.toggle("text-success", ok !== false);
+        },
+      });
+    }
+  } finally {
+    setWizardBusy(false);
+    if (importBtn) importBtn.disabled = false;
+  }
+}
+
+function finishShpBatchWithoutWizard(_body) {
+  if (!wizard.shp_batch_done) {
+    window.alert("Importe al menos una capa antes de terminar.");
+    return;
+  }
+  closeModal({ force: true });
+  purgeOrphanModalBackdrops();
+  void reloadVisorLayerCatalog();
+  document.dispatchEvent(new CustomEvent("atlasgro-visor-layers-panel-refresh"));
+  window.alert("Las capas importadas quedaron disponibles en «Tablas existentes» para publicar cuando lo desee.");
+  purgeOrphanModalBackdrops();
 }
 
 function refreshStylePreview(container) {
@@ -1303,6 +1831,9 @@ function refreshStylePreview(container) {
 
 function apiErrorMessage(data, fallback) {
   const detail = data?.detail;
+  if (typeof detail === "string" && detail.trim()) {
+    return detail.trim();
+  }
   if (Array.isArray(detail) && detail.length) {
     const first = detail[0];
     const loc = Array.isArray(first?.loc) ? first.loc.filter((p) => p !== "body").join(".") : "";
@@ -1455,19 +1986,24 @@ async function renderStepTables(body) {
     </ul>
     <div id="visorAdminTableTabMartin" class="${wizard.table_source === "shp" ? "d-none" : ""}"></div>
     <div id="visorAdminTableTabShp" class="${wizard.table_source === "shp" ? "" : "d-none"}">
-      <p class="small text-muted">Importa <strong>.shp</strong> o <strong>.zip</strong> (con .shp, .dbf, .shx). Se crea una tabla <code>c_*</code> en la base de datos.</p>
+      <p class="small text-muted mb-2">
+        <strong>1.</strong> Elija <strong>.shp</strong> o <strong>.zip</strong> (varios shapes con .dbf, .shx, .prj) &nbsp;→&nbsp;
+        <strong>2.</strong> Analizar &nbsp;→&nbsp;
+        <strong>3.</strong> Revise nombres e importe.
+      </p>
       <div class="mb-2">
-        <label class="form-label small mb-1" for="visorAdminShpTable">Nombre de tabla (opcional)</label>
-        <input type="text" class="form-control form-control-sm" id="visorAdminShpTable" placeholder="c_mi_capa" value="${escapeHtml(wizard.table && wizard.shp_uploaded ? wizard.table : "")}" />
+        <label class="form-label small mb-1" for="visorAdminShpFile">Archivos</label>
+        <input type="file" class="form-control form-control-sm" id="visorAdminShpFile" accept=".shp,.zip,application/zip,application/x-shapefile" multiple />
       </div>
       <div class="mb-2">
-        <label class="form-label small mb-1" for="visorAdminShpFile">Archivo</label>
-        <input type="file" class="form-control form-control-sm" id="visorAdminShpFile" accept=".shp,.zip,application/zip,application/x-shapefile" />
+        <button type="button" class="btn btn-sm btn-outline-primary" id="visorAdminShpAnalyzeBtn">Analizar archivos</button>
       </div>
-      <button type="button" class="btn btn-sm btn-primary" id="visorAdminShpUploadBtn">Importar</button>
+      <div id="visorAdminShpBatchHost" class="visor-admin-shp-batch-host">
+        <p class="small text-muted mb-0" id="visorAdminShpBatchPlaceholder">Los nombres de tabla aparecerán aquí después de analizar (una caja por shape detectado).</p>
+      </div>
       <div id="visorAdminShpStatus" class="small mt-2 text-muted"></div>
-      <div id="visorAdminShpOk" class="alert alert-success py-2 px-2 small mt-2 ${wizard.shp_uploaded ? "" : "d-none"}">${wizard.shp_uploaded ? `Tabla lista: <strong>${escapeHtml(wizard.table)}</strong>` : ""}</div>
-      <p class="small text-muted mt-2 mb-0">Tras importar, la capa se prepara sola para el mapa (~30&nbsp;s). No hace falta reiniciar servicios.</p>
+      ${wizard.shp_uploaded && wizard.table ? `<div class="alert alert-success py-2 px-2 small mt-2">Tabla seleccionada para configurar: <strong>${escapeHtml(wizard.table)}</strong></div>` : ""}
+      <p class="small text-muted mt-2 mb-0">Las capas importadas quedan en «Tablas existentes» aunque no continúe el asistente. El mapa las incorpora en ~${martinPreparingHintSeconds({})}&nbsp;s (recarga automática).</p>
     </div>`;
 
   body.querySelectorAll(".visor-admin-table-tabs [data-tab]").forEach((btn) => {
@@ -1476,7 +2012,23 @@ async function renderStepTables(body) {
       void renderStepTables(body);
     });
   });
-  body.querySelector("#visorAdminShpUploadBtn")?.addEventListener("click", () => void uploadShpFromWizard(body));
+  body.querySelector("#visorAdminShpFile")?.addEventListener("change", () => {
+    wizard.shp_discover_items = [];
+    wizard.shp_batch_done = false;
+    wizard.shp_uploaded = false;
+    wizard.table = "";
+    const host = body.querySelector("#visorAdminShpBatchHost");
+    if (host) {
+      host.innerHTML =
+        '<p class="small text-muted mb-0" id="visorAdminShpBatchPlaceholder">Los nombres de tabla aparecerán aquí después de analizar (una caja por shape detectado).</p>';
+    }
+    const statusEl = body.querySelector("#visorAdminShpStatus");
+    if (statusEl) statusEl.textContent = "";
+  });
+  body.querySelector("#visorAdminShpAnalyzeBtn")?.addEventListener("click", () => void discoverShpBatch(body));
+  if (wizard.shp_discover_items?.length) {
+    renderShpDiscoverTable(body, wizard.shp_discover_items);
+  }
 
   if (wizard.table_source === "shp") return;
 
@@ -1511,22 +2063,28 @@ async function renderStepTables(body) {
   const metaLine = tablesMeta
     ? `<p class="small text-muted mb-1">Disponibles: <strong>${tables.length}</strong> · con geometría: ${tablesMeta.postgis_c_star ?? "—"} · ya en catálogo: ${tablesMeta.in_catalog ?? "—"}</p>`
     : "";
+  const tablePickRows = filterRowsByLifecycleGroup(tables, wizard.table_lc_group);
+  const pickRows = tablePickRows.length ? tablePickRows : tables;
   martinPane.innerHTML = `
     <p class="small text-muted mb-1">Seleccione una tabla <code>c_*</code> <strong>con geometría</strong> que aún no esté en el catálogo del visor.</p>
     ${metaLine}
+    ${lifecycleFilterBarHtml(tables, wizard.table_lc_group)}
     <p class="small text-muted mb-2">
       <span class="me-2"><strong>lista para el mapa</strong> = ya se puede visualizar.</span>
-      <span><strong>preparando mapa</strong> = datos listos; el mapa la incorpora en ~30&nbsp;s.</span>
+      <span><strong>preparando mapa</strong> = datos listos; el mapa la incorpora en ~${martinPreparingHintSeconds({})}&nbsp;s.</span>
     </p>
     <div id="visorAdminMartinBanner" class="d-none"></div>
     <select class="form-select form-select-sm" id="visorAdminTablePick">
-      ${tables
+      ${pickRows
         .map((t) => {
+          const lc = lifecycleFromRow(t);
           let suffix = "";
-          if (t.needs_martin_restart) suffix = " · mapa no disponible";
+          if (lc?.label) suffix = ` · ${lc.label}`;
+          else if (t.needs_martin_restart) suffix = " · mapa no disponible";
+          else if (t.needs_martin_reload || t.pending_martin) suffix = ` · preparando mapa (~${martinPreparingHintSeconds(t)} s)`;
           else if (t.pending_martin || (t.in_martin === false && t.in_postgis)) suffix = " · preparando mapa";
           else if (t.in_martin) suffix = " · lista para el mapa";
-          return `<option value="${escapeHtml(t.table)}">${escapeHtml(t.table)}${suffix}</option>`;
+          return `<option value="${escapeHtml(t.table)}">${escapeHtml(t.table)}${escapeHtml(suffix)}</option>`;
         })
         .join("")}
     </select>
@@ -1534,9 +2092,15 @@ async function renderStepTables(body) {
       <button type="button" class="btn btn-sm btn-outline-danger" id="visorAdminDropOrphanTable">Eliminar tabla seleccionada</button>
       <span class="small text-muted ms-1">Solo tablas no publicadas en el catálogo. No borra el núcleo del Atlas.</span>
     </div>`;
+  martinPane.querySelectorAll("[data-lc-group]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      wizard.table_lc_group = btn.getAttribute("data-lc-group") || "";
+      void renderStepTables(body);
+    });
+  });
   const pick = martinPane.querySelector("#visorAdminTablePick");
   const banner = martinPane.querySelector("#visorAdminMartinBanner");
-  wizard.table = pick?.value || tables[0].table;
+  wizard.table = pick?.value || pickRows[0]?.table || tables[0].table;
   wizard.shp_uploaded = false;
   const syncTablePick = async () => {
     wizard.table = pick?.value || wizard.table;
@@ -1692,6 +2256,34 @@ function renderStepDetails(body) {
         <div id="visorAdminDataFilterDistinctChips" class="visor-admin-distinct-values atlas-scroll mt-1 d-none"></div>
       </div>
     </div>
+    <div class="visor-admin-tile-pub border rounded p-2 mt-3" id="visorAdminTilePubBlock">
+      <div class="fw-semibold small mb-2">Publicación de tiles (Martin)</div>
+      <label class="form-label small mb-1" for="visorAdminTileStrategy">Estrategia MVT</label>
+      <select class="form-select form-select-sm" id="visorAdminTileStrategy">
+        <option value="shared" ${wizard.tile_strategy !== "filtered" ? "selected" : ""}>Compartida — una vista de toda la tabla (por defecto)</option>
+        <option value="filtered" ${wizard.tile_strategy === "filtered" ? "selected" : ""}>Filtrada — vista propia con el filtro de atributo</option>
+      </select>
+      <p class="form-text mb-2">
+        <strong>Filtrada</strong> exige activar «Filtrar elementos por atributo» (campo + valores)
+        o códigos SCIAN en capas DENUE. El mapa pide
+        <code>tiles.&lt;published_id&gt;</code> en lugar de toda la tabla.
+      </p>
+      <div id="visorAdminPublishedIdWrap" class="${wizard.tile_strategy === "filtered" ? "" : "d-none"}">
+        <label class="form-label small mb-1" for="visorAdminPublishedId">Id publicado (recurso Martin)</label>
+        <input
+          type="text"
+          class="form-control form-control-sm"
+          id="visorAdminPublishedId"
+          value="${escapeHtml(wizard.published_id || "")}"
+          placeholder="${escapeHtml(
+            wizard.mode === "edit"
+              ? wizard.editingLayerId
+              : layerIdFromTable(wizard.table) || "id_de_capa",
+          )}"
+        />
+        <p class="form-text mb-0">Si lo deja vacío, se usa el id de la capa.</p>
+      </div>
+    </div>
     </div>`;
   body.querySelector("#visorAdminLabel")?.addEventListener("input", (ev) => {
     ev.target.dataset.touched = "1";
@@ -1713,6 +2305,7 @@ function renderStepDetails(body) {
     if (scope) scope.value = detected;
   });
   void bindDataFilterStepUi(body);
+  bindTilePublicationStepUi(body);
   bindKmlExportUi(body);
 }
 
@@ -1806,6 +2399,76 @@ function readDataFilterFromDom() {
     .split(/[,;\n]+/)
     .map((s) => s.trim())
     .filter(Boolean);
+  // Capas DENUE: el filtro genérico codigo_act alimenta también la UI SCIAN.
+  if (
+    isDenueTable(wizard.table) &&
+    wizard.data_filter_field === "codigo_act" &&
+    wizard.data_filter_values.length
+  ) {
+    wizard.denue_codigo_act = wizard.data_filter_values
+      .map((v) => Number(String(v).replace(/\D/g, "")))
+      .filter((n) => Number.isFinite(n) && n > 0);
+  }
+}
+
+/**
+ * Carga data.filter del catálogo en el wizard (field+values o codigo_act DENUE legacy).
+ * @param {object} filt
+ * @param {object} [denue]
+ */
+function applyCatalogFilterToWizard(filt, denue) {
+  const f = filt && typeof filt === "object" ? filt : {};
+  const denueCodes = Array.isArray(denue?.codigo_act) ? denue.codigo_act : [];
+  const codigoAct = Array.isArray(f.codigo_act) && f.codigo_act.length ? f.codigo_act : denueCodes;
+
+  if (f.field && Array.isArray(f.values) && f.values.length) {
+    wizard.data_filter_enabled = true;
+    wizard.data_filter_field = String(f.field);
+    wizard.data_filter_values = f.values.map((v) => String(v));
+  } else if (codigoAct.length) {
+    // Capas seed DENUE: el filtro vive como codigo_act, no como field+values.
+    wizard.data_filter_enabled = true;
+    wizard.data_filter_field = "codigo_act";
+    wizard.data_filter_values = codigoAct.map((v) => String(v));
+    if (!wizard.denue_codigo_act?.length) {
+      wizard.denue_codigo_act = [...codigoAct];
+    }
+  } else {
+    wizard.data_filter_enabled = false;
+    wizard.data_filter_field = "";
+    wizard.data_filter_values = [];
+  }
+}
+
+function bindTilePublicationStepUi(body) {
+  const strategyEl = body.querySelector("#visorAdminTileStrategy");
+  const wrap = body.querySelector("#visorAdminPublishedIdWrap");
+  const sync = () => {
+    const filtered = strategyEl?.value === "filtered";
+    wrap?.classList.toggle("d-none", !filtered);
+  };
+  strategyEl?.addEventListener("change", sync);
+  sync();
+}
+
+function readTilePublicationFromDom() {
+  const strategyEl = document.getElementById("visorAdminTileStrategy");
+  if (!strategyEl) return;
+  wizard.tile_strategy = strategyEl.value === "filtered" ? "filtered" : "shared";
+  wizard.published_id = (
+    document.getElementById("visorAdminPublishedId")?.value || ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
+function wizardHasUsableTileFilter() {
+  const hasAttr =
+    wizard.data_filter_enabled &&
+    wizard.data_filter_field &&
+    (wizard.data_filter_values || []).length > 0;
+  const hasDenue = isDenueTable(wizard.table) && (wizard.denue_codigo_act || []).length > 0;
+  return Boolean(hasAttr || hasDenue);
 }
 
 async function loadTableColumns(table) {
@@ -2347,8 +3010,14 @@ function renderIndexPlanTable(plan) {
       ? `<button type="button" class="btn btn-primary btn-sm" id="visorAdminIndexCreateMissing">Crear ${missing.length} índice(s) faltante(s)</button>`
       : `<span class="badge text-bg-success">Todos los índices sugeridos ya existen</span>`;
 
+  const hasTrgm = suggestions.some((s) => s.method === "gin_trgm");
+  const trgmNote = hasTrgm
+    ? `<p class="small mb-2">Con <strong>buscador</strong> activo se sugieren índices <code>gin_trgm</code> (extensión <code>pg_trgm</code>) para acelerar <code>ILIKE %…%</code>. No son específicos de DENUE: salen de las columnas <code>search</code> del catálogo.</p>`
+    : "";
+
   return `
     <p class="text-muted mb-2">Según la configuración de publicación, estas columnas se benefician de índices. Puede crearlos en caliente desde aquí (solo administradores).</p>
+    ${trgmNote}
     ${existingBlock}
     <div class="table-responsive mb-2">
       <table class="table table-sm table-bordered align-middle mb-0 visor-admin-index-table">
@@ -3245,6 +3914,7 @@ async function renderStepMap(body) {
               <div class="col-md-4">
                 <label class="form-label small mb-1" for="visorAdminSearchIdColumn">Campo identificador</label>
                 <select class="form-select form-select-sm" id="visorAdminSearchIdColumn">${labelFieldOptionsHtml(cols, wizard.identify_fields, wizard.search_id_column)}</select>
+                <p class="form-text mb-0">Use <code>cvegeo</code> en localidades, colonias, AGEB, manzanas. <code>cve_mun</code> solo si la capa es el municipio (un renglón por municipio).</p>
               </div>
             </div>
             <div class="mt-2">
@@ -3262,6 +3932,51 @@ async function renderStepMap(body) {
   }
 }
 
+function systemSymbologyBannerHtml() {
+  if (!wizard.system_symbology_readonly) return "";
+  const preset = wizard.catalog_style_preset || wizard.style_preset;
+  const note =
+    wizard.system_symbology_note ||
+    "Simbología fija del mapa (capa legacy / compartida). Solo lectura en el gestor.";
+  return `
+    <div class="alert alert-info py-2 px-2 small mb-2" id="visorAdminSystemStyleBanner" role="status">
+      <strong>Simbología del mapa (sistema).</strong>
+      Se muestra cómo está pintada la capa en el visor
+      (<code>${escapeHtml(preset)}</code>). No se modifica el render al guardar.
+      <div class="mt-1 text-muted">${escapeHtml(note)}</div>
+    </div>`;
+}
+
+function lockSystemSymbologyControls(body) {
+  if (!wizard.system_symbology_readonly || !body) return;
+  const ids = [
+    "visorAdminPreset",
+    "visorAdminPresetAttr",
+    "visorAdminColor",
+    "visorAdminDefaultColor",
+    "visorAdminStyleField",
+    "visorAdminAddClass",
+    "visorAdminAutoclassifyBtn",
+    "visorAdminIcon",
+  ];
+  for (const id of ids) {
+    const el = body.querySelector(`#${id}`);
+    if (el) el.disabled = true;
+  }
+  body.querySelectorAll(".visor-admin-style-tabs [data-style-tab]").forEach((btn) => {
+    if (btn.getAttribute("data-style-tab") === "advanced") return;
+    /* permitir ver pestañas; campos quedan disabled */
+  });
+  body.querySelectorAll("#visorAdminStyleClasses input, #visorAdminStyleClasses button").forEach((el) => {
+    el.disabled = true;
+  });
+  body.querySelectorAll("#visorAdminStyleAdvanced input, #visorAdminStyleAdvanced select").forEach((el) => {
+    el.disabled = true;
+  });
+  const distinctPanel = body.querySelector("#visorAdminDistinctPanel");
+  if (distinctPanel) distinctPanel.classList.add("d-none");
+}
+
 function renderStepStyle(body) {
   const showDenue = isDenueTable(wizard.table);
   const classes = normalizeStyleClasses(wizard.style_classes);
@@ -3269,6 +3984,7 @@ function renderStepStyle(body) {
   wizard.style_tab = styleTab;
   body.innerHTML = `
     <div class="visor-admin-style-step">
+      ${systemSymbologyBannerHtml()}
       ${layerMinzoomControlsHtml()}
       ${clusterControlsHtml()}
       <ul class="nav nav-tabs nav-tabs-sm visor-admin-style-tabs mb-2" role="tablist">
@@ -3407,9 +4123,9 @@ function renderStepStyle(body) {
         fieldEl.innerHTML = `<option value="">Cargando columnas…</option>`;
       }
       await ensureTableColumnsLoaded();
-      if (fieldEl) fieldEl.disabled = false;
+      if (fieldEl) fieldEl.disabled = Boolean(wizard.system_symbology_readonly);
       refreshStyleFieldSelect(body, wizard.style_field);
-      if (wizard.style_field) {
+      if (wizard.style_field && !wizard.system_symbology_readonly) {
         await loadDistinctFieldPanel(body, previewHost);
       }
     }
@@ -3463,7 +4179,10 @@ function renderStepStyle(body) {
   }
   bindLayerMinzoomUi(body);
   bindClusterStepUi(body);
-  void syncPresetUi();
+  void syncPresetUi().then(() => {
+    lockSystemSymbologyControls(body);
+  });
+  lockSystemSymbologyControls(body);
 }
 
 function renderStepReview(body) {
@@ -3504,10 +4223,18 @@ function renderStepReview(body) {
   const filterSummary =
     wizard.data_filter_enabled && wizard.data_filter_field
       ? `${wizard.data_filter_field} ∈ ${(wizard.data_filter_values || []).join(", ") || "—"}`
-      : "Sin filtro de atributo";
-  const styleSummary = isByAttributePreset(wizard.style_preset)
-    ? `${wizard.style_preset} · ${wizard.style_field || "—"} (${normalizeStyleClasses(wizard.style_classes).length} clases)`
-    : document.getElementById("visorAdminPreset")?.value || wizard.style_preset;
+      : isDenueTable(wizard.table) && (wizard.denue_codigo_act || []).length
+        ? `codigo_act ∈ ${(wizard.denue_codigo_act || []).join(", ")}`
+        : "Sin filtro de atributo";
+  const tilePubSummary =
+    wizard.tile_strategy === "filtered"
+      ? `Filtrada · ${wizard.published_id || layerId || "—"}`
+      : "Compartida (tabla completa)";
+  const styleSummary = wizard.system_symbology_readonly
+    ? `${wizard.catalog_style_preset || wizard.style_preset} · simbología del mapa (sistema, ${normalizeStyleClasses(wizard.style_classes).length || "—"} clases)`
+    : isByAttributePreset(wizard.style_preset)
+      ? `${wizard.style_preset} · ${wizard.style_field || "—"} (${normalizeStyleClasses(wizard.style_classes).length} clases)`
+      : document.getElementById("visorAdminPreset")?.value || wizard.style_preset;
   const layerMinzoomSummary = wizard.layer_minzoom_enabled
     ? `Zoom ≥ ${wizard.style_minzoom ?? defaultLayerMinzoom(wizard.geometry)} (aviso en mapa)`
     : "Sin límite (visible en cualquier zoom)";
@@ -3549,6 +4276,7 @@ function renderStepReview(body) {
       <dt>Etiquetas mapa</dt><dd>${escapeHtml(labelsSummary)}</dd>
       <dt>Buscador</dt><dd>${escapeHtml(searchSummary)}</dd>
       <dt>Filtro atributo</dt><dd>${escapeHtml(filterSummary)}</dd>
+      <dt>Tiles Martin</dt><dd>${escapeHtml(tilePubSummary)}</dd>
       <dt>Análisis espacial</dt><dd>${escapeHtml(spatialSummary)}</dd>
       <dt>Consulta tabular</dt><dd>${escapeHtml(tabularSummary)}</dd>
       <dt>Clusters</dt><dd>${escapeHtml(clusterSummary)}</dd>
@@ -3559,8 +4287,8 @@ function renderStepReview(body) {
     ${renderIndexHintsShell()}
     <div id="visorAdminStatus" class="small mt-2 text-danger" hidden></div>
     ${
-      wizard.pending_martin
-        ? `<div class="alert alert-info py-2 px-2 small mb-0">La capa aún se está preparando para el mapa (~30&nbsp;s). Puede publicar el catálogo; la visualización aparecerá al terminar. Use <strong>Comprobar de nuevo</strong> en el paso Tabla si hace falta.</div>`
+      wizard.pending_martin || wizard.martin_needs_reload
+        ? `<div class="alert alert-info py-2 px-2 small mb-0">La capa aún se está preparando para el mapa (~10&nbsp;s). Puede publicar el catálogo; la visualización aparecerá al terminar. Use <strong>Comprobar de nuevo</strong> en el paso Tabla si hace falta.</div>`
         : ""
     }
     ${
@@ -3575,14 +4303,22 @@ function readStepFields() {
   wizard.label = document.getElementById("visorAdminLabel")?.value?.trim() || wizard.label;
   wizard.group_id = document.getElementById("visorAdminGroup")?.value || wizard.group_id;
   wizard.geometry = document.getElementById("visorAdminGeometry")?.value || wizard.geometry;
-  wizard.style_preset = document.getElementById("visorAdminPreset")?.value || wizard.style_preset;
-  wizard.color = document.getElementById("visorAdminColor")?.value || wizard.color;
-  wizard.icon_key = document.getElementById("visorAdminIcon")?.value || wizard.icon_key;
-  if (document.getElementById("visorAdminStyleField")) {
-    wizard.style_field = document.getElementById("visorAdminStyleField")?.value?.trim() || "";
-    wizard.default_color =
-      document.getElementById("visorAdminDefaultColor")?.value?.trim() || wizard.default_color;
-    wizard.style_classes = readStyleClassesFromDom();
+  if (!wizard.system_symbology_readonly) {
+    wizard.style_preset = document.getElementById("visorAdminPreset")?.value || wizard.style_preset;
+    wizard.color = document.getElementById("visorAdminColor")?.value || wizard.color;
+    wizard.icon_key = document.getElementById("visorAdminIcon")?.value || wizard.icon_key;
+    if (document.getElementById("visorAdminStyleField")) {
+      wizard.style_field = document.getElementById("visorAdminStyleField")?.value?.trim() || "";
+      wizard.default_color =
+        document.getElementById("visorAdminDefaultColor")?.value?.trim() || wizard.default_color;
+      wizard.style_classes = readStyleClassesFromDom();
+    }
+    if (document.getElementById("visorAdminStyleAdvanced")) {
+      readAdvancedStyleFromDom();
+    }
+  } else if (document.getElementById("visorAdminPreset")?.value) {
+    /* Mantener preset UI para vista previa; el catálogo usa catalog_style_preset. */
+    wizard.style_preset = document.getElementById("visorAdminPreset").value;
   }
   if (document.getElementById("visorAdminDenueCodigos")) {
     const raw = document.getElementById("visorAdminDenueCodigos")?.value || "";
@@ -3592,9 +4328,6 @@ function readStepFields() {
       .filter((n) => Number.isFinite(n));
     wizard.denue_use_template = Boolean(document.getElementById("visorAdminDenueTemplate")?.checked);
     wizard.denue_preset_key = document.getElementById("visorAdminDenuePreset")?.value || "";
-  }
-  if (document.getElementById("visorAdminStyleAdvanced")) {
-    readAdvancedStyleFromDom();
   }
   readLayerMinzoomFromDom();
   const kmlEl = document.getElementById("visorAdminExpKml");
@@ -3645,6 +4378,7 @@ function readStepFields() {
   readLabelsFromDom();
   readSearchFromDom();
   readDataFilterFromDom();
+  readTilePublicationFromDom();
 }
 
 function buildPayload() {
@@ -3654,26 +4388,39 @@ function buildPayload() {
       ? wizard.editingLayerId
       : document.getElementById("visorAdminLayerId")?.value?.trim() || layerIdFromTable(wizard.table);
   const style = {};
-  if (isByAttributePreset(wizard.style_preset)) {
-    style.field = wizard.style_field;
-    style.default_color = wizard.default_color || "#94a3b8";
-    style.classes = normalizeStyleClasses(wizard.style_classes);
-  } else if (wizard.style_preset === "point_symbol") {
-    style.icon_key = wizard.icon_key || (_meta?.icons?.[0]?.key ?? "");
-  } else if (wizard.style_preset === "line_outline") {
-    style.color = wizard.color;
-    style.halo_color = wizard.style_halo_color || wizard.color;
-  } else if (wizard.style_preset === "line_simple") {
-    style.color = wizard.color;
-  } else if (wizard.style_preset === "polygon_fill") {
-    style.color = wizard.color;
-  } else {
-    style.color = wizard.color;
-  }
-  mergeAdvancedStyleIntoPayload(style, wizard.style_preset);
-  if (wizard.layer_minzoom_enabled) {
-    const mz = Number(wizard.style_minzoom);
-    if (Number.isFinite(mz) && mz >= 0) style.minzoom = mz;
+  const systemStyle = Boolean(wizard.system_symbology_readonly);
+  const effectivePreset = systemStyle
+    ? wizard.catalog_style_preset || wizard.style_preset
+    : wizard.style_preset;
+  if (!systemStyle) {
+    if (isByAttributePreset(wizard.style_preset)) {
+      style.field = wizard.style_field;
+      style.default_color = wizard.default_color || "#94a3b8";
+      style.classes = normalizeStyleClasses(wizard.style_classes);
+    } else if (wizard.style_preset === "point_symbol") {
+      style.icon_key = wizard.icon_key || (_meta?.icons?.[0]?.key ?? "");
+    } else if (wizard.style_preset === "line_outline") {
+      style.color = wizard.color;
+      style.halo_color = wizard.style_halo_color || wizard.color;
+    } else if (wizard.style_preset === "line_simple") {
+      style.color = wizard.color;
+    } else if (wizard.style_preset === "polygon_outline_detail") {
+      style.color = wizard.color;
+      style.halo_color = wizard.style_halo_color || wizard.color;
+      style.fill_hit_color = wizard.color;
+    } else if (wizard.style_preset === "polygon_outline") {
+      style.color = wizard.color;
+      style.halo_color = wizard.style_halo_color || wizard.color;
+    } else if (wizard.style_preset === "polygon_fill") {
+      style.color = wizard.color;
+    } else {
+      style.color = wizard.color;
+    }
+    mergeAdvancedStyleIntoPayload(style, wizard.style_preset);
+    if (wizard.layer_minzoom_enabled) {
+      const mz = Number(wizard.style_minzoom);
+      if (Number.isFinite(mz) && mz >= 0) style.minzoom = mz;
+    }
   }
   const exportFormats = [];
   if (wizard.export_kml) exportFormats.push("kml");
@@ -3714,7 +4461,7 @@ function buildPayload() {
     label: wizard.label || layerId,
     group_id: wizard.group_id || _meta?.groups?.[0]?.id || "servicios",
     geometry: wizard.geometry,
-    style_preset: wizard.style_preset,
+    style_preset: effectivePreset,
     style,
     data,
     capabilities: {
@@ -3798,6 +4545,14 @@ function buildPayload() {
         : [wizard.search_name_column],
     };
   }
+  const tileStrategy = wizard.tile_strategy === "filtered" ? "filtered" : "shared";
+  payload.publication = {
+    tile_strategy: tileStrategy,
+    published_id:
+      tileStrategy === "filtered"
+        ? (wizard.published_id || layerId).trim().toLowerCase()
+        : wizard.table,
+  };
   if (wizard.style_preset === "point_symbol" && style.icon_key) {
     payload.legend = {
       iconItems: [{ icon_key: style.icon_key, label: (wizard.label || layerId).trim() }],
@@ -3886,13 +4641,24 @@ async function renderWizardStep() {
   }
 
   await renderStepById(def?.id || WIZARD_STEP.REVIEW, body);
-  modal.classList.remove("d-none");
+  showAdminShell();
 }
 
 async function saveLayer() {
   const payload = buildPayload();
   const status = document.getElementById("visorAdminStatus");
   const isEdit = wizard.mode === "edit";
+  if (payload.publication?.tile_strategy === "filtered" && !wizardHasUsableTileFilter()) {
+    const msg =
+      "Estrategia filtrada exige un filtro de atributo (campo + valores) o códigos SCIAN DENUE. Active el filtro en el paso Capa o use compartida.";
+    if (status) {
+      status.hidden = false;
+      status.textContent = msg;
+    } else {
+      window.alert(msg);
+    }
+    return;
+  }
   const labelWarnCols = collectLabelFieldColumns(payload.labels || {});
   const known = new Set((wizard.table_columns || []).map((c) => String(c).toLowerCase()));
   const missingLabelCols = labelWarnCols.filter((c) => known.size && !known.has(String(c).toLowerCase()));
@@ -3905,10 +4671,20 @@ async function saveLayer() {
   const url = isEdit
     ? `/api/visor/admin/layers/${encodeURIComponent(wizard.editingLayerId)}`
     : "/api/visor/admin/layers";
-  const { res, data } = await adminFetch(url, {
+  const { res, data, networkError } = await adminFetch(url, {
     method: isEdit ? "PUT" : "POST",
     body: JSON.stringify(payload),
   });
+  if (networkError || !res) {
+    const msg = "No se pudo contactar al servidor. Espere un momento e intente de nuevo.";
+    if (status) {
+      status.hidden = false;
+      status.textContent = msg;
+    } else {
+      window.alert(msg);
+    }
+    return;
+  }
   if (!res.ok) {
     const msg = apiErrorMessage(data, isEdit ? "No se pudo actualizar la capa" : "No se pudo publicar la capa");
     if (status) {
@@ -3919,11 +4695,28 @@ async function saveLayer() {
     }
     return;
   }
+  applyMartinFlagsFromStatus(data);
   closeModal({ force: true });
   purgeOrphanModalBackdrops();
   await reloadVisorLayerCatalog();
   document.dispatchEvent(new CustomEvent("atlasgro-visor-layers-panel-refresh"));
-  window.alert(friendlyUserMessage(data?.message, isEdit ? "Capa actualizada. Recargue el visor (Ctrl+F5)." : "Capa publicada. Recargue el visor (Ctrl+F5)."));
+  const defaultMsg = isEdit
+    ? "Capa actualizada. Recargue el visor (Ctrl+F5)."
+    : "Capa publicada. Recargue el visor (Ctrl+F5).";
+  const tv = data.tiles_view || {};
+  let userMsg = friendlyUserMessage(data?.martin_message || data?.message, defaultMsg);
+  if (tv.ok === false) {
+    userMsg =
+      `Catálogo guardado, pero no se actualizó tiles.${tv.resource_id || ""}: ` +
+      `${tv.error || (tv.errors || []).join("; ") || "error desconocido"}`;
+  } else if (tv.database || (tv.view_columns || []).length) {
+    const cols = (tv.view_columns || Object.keys(tv.field_map || {})).join(", ");
+    userMsg += `\n\nBD ${tv.database || "?"}.tiles.${tv.resource_id || ""}:\n${cols}`;
+    if ((tv.missing_extra || []).length) {
+      userMsg += `\nNo entraron: ${tv.missing_extra.join(", ")}`;
+    }
+  }
+  window.alert(userMsg);
   purgeOrphanModalBackdrops();
 }
 
@@ -3936,7 +4729,7 @@ async function ensureAdminSession() {
     window.location.href = "./visor-studio.html";
     return false;
   }
-  const user = await verifyAdminSession();
+  const user = await verifyAdminSession({ failClosed: true });
   if (!user) {
     window.alert(
       "No se pudo validar la sesión admin.\n\n" +
@@ -3962,20 +4755,26 @@ function onWizardFooterPrevClick() {
   void retreatWizardStep();
 }
 
-function bindWizardNav() {
+function ensureWizardFooterNavBound() {
   const modal = ensureModal();
   const btnNext = modal.querySelector('[data-act="next"]');
   const btnPrev = modal.querySelector('[data-act="prev"]');
-  if (!btnNext || !btnPrev) return;
-  _modalFooterMode = "wizard";
+  if (!btnNext || !btnPrev) return { btnNext, btnPrev };
   if (!modal.dataset.wizardNavBound) {
     modal.dataset.wizardNavBound = "1";
     btnNext.addEventListener("click", onWizardFooterNextClick);
     btnPrev.addEventListener("click", onWizardFooterPrevClick);
   }
-  btnNext.disabled = false;
   btnNext.onclick = null;
   btnPrev.onclick = null;
+  return { btnNext, btnPrev };
+}
+
+function bindWizardNav() {
+  const { btnNext, btnPrev } = ensureWizardFooterNavBound();
+  if (!btnNext || !btnPrev) return;
+  _modalFooterMode = "wizard";
+  btnNext.disabled = false;
   btnPrev.classList.remove("invisible");
 }
 
@@ -4016,6 +4815,7 @@ async function openEditWizard(layerId) {
     wizard.default_color = data.style?.default_color || "#94a3b8";
     wizard.style_classes = normalizeStyleClasses(data.style?.classes);
     wizard.style_tab = defaultStyleTabForPreset(wizard.style_preset);
+    applyBuiltinMapStyleHydration(layerId, data);
     wizard.maxStepReached = wizardMaxStep();
     const denue = data.denue || {};
     wizard.denue_codigo_act = [...(denue.codigo_act || [])];
@@ -4050,10 +4850,10 @@ async function openEditWizard(layerId) {
     wizard.labels_offset_x = Array.isArray(off) ? Number(off[0]) || 0 : 0;
     wizard.labels_offset_y = Array.isArray(off) ? Number(off[1]) || 0 : 0;
     wizard.export_columns = [...(data.data?.export_columns || [])];
-    const filt = data.data?.filter || {};
-    wizard.data_filter_enabled = Boolean(filt.field && Array.isArray(filt.values) && filt.values.length);
-    wizard.data_filter_field = filt.field || "";
-    wizard.data_filter_values = [...(filt.values || [])];
+    applyCatalogFilterToWizard(data.data?.filter || {}, data.denue || {});
+    const pub = data.publication || {};
+    wizard.tile_strategy = String(pub.tile_strategy || "shared").toLowerCase() === "filtered" ? "filtered" : "shared";
+    wizard.published_id = String(pub.published_id || "").trim().toLowerCase();
     const search = data.search || {};
     wizard.search_enabled = Boolean(search.enabled);
     wizard.search_tipo = search.tipo || data.label || "";
@@ -4103,9 +4903,7 @@ async function syncManageUiAfterCatalogChange() {
     console.warn("[visor-admin] reloadVisorLayerCatalog:", err);
   }
   document.dispatchEvent(new CustomEvent("atlasgro-visor-layers-panel-refresh"));
-  const manageBody = document
-    .getElementById("visorCatalogAdminModal")
-    ?.querySelector(".visor-admin-modal__body");
+  const manageBody = getAdminShellRoot()?.querySelector(".visor-admin-modal__body");
   if (manageBody?.querySelector(".visor-admin-manage-panel")) {
     try {
       await refreshManagePanel(manageBody);
@@ -4350,6 +5148,123 @@ async function renderManageGroupsTab(host) {
   });
 }
 
+async function renderManageSearchTab(host) {
+  host.innerHTML = '<p class="small text-muted mb-0">Diagnosticando fuentes del buscador…</p>';
+  const { res, data } = await adminFetch("/api/visor/admin/search/health");
+  if (!res?.ok) {
+    host.innerHTML = `<p class="small text-danger mb-0">${escapeHtml(apiErrorMessage(data, "No se pudo diagnosticar el buscador"))}</p>`;
+    return;
+  }
+  const sources = data?.sources || [];
+  const summary = data?.summary || {};
+  const instanceKey = data?.instance_key || "—";
+  if (!sources.length) {
+    host.innerHTML =
+      '<p class="small text-muted mb-0">No hay capas con <code>search.enabled</code> en el catálogo de esta instancia.</p>';
+    return;
+  }
+
+  const codeBadge = (code) => {
+    if (code === "ok") return '<span class="badge text-bg-success">ok</span>';
+    if (code === "relation_missing") return '<span class="badge text-bg-danger">relation_missing</span>';
+    if (code === "trgm_index_missing") return '<span class="badge text-bg-warning text-dark">trgm_index_missing</span>';
+    return `<span class="badge text-bg-secondary">${escapeHtml(code || "?")}</span>`;
+  };
+
+  host.innerHTML = `
+    <p class="small text-muted mb-2">
+      Instancia <code>${escapeHtml(instanceKey)}</code> ·
+      ok ${summary.ok || 0} ·
+      sin tabla ${summary.relation_missing || 0} ·
+      sin gin_trgm ${summary.trgm_index_missing || 0}
+    </p>
+    <p class="small mb-2">
+      Las fuentes salen del catálogo (<code>search</code>). Si la tabla no existe en esta AMIGO, el buscador la omite
+      (<code>omitted.code=relation_missing</code>) y <strong>vuelve a consultarla</strong> cuando exista.
+      No se elimina la capa del catálogo.
+    </p>
+    <div class="d-flex flex-wrap gap-2 mb-2">
+      <button type="button" class="btn btn-primary btn-sm" id="visorAdminSearchEnsureIndexes"
+        ${(summary.trgm_index_missing || 0) > 0 ? "" : "disabled"}>
+        Crear índices gin_trgm faltantes (${summary.trgm_index_missing || 0})
+      </button>
+      <button type="button" class="btn btn-outline-secondary btn-sm" id="visorAdminSearchHealthRefresh">Actualizar</button>
+    </div>
+    <div id="visorAdminSearchHealthStatus" class="small mb-2" hidden></div>
+    <div class="table-responsive">
+      <table class="table table-sm table-bordered align-middle mb-2">
+        <thead>
+          <tr>
+            <th>Capa</th>
+            <th>Tabla</th>
+            <th>Estado</th>
+            <th>Reparación</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          ${sources
+            .map((s) => {
+              const editBtn =
+                s.code === "trgm_index_missing" || s.code === "ok"
+                  ? `<button type="button" class="btn btn-sm btn-outline-primary" data-edit="${escapeHtml(s.layer_id)}">Editar / índices</button>`
+                  : s.code === "relation_missing"
+                    ? `<span class="small text-muted">Cargar tabla o desactivar search</span>`
+                    : "";
+              return `<tr>
+                <td><code>${escapeHtml(s.layer_id)}</code><div class="small text-muted">${escapeHtml(s.tipo || "")}</div></td>
+                <td><code>${escapeHtml(s.table)}</code></td>
+                <td>${codeBadge(s.code)}${s.issue ? `<div class="small text-muted mt-1">${escapeHtml(s.issue)}</div>` : ""}</td>
+                <td class="small">${s.repair ? escapeHtml(s.repair) : "—"}</td>
+                <td class="text-end">${editBtn}</td>
+              </tr>`;
+            })
+            .join("")}
+        </tbody>
+      </table>
+    </div>`;
+
+  const statusEl = host.querySelector("#visorAdminSearchHealthStatus");
+  const setStatus = (msg, isError = false) => {
+    if (!statusEl) return;
+    if (!msg) {
+      statusEl.hidden = true;
+      statusEl.textContent = "";
+      return;
+    }
+    statusEl.hidden = false;
+    statusEl.textContent = msg;
+    statusEl.classList.toggle("text-danger", isError);
+    statusEl.classList.toggle("text-success", !isError);
+  };
+
+  host.querySelector("#visorAdminSearchHealthRefresh")?.addEventListener("click", () => {
+    void renderManageSearchTab(host);
+  });
+  host.querySelector("#visorAdminSearchEnsureIndexes")?.addEventListener("click", async (ev) => {
+    const btn = ev.currentTarget;
+    if (btn) btn.disabled = true;
+    setStatus("Creando índices gin_trgm en la instancia activa…");
+    const { res, data: out, networkError } = await adminFetch("/api/visor/admin/search/ensure-indexes", {
+      method: "POST",
+      body: "{}",
+    });
+    if (networkError || !res?.ok) {
+      setStatus(apiErrorMessage(out, "No se pudieron crear los índices"), true);
+      if (btn) btn.disabled = false;
+      return;
+    }
+    setStatus(out?.message || "Índices aplicados.", false);
+    await renderManageSearchTab(host);
+  });
+  host.querySelectorAll("[data-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      closeModal();
+      void openEditWizard(btn.getAttribute("data-edit"));
+    });
+  });
+}
+
 async function renderManageLayersTab(host) {
   host.innerHTML = '<p class="small text-muted mb-0">Cargando capas…</p>';
   const { res, data } = await adminFetch("/api/visor/admin/layers");
@@ -4363,26 +5278,30 @@ async function renderManageLayersTab(host) {
       '<p class="small text-muted mb-0">No hay capas en el catálogo.</p>';
     return;
   }
+  const visible = filterRowsByLifecycleGroup(layers, wizard.manage_lc_group);
+  const shown = visible.length ? visible : layers;
   host.innerHTML = `
     <p class="small text-muted mb-2">
-      <span class="badge text-bg-info">Kit Guerrero</span> kit de la entidad: se edita y se despublica; la tabla no se borra.
+      <span class="badge text-bg-info">Kit Base</span> kit de la entidad: se edita y se despublica; la tabla no se borra.
       <span class="badge text-bg-success">Studio</span> publicadas aquí: se pueden borrar.
       <strong>Despublicar</strong> quita del visor y conserva los datos.
     </p>
+    ${lifecycleFilterBarHtml(layers, wizard.manage_lc_group)}
     <ul class="list-group list-group-flush visor-admin-manage-list">
-      ${layers
+      ${shown
         .map(
           (layer) => {
             const badge = layer.badge
               ? `<span class="badge ${layer.seed ? "text-bg-info" : "text-bg-success"} ms-1">${escapeHtml(layer.badge)}</span>`
               : "";
+            const lcBadge = lifecycleBadgeHtml(lifecycleFromRow(layer), "ms-1");
             const dropBtn = layer.can_drop
               ? `<button type="button" class="btn btn-sm btn-outline-danger" data-drop="${escapeHtml(layer.layer_id)}" data-label="${escapeHtml(layer.label)}" data-table="${escapeHtml(layer.table || "")}">Borrar tabla</button>`
               : "";
             return `
         <li class="list-group-item px-0 py-2 d-flex align-items-start justify-content-between gap-2">
           <div class="min-w-0">
-            <div class="fw-semibold small">${escapeHtml(layer.label)}${badge}</div>
+            <div class="fw-semibold small">${escapeHtml(layer.label)}${badge}${lcBadge}</div>
             <div class="text-muted small"><code>${escapeHtml(layer.layer_id)}</code> · ${escapeHtml(layer.table || "")}</div>
           </div>
           <div class="d-flex gap-1 flex-shrink-0 flex-wrap justify-content-end">
@@ -4395,6 +5314,12 @@ async function renderManageLayersTab(host) {
         )
         .join("")}
     </ul>`;
+  host.querySelectorAll("[data-lc-group]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      wizard.manage_lc_group = btn.getAttribute("data-lc-group") || "";
+      void renderManageLayersTab(host);
+    });
+  });
   host.querySelectorAll("[data-edit]").forEach((btn) => {
     btn.addEventListener("click", () => {
       closeModal();
@@ -4482,6 +5407,7 @@ async function refreshManagePanel(body, tab = "layers") {
   });
   if (activeTab === "audit") await renderAuditLogTab(tabHost);
   else if (activeTab === "groups") await renderManageGroupsTab(tabHost);
+  else if (activeTab === "search") await renderManageSearchTab(tabHost);
   else await renderManageLayersTab(tabHost);
 }
 
@@ -4491,6 +5417,7 @@ async function renderManagePanel(body) {
       <div class="visor-admin-manage-tabs d-flex gap-1 mb-2 flex-wrap" role="tablist" aria-label="Gestionar catálogo">
         <button type="button" class="btn btn-sm btn-outline-secondary active" data-manage-tab="layers" role="tab" aria-selected="true">Capas</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" data-manage-tab="groups" role="tab" aria-selected="false">Grupos</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-manage-tab="search" role="tab" aria-selected="false">Buscador</button>
         <button type="button" class="btn btn-sm btn-outline-secondary" data-manage-tab="audit" role="tab" aria-selected="false">Registro de actividad</button>
       </div>
       <div id="visorAdminManageTabContent" role="tabpanel"></div>
@@ -4521,6 +5448,7 @@ async function openManageModal() {
       "visor-admin-modal__panel--style",
     );
     _modalFooterMode = "manage";
+    ensureWizardFooterNavBound();
     modal.querySelector('[data-act="prev"]')?.classList.add("invisible");
     const btnNext = modal.querySelector('[data-act="next"]');
     if (btnNext) {
@@ -4529,7 +5457,7 @@ async function openManageModal() {
     }
     const body = modal.querySelector(".visor-admin-modal__body");
     if (body) await renderManagePanel(body);
-    modal.classList.remove("d-none");
+    showAdminShell();
   } catch (err) {
     console.error("[visor-admin]", err);
     window.alert(err?.message || "No se pudo abrir el gestor");
@@ -4606,6 +5534,17 @@ export function attachVisorCatalogAdmin() {
 function initAdminUi() {
   ensurePublishButton();
   ensureManageButton();
+  // Ocultos hasta confirmar /me (JWT en localStorage no basta).
+  syncAdminButtons();
+  void gatePortalAdminChrome();
+}
+
+async function gatePortalAdminChrome() {
+  if (!isVisorAdminLoggedIn()) {
+    syncAdminButtons();
+    return;
+  }
+  await verifyAdminSession({ failClosed: true });
   syncAdminButtons();
 }
 
@@ -4613,6 +5552,31 @@ export function refreshVisorCatalogAdmin() {
   ensurePublishButton();
   ensureManageButton();
   syncAdminButtons();
+}
+
+/** Studio v2 / GroSIG — sin barra del mapa; el shell embebe en #visorStudioCatalogEmbed */
+export function initVisorCatalogAdminForStudio() {}
+
+/** @param {HTMLElement|null} host Contenedor central del studio (modo inline). */
+export function setVisorCatalogAdminInlineHost(host) {
+  _inlineHost = host || null;
+  if (!host) _inlineShellEl = null;
+}
+
+export function clearVisorCatalogAdminInlineHost() {
+  if (_inlineHost) closeModal({ force: true });
+  _inlineHost = null;
+  _inlineShellEl = null;
+}
+
+/** Abre el asistente «Publicar capa» (incluye subir shapefile). */
+export async function openVisorCatalogPublishWizard() {
+  return openWizard();
+}
+
+/** Abre el gestor de capas publicadas. */
+export async function openVisorCatalogManageModal() {
+  return openManageModal();
 }
 
 export function teardownVisorCatalogAdmin() {
@@ -4624,6 +5588,7 @@ export function teardownVisorCatalogAdmin() {
   _publishBtn = null;
   _manageBtn?.remove();
   _manageBtn = null;
+  clearVisorCatalogAdminInlineHost();
   _modalEl?.remove();
   _modalEl = null;
 }

@@ -3,7 +3,7 @@
  * Sin DSN ni connection_key en el cliente.
  */
 
-import { apiUrl } from "./atlasConfig.js";
+import { apiUrl, setApiCveEnt, setMartinSourcePrefix } from "./atlasConfig.js";
 
 const API_CONFIG = apiUrl("/api/amigo/config");
 const API_ENTIDADES = apiUrl("/api/amigo/entidades");
@@ -26,14 +26,16 @@ export const GRO_FALLBACK_BOUNDS = [
 
 let _cfg = {
   deployment_mode: "estatal",
-  default_ent: "12",
+  default_ent: "",
   configured: false,
   loaded: false,
   catalog_package: null,
+  martin_source_prefix_by_ent: {},
 };
 
-/** Entidad activa en mapa/combo (2 dígitos). */
-let _activeEnt = "12";
+/** Entidad activa en mapa/combo (2 dígitos). Vacío hasta pick en modo nacional. */
+let _activeEnt = "";
+setApiCveEnt(_activeEnt);
 
 /** En modo nacional: ya eligió entidad (muestra municipios). */
 let _entityPicked = false;
@@ -54,11 +56,14 @@ export function isNationalMode() {
 }
 
 export function getDefaultEnt() {
-  return pad2(_cfg.default_ent || "12");
+  const raw = String(_cfg.default_ent ?? "").replace(/\D/g, "");
+  return raw ? pad2(raw) : "";
 }
 
 export function getActiveCveEnt() {
-  return pad2(_activeEnt || getDefaultEnt());
+  const active = String(_activeEnt ?? "").replace(/\D/g, "");
+  if (active) return pad2(active);
+  return getDefaultEnt();
 }
 
 export function isEntityPicked() {
@@ -72,6 +77,10 @@ export function onAmigoTerritoryChange(fn) {
 }
 
 function notify() {
+  const byEnt = _cfg.martin_source_prefix_by_ent || {};
+  const ent = getActiveCveEnt();
+  setMartinSourcePrefix(byEnt[ent] || "");
+  setApiCveEnt(ent);
   for (const fn of _listeners) {
     try {
       fn({
@@ -86,9 +95,10 @@ function notify() {
 }
 
 export function setActiveCveEnt(cve_ent, { picked = true } = {}) {
-  _activeEnt = pad2(cve_ent || getDefaultEnt());
+  const raw = String(cve_ent ?? "").replace(/\D/g, "");
+  _activeEnt = raw ? pad2(raw) : getDefaultEnt();
   if (isNationalMode()) {
-    _entityPicked = Boolean(picked);
+    _entityPicked = Boolean(picked && _activeEnt);
   } else {
     _entityPicked = true;
   }
@@ -121,10 +131,14 @@ export async function loadAmigoConfig() {
             String(json.deployment_mode || "estatal").toLowerCase() === "nacional"
               ? "nacional"
               : "estatal",
-          default_ent: pad2(json.default_ent || "12"),
+          default_ent: (() => {
+            const raw = String(json.default_ent ?? "").replace(/\D/g, "");
+            return raw ? pad2(raw) : "";
+          })(),
           configured: Boolean(json.configured),
           loaded: true,
           catalog_package: json.catalog_package || null,
+          martin_source_prefix_by_ent: json.martin_source_prefix_by_ent || {},
         };
       }
     }

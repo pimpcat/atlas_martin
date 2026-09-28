@@ -618,7 +618,7 @@ async function bootDashboard() {
   await loadMetaAndCatalog();
 }
 
-async function init() {
+function wireInvStudioUi() {
   $("invGroupNewBtn")?.addEventListener("click", () => openNewGroup());
   $("invIndNewBtn")?.addEventListener("click", () => openNewIndicator());
   $("invGroupForm")?.addEventListener("submit", saveGroupDraft);
@@ -633,11 +633,24 @@ async function init() {
   $("fIndColor")?.addEventListener("input", syncIconPreview);
   $("fIndKind")?.addEventListener("change", () => {
     syncKindDoc();
-    // Entorno → polígono por defecto si el usuario cambia a ese tipo
     if ($("fIndKind")?.value === "entorno" && $("fIndRender")?.value === "point") {
       $("fIndRender").value = "polygon";
     }
   });
+}
+
+/** Shell v2 — enlazar UI tras montar panel en #gs2StudioMount */
+export function bindInvStudioUi() {
+  wireInvStudioUi();
+}
+
+/** Shell v2 — cargar meta y catálogo */
+export function enterInvStudioDashboard() {
+  return bootDashboard();
+}
+
+async function init() {
+  wireInvStudioUi();
 
   const shell = createStudioShell(
     studioIdsFromPrefix("invStudio", { loginError: "invStudioError" }),
@@ -656,4 +669,6 @@ async function init() {
   await shell.boot();
 }
 
-void init();
+if (document.getElementById("invStudioLoginForm")) {
+  void init();
+}
